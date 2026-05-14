@@ -50,13 +50,7 @@ export function renderAnchorHandles(group, node, scale, onDown) {
     c.setAttribute('class', 'arrow-anchor-handle');
     c.setAttribute('data-block', node.id);
     c.setAttribute('data-side',  s.side);
-    c.style.cursor = 'crosshair';
-    c.addEventListener('mousedown', (ev) => {
-      if (ev.button !== 0) return;
-      ev.preventDefault();
-      ev.stopPropagation();
-      onDown(ev, node.id, s.side);
-    });
+    c.style.pointerEvents = 'none';
     group.appendChild(c);
   }
 }
