@@ -3,7 +3,6 @@
    nodes/edges maps, syncs persistence, drives presence + snapshots. */
 
 import { Viewer } from './viewer.js';
-import { SidePanel } from './side-panel.js';
 import { SearchBar } from './search.js';
 import { EditorModal } from './editor.js';
 import { ContextMenu, statusSubmenu, isInOwnedSurface } from './context-menu.js';
@@ -117,7 +116,6 @@ const state = {
 const HISTORY_LIMIT = 50;
 
 let viewer;
-let sidePanel;
 let searchBar;
 let editorModal;
 let editNodeModal;
@@ -178,9 +176,9 @@ async function bootstrap() {
   applyStaticTranslations();
   clipboardMgr = new NodeClipboard();
   setupViewer();
-  setupSidePanel();
-  setupSearchBar();
   setupEditorModal();
+  setupEditNodeModal();
+  setupSearchBar();
   setupArrowLayer();
   setupToolbar();
   setupMigrationBanner();
@@ -192,7 +190,6 @@ async function bootstrap() {
   setupMinimap();
   setupKeyboard();
   setupAuthUI();
-  setupEditNodeModal();
   setupLeftRail();
   setupSelectionStatus();
   setupTouch();
@@ -220,11 +217,11 @@ async function bootstrap() {
   document.addEventListener('i18n:changed', () => {
     applyStaticTranslations();
     refreshPuzzleViewsInViewer();
-    if (sidePanel && sidePanel.isOpen() && sidePanel.currentView) {
-      sidePanel.refreshLocalised();
-      const cur = sidePanel.currentView;
+    if (editNodeModal && editNodeModal.isOpen() && editNodeModal.currentView) {
+      editNodeModal.refreshLocalised();
+      const cur = editNodeModal.currentView;
       const n = findNode(state.nodes, cur.id);
-      if (n) sidePanel.open(viewWithLang(toViewShape(n), getLang()));
+      if (n) editNodeModal.open(viewWithLang(toViewShape(n), getLang()));
     }
     if (arrowLayer) arrowLayer.retranslate();
     if (minimap) minimap.retranslate();
@@ -687,7 +684,7 @@ function setupViewer() {
       if (!n) return;
       const view = toViewShape(n);
       viewer.setActiveId(id);
-      sidePanel.open(viewWithLang(view, getLang()));
+      if (editNodeModal) editNodeModal.open(viewWithLang(view, getLang()));
     },
     onHotspotDoubleClick: (id) => openRichEdit(id),
     onHotspotRightClick: (id, ev) => {
@@ -790,154 +787,6 @@ function setupArrowLayer() {
   }
 }
 
-function setupSidePanel() {
-  sidePanel = new SidePanel({
-    panelEl: $('panel'),
-    statusSelectEl: $('panel-status-select'),
-    titleInputEl: $('panel-title-input'),
-    tagsHostEl: $('panel-tags'),
-    tagsInputEl: $('panel-tags-input'),
-    branchesHostEl: $('panel-branches-host'),
-    lockBtnEl: $('panel-lock-btn'),
-    deleteBtnEl: $('panel-delete-btn'),
-    bodyEl: $('panel-body'),
-    closeEl: $('panel-close'),
-    editBtnEl: $('btn-edit-md'),
-    saveBtnEl: $('btn-save-md'),
-    exportBtnEl: $('btn-export-md'),
-    statusDotEl: $('panel-status-dot'),
-    overlayEl: $('md-edit-overlay'),
-    overlayTextareaEl: $('md-edit-textarea'),
-    overlaySaveEl: $('md-edit-save'),
-    overlayCancelEl: $('md-edit-cancel'),
-    getNode: (id) => findNode(state.nodes, id),
-    getBranches: () => (Array.isArray(state.branches) ? state.branches : []),
-    onStatusChange: (id, status) => {
-      if (!isLoggedIn()) {
-        const n0 = findNode(state.nodes, id);
-        if (n0) sidePanel.setNodeMeta(toViewShape(n0));
-        if (authUI) authUI.openLogin();
-        return;
-      }
-      updatePuzzleNode(state.nodes, id, { status });
-      const n = findNode(state.nodes, id);
-      if (!n) return;
-      const view = toViewShape(n);
-      sidePanel.setNodeMeta(view);
-      sidePanel.refreshStatusDot(view.status);
-      refreshPuzzleViewsInViewer();
-      pushNodePatch(id, { status });
-      scheduleSave();
-    },
-    onLabelChange: (id, label) => {
-      if (!isLoggedIn()) {
-        const n0 = findNode(state.nodes, id);
-        if (n0) sidePanel.setNodeMeta(toViewShape(n0));
-        if (authUI) authUI.openLogin();
-        return;
-      }
-      updatePuzzleNode(state.nodes, id, { label, title: label });
-      const n = findNode(state.nodes, id);
-      if (!n) return;
-      refreshPuzzleViewsInViewer();
-      pushNodePatch(id, { label });
-      scheduleSave();
-    },
-    onTagsChange: (id, tags) => {
-      if (!isLoggedIn()) {
-        const n0 = findNode(state.nodes, id);
-        if (n0) sidePanel.setNodeMeta(toViewShape(n0));
-        if (authUI) authUI.openLogin();
-        return;
-      }
-      updatePuzzleNode(state.nodes, id, { tags });
-      refreshPuzzleViewsInViewer();
-      pushNodePatch(id, { tags });
-      scheduleSave();
-    },
-    onBranchesChange: (id, branches) => {
-      if (!isLoggedIn()) {
-        const n0 = findNode(state.nodes, id);
-        if (n0) sidePanel.setNodeMeta(toViewShape(n0));
-        if (authUI) authUI.openLogin();
-        return;
-      }
-      updatePuzzleNode(state.nodes, id, { branches });
-      refreshPuzzleViewsInViewer();
-      pushNodePatch(id, { branches });
-      scheduleSave();
-    },
-    onLockToggle: (id, locked) => {
-      if (!isLoggedIn()) {
-        const n0 = findNode(state.nodes, id);
-        if (n0) sidePanel.setNodeMeta(toViewShape(n0));
-        if (authUI) authUI.openLogin();
-        return;
-      }
-      const n = findNode(state.nodes, id);
-      if (!n) return;
-      if (locked) n.locked = true;
-      else delete n.locked;
-      refreshPuzzleViewsInViewer();
-      pushNodePatch(id, { locked: !!locked });
-      scheduleSave();
-    },
-    onDeleteNode: (id) => {
-      if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
-      editorModal.showConfirm({
-        title: tr('editor_delete_title'),
-        message: tr('edit_modal_delete_confirm'),
-        actions: [
-          { label: tr('editor_cancel_button'), kind: 'cancel', fn: () => editorModal.hideConfirm() },
-          { label: tr('editor_delete_button'), kind: 'danger', fn: () => {
-            editorModal.hideConfirm();
-            deletePuzzleNode(id);
-            sidePanel.requestClose();
-          } },
-        ],
-      });
-    },
-    onContentChange: (id, md, persist) => {
-      const n = findNode(state.nodes, id);
-      if (!n) return;
-      if (isPuzzleNode(n)) {
-        updatePuzzleNode(state.nodes, id, { md });
-        if (n.slug) setCachedMarkdown(n.slug, md);
-      }
-      if (persist) {
-        toast(tr('toast_md_saved'));
-        pushNodePatch(id, { text: md });
-        scheduleSave();
-      }
-    },
-    onConfirmCloseWithUnsaved: (cb) => {
-      editorModal.showConfirm({
-        title: tr('editor_discard_title'),
-        message: tr('editor_discard_confirm_q'),
-        actions: [
-          { label: tr('editor_discard_keep'),    kind: 'cancel', fn: () => { editorModal.hideConfirm(); cb(false); } },
-          { label: tr('editor_discard_discard'), kind: 'danger', fn: () => { editorModal.hideConfirm(); cb(true);  } },
-        ],
-      });
-    },
-    onClose: () => {
-      viewer.setActiveId(null);
-    },
-    onExportMd: (slug, md) => {
-      const blob = new Blob([md], { type: 'text/markdown' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${slug}.md`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 200);
-      toast(tr('toast_md_downloaded', { filename: `${slug}.md` }));
-    },
-  });
-}
-
 function setupSearchBar() {
   searchBar = new SearchBar({
     inputEl: $('search'),
@@ -949,7 +798,7 @@ function setupSearchBar() {
       const view = toViewShape(n);
       viewer.centerOnHotspot(view);
       viewer.setActiveId(id);
-      sidePanel.open(view);
+      if (editNodeModal) editNodeModal.open(viewWithLang(view, getLang()));
     },
     onTermChange: (term, ids) => {
       state.searchTerm = term;
@@ -994,9 +843,11 @@ function setupEditorModal() {
         if (finalSlug) setCachedMarkdown(finalSlug, payload.md);
         refreshPuzzleViewsInViewer();
         const view = toViewShape(findNode(state.nodes, payload.id));
-        sidePanel.setNodeMeta(view);
-        if (sidePanel.isOpen() && sidePanel.currentSlug() === finalSlug) {
-          sidePanel.open(view);
+        if (editNodeModal) {
+          editNodeModal.setNodeMeta(view);
+          if (editNodeModal.isOpen() && editNodeModal.currentSlug() === finalSlug) {
+            editNodeModal.open(view);
+          }
         }
         pushNodePatch(payload.id, {
           slug: finalSlug,
@@ -1048,8 +899,8 @@ function deletePuzzleNode(id) {
   if (arrowLayer) arrowLayer.notifyNodeDeleted(id);
   refreshPuzzleViewsInViewer();
   if (viewer) viewer.notifyNodesChanged();
-  if (sidePanel.isOpen() && sidePanel.currentSlug() === slug) {
-    sidePanel.requestClose();
+  if (editNodeModal && editNodeModal.isOpen() && editNodeModal.currentSlug() === slug) {
+    editNodeModal.requestClose();
   }
   pushNodeDelete(id);
   scheduleSave();
@@ -1129,7 +980,7 @@ function setupTouch() {
         if (n) {
           const view = toViewShape(n);
           viewer.setActiveId(target.id);
-          sidePanel.open(viewWithLang(view, getLang()));
+          if (editNodeModal) editNodeModal.open(viewWithLang(view, getLang()));
         }
       }
     },
@@ -1146,8 +997,11 @@ function setupTouch() {
 
 function setupEditNodeModal() {
   editNodeModal = new EditNodeModal({
+    panelEl: $('panel'),
+    mountInto: $('panel-mount'),
     getNodes: () => state.nodes,
-    getBranches: () => state.branches,
+    getNode: (id) => findNode(state.nodes, id),
+    getBranches: () => (Array.isArray(state.branches) ? state.branches : []),
     canEdit: () => isLoggedIn(),
     onSave: (payload) => persistRichEditSave(payload),
     onDelete: (id) => deletePuzzleNode(id),
@@ -1155,7 +1009,115 @@ function setupEditNodeModal() {
     onUnauthedSubmit: () => { if (authUI) authUI.openLogin(); },
     onCropImage: (id, currentUrl) => doCropImage(id, currentUrl),
     onReplaceImage: (id) => doReplaceImage(id),
+    onStatusChange: (id, status) => {
+      if (!isLoggedIn()) {
+        const n0 = findNode(state.nodes, id);
+        if (n0 && editNodeModal) editNodeModal.setNodeMeta(toViewShape(n0));
+        if (authUI) authUI.openLogin();
+        return;
+      }
+      updatePuzzleNode(state.nodes, id, { status });
+      const n = findNode(state.nodes, id);
+      if (!n) return;
+      const view = toViewShape(n);
+      if (editNodeModal) editNodeModal.setNodeMeta(view);
+      refreshPuzzleViewsInViewer();
+      pushNodePatch(id, { status });
+      scheduleSave();
+    },
+    onLabelChange: (id, label) => {
+      if (!isLoggedIn()) {
+        const n0 = findNode(state.nodes, id);
+        if (n0 && editNodeModal) editNodeModal.setNodeMeta(toViewShape(n0));
+        if (authUI) authUI.openLogin();
+        return;
+      }
+      updatePuzzleNode(state.nodes, id, { label, title: label });
+      const n = findNode(state.nodes, id);
+      if (!n) return;
+      refreshPuzzleViewsInViewer();
+      pushNodePatch(id, { label });
+      scheduleSave();
+    },
+    onTagsChange: (id, tags) => {
+      if (!isLoggedIn()) {
+        const n0 = findNode(state.nodes, id);
+        if (n0 && editNodeModal) editNodeModal.setNodeMeta(toViewShape(n0));
+        if (authUI) authUI.openLogin();
+        return;
+      }
+      updatePuzzleNode(state.nodes, id, { tags });
+      refreshPuzzleViewsInViewer();
+      pushNodePatch(id, { tags });
+      scheduleSave();
+    },
+    onBranchesChange: (id, branches) => {
+      if (!isLoggedIn()) {
+        const n0 = findNode(state.nodes, id);
+        if (n0 && editNodeModal) editNodeModal.setNodeMeta(toViewShape(n0));
+        if (authUI) authUI.openLogin();
+        return;
+      }
+      updatePuzzleNode(state.nodes, id, { branches });
+      refreshPuzzleViewsInViewer();
+      pushNodePatch(id, { branches });
+      scheduleSave();
+    },
+    onLockToggle: (id, locked) => {
+      if (!isLoggedIn()) {
+        const n0 = findNode(state.nodes, id);
+        if (n0 && editNodeModal) editNodeModal.setNodeMeta(toViewShape(n0));
+        if (authUI) authUI.openLogin();
+        return;
+      }
+      const n = findNode(state.nodes, id);
+      if (!n) return;
+      if (locked) n.locked = true;
+      else delete n.locked;
+      refreshPuzzleViewsInViewer();
+      pushNodePatch(id, { locked: !!locked });
+      scheduleSave();
+    },
+    onContentChange: (id, md, persist) => {
+      const n = findNode(state.nodes, id);
+      if (!n) return;
+      if (isPuzzleNode(n)) {
+        updatePuzzleNode(state.nodes, id, { md });
+        if (n.slug) setCachedMarkdown(n.slug, md);
+      }
+      if (persist) {
+        toast(tr('toast_md_saved'));
+        scheduleSave();
+      }
+    },
+    onConfirmCloseWithUnsaved: (cb) => {
+      editorModal.showConfirm({
+        title: tr('editor_discard_title'),
+        message: tr('editor_discard_confirm_q'),
+        actions: [
+          { label: tr('editor_discard_keep'),    kind: 'cancel', fn: () => { editorModal.hideConfirm(); cb(false); } },
+          { label: tr('editor_discard_discard'), kind: 'danger', fn: () => { editorModal.hideConfirm(); cb(true);  } },
+        ],
+      });
+    },
+    onClose: () => {
+      if (viewer) viewer.setActiveId(null);
+    },
+    onExportMd: (slug, md) => {
+      const blob = new Blob([md], { type: 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${slug}.md`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 200);
+      toast(tr('toast_md_downloaded', { filename: `${slug}.md` }));
+    },
   });
+  const closeBtn = $('panel-close');
+  if (closeBtn) closeBtn.addEventListener('click', () => editNodeModal && editNodeModal.requestClose());
 }
 
 function setupSelectionStatus() {
@@ -2095,7 +2057,7 @@ function applyStaticTranslations() {
   document.querySelectorAll('[data-i18n-aria]').forEach((el) => {
     el.setAttribute('aria-label', tr(el.dataset.i18nAria));
   });
-  if (sidePanel) sidePanel.refreshStatusOptions();
+  if (editNodeModal) editNodeModal.refreshStatusOptions();
   if (editorModal) editorModal.refreshStatusOptions();
 }
 
@@ -2722,8 +2684,8 @@ function setupKeyboard() {
       onDuplicate: () => doDuplicate(),
       onSelectAll: () => doSelectAll(),
       onEscape: () => {
-        if (sidePanel && sidePanel.isOpen()) {
-          sidePanel.requestClose();
+        if (editNodeModal && editNodeModal.isOpen()) {
+          editNodeModal.requestClose();
           return;
         }
         if (getActiveTool() !== 'select') {

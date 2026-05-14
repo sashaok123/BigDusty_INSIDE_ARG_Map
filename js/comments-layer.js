@@ -94,7 +94,7 @@ export class CommentsLayer {
 
   async _onViewportClick(ev) {
     if (!this._armed) return;
-    if (ev.target && ev.target.closest && ev.target.closest('.comment-pin, .comments-panel, #left-rail, #toolbar, #panel, #edit-node-modal, #editor-modal, #confirm-modal')) return;
+    if (ev.target && ev.target.closest && ev.target.closest('.comment-pin, .comments-panel, #left-rail, #toolbar, #panel, #panel-mount, #editor-modal, #confirm-modal')) return;
     this.disarm();
     if (!this.isLoggedIn()) return;
     const t = this.getTransform();

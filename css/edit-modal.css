@@ -1,61 +1,7 @@
-/* Rich edit-node modal styles. Tabbed body editor, status segmented control,
-   tag chip input, color palette, caption side picker, group parent select. */
-
-#edit-node-modal {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.36);
-  z-index: 2300;
-  align-items: center;
-  justify-content: center;
-  backdrop-filter: blur(4px);
-}
-#edit-node-modal.open { display: flex; }
-
-#edit-node-box {
-  background: var(--panel-bg);
-  border: 1px solid var(--panel-border);
-  width: 640px;
-  max-width: 96vw;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: var(--shadow-modal);
-  border-radius: var(--radius);
-}
-
-#edit-node-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 20px;
-  border-bottom: 1px solid var(--panel-border);
-  flex-shrink: 0;
-}
-#edit-node-head h2 {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: var(--accent);
-}
-#edit-node-close {
-  background: none;
-  border: none;
-  color: var(--text-dim);
-  font-size: 22px;
-  cursor: pointer;
-  padding: 0 4px;
-  border-radius: var(--radius);
-}
-#edit-node-close:hover { color: var(--text); background: var(--hover); }
-
-#edit-node-body {
-  overflow-y: auto;
-  padding: 18px 22px;
-  flex: 1;
-}
+/* Node-editor field styles. Tabbed body editor, status segmented control,
+   tag chip input, color palette, caption side picker, group parent select.
+   These selectors are class-based so the same fields render correctly inside
+   the docked side panel (#panel-mount). */
 
 .em-field {
   display: flex;
@@ -258,15 +204,6 @@
   color: var(--text-dim);
 }
 
-#edit-node-foot {
-  border-top: 1px solid var(--panel-border);
-  padding: 12px 20px;
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-  align-items: center;
-  flex-shrink: 0;
-}
 #edit-node-foot .em-spacer { flex: 1; }
 
 .em-readonly .em-segmented button,

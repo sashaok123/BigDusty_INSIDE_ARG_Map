@@ -377,9 +377,6 @@
 #offline-banner.open { display: inline-block; }
 
 body:not(.authed) .mode-switch { display: none; }
-body:not(.authed) #btn-edit-md,
-body:not(.authed) #btn-save-md { display: none; }
-body:not(.authed) #panel-status-select { pointer-events: none; opacity: 0.7; }
 
 .auth-tabs {
   display: flex;

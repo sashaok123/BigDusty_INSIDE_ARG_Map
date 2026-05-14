@@ -1,15 +1,14 @@
-/* Rich edit modal for nodes (puzzle, sticky, group, file, text, video).
-   Opens on double-click, right-click Edit, or Enter on a selected node.
-   Provides: title, status segmented control, tag chip input, body editor
-   with Markdown formatting toolbar + Edit/Preview tabs, caption row,
-   colour palette, parent-group dropdown, font/size/colour controls for
-   free-text nodes, per-field magic-wand auto-translate, image preview
-   with Crop/Replace, video URL editor. */
+/* Docked node editor that lives inside #panel-mount. Built field stack:
+   status segmented + color preset + title + tags chip input + body MD editor
+   with toolbar + Edit/Preview tabs + caption + parent select + text-style +
+   video URL + image preview with Crop/Replace + branches + lock + delete +
+   translations. Single-click on a node opens this panel; double-click and
+   ctx-menu Edit open the same panel. */
 
 import { tr, LANGS } from './i18n.js';
-import { STATUSES, statusVarName, isGroupNode } from './nodes.js';
+import { STATUSES, statusVarName, isGroupNode, nodeMarkdown } from './nodes.js';
 import { renderMarkdown } from './markdown.js';
-import { translateMany, translateOne, providerLabel } from './translate.js';
+import { translateMany, providerLabel } from './translate.js';
 import { getTranslationProvider } from './settings.js';
 import { buildMarkdownToolbar } from './md-toolbar.js';
 
@@ -98,29 +97,36 @@ function el(tag, attrs, kids) {
 
 export class EditNodeModal {
   constructor(opts) {
+    this.panelEl = opts.panelEl;
+    this.mountInto = opts.mountInto;
     this.getNodes = opts.getNodes || (() => new Map());
+    this.getNode = opts.getNode || ((id) => {
+      const m = this.getNodes();
+      return m && typeof m.get === 'function' ? m.get(id) : null;
+    });
     this.getBranches = opts.getBranches || (() => []);
     this.canEdit = opts.canEdit || (() => true);
     this.onSave = opts.onSave || (() => {});
     this.onDelete = opts.onDelete || (() => {});
-    this.onCancel = opts.onCancel || (() => {});
+    this.onClose = opts.onClose || (() => {});
     this.onUnauthedSubmit = opts.onUnauthedSubmit || (() => {});
     this.onCropImage = opts.onCropImage || null;
     this.onReplaceImage = opts.onReplaceImage || null;
+    this.onStatusChange = opts.onStatusChange || (() => {});
+    this.onLabelChange = opts.onLabelChange || (() => {});
+    this.onTagsChange = opts.onTagsChange || (() => {});
+    this.onBranchesChange = opts.onBranchesChange || (() => {});
+    this.onLockToggle = opts.onLockToggle || (() => {});
+    this.onContentChange = opts.onContentChange || (() => {});
+    this.onExportMd = opts.onExportMd || (() => {});
+    this.onConfirmCloseWithUnsaved = opts.onConfirmCloseWithUnsaved || ((cb) => cb(true));
     this._build();
     document.addEventListener('i18n:changed', () => this._retranslate());
   }
 
   _build() {
-    const modal = el('div', { id: 'edit-node-modal' });
-    const box = el('div', { id: 'edit-node-box' });
-    const head = el('div', { id: 'edit-node-head' });
-    const titleHead = el('h2', { text: tr('edit_modal_title') });
-    const closeBtn = el('button', { id: 'edit-node-close', type: 'button', html: '&times;',
-      onclick: () => this._cancel() });
-    head.appendChild(titleHead); head.appendChild(closeBtn);
-
-    const body = el('div', { id: 'edit-node-body' });
+    const root = el('div', { class: 'edit-node-root' });
+    const body = el('div', { class: 'edit-node-body' });
     const signinHint = el('div', { id: 'edit-modal-signin-hint', text: tr('edit_modal_signin_hint') });
 
     const titleField = el('div', { class: 'em-field' });
@@ -144,7 +150,7 @@ export class EditNodeModal {
       const tx = document.createElement('span');
       tx.textContent = this._statusLabel(s);
       b.appendChild(tx);
-      b.addEventListener('click', () => this._setStatus(s));
+      b.addEventListener('click', () => this._setStatus(s, false));
       statusSeg.appendChild(b);
       statusBtns[s] = b;
     }
@@ -350,10 +356,10 @@ export class EditNodeModal {
     videoField.style.display = 'none';
 
     body.appendChild(signinHint);
-    body.appendChild(titleField);
     const row = el('div', { class: 'em-row' });
     row.appendChild(statusField); row.appendChild(colorField);
     body.appendChild(row);
+    body.appendChild(titleField);
     body.appendChild(tagsField);
     body.appendChild(bodyField);
     body.appendChild(textStyleField);
@@ -365,24 +371,20 @@ export class EditNodeModal {
     body.appendChild(imageField);
 
     const foot = el('div', { id: 'edit-node-foot' });
+    const lockBtn = el('button', { type: 'button', class: 'modal-btn em-lock-btn', text: tr('ctx_lock') });
+    lockBtn.addEventListener('click', () => this._toggleLock());
+    const exportBtn = el('button', { type: 'button', class: 'modal-btn', text: tr('side_panel_export_md') });
+    exportBtn.addEventListener('click', () => this._exportMd());
     const delBtn = el('button', { type: 'button', class: 'modal-btn danger', text: tr('edit_modal_delete') });
     delBtn.addEventListener('click', () => this._delete());
     const spacer = el('div', { class: 'em-spacer' });
-    const cancelBtn = el('button', { type: 'button', class: 'modal-btn cancel', text: tr('edit_modal_cancel'),
-      onclick: () => this._cancel() });
     const saveBtn = el('button', { type: 'button', class: 'modal-btn primary', text: tr('edit_modal_save'),
       onclick: () => this._save() });
-    foot.appendChild(delBtn); foot.appendChild(spacer); foot.appendChild(cancelBtn); foot.appendChild(saveBtn);
+    foot.appendChild(lockBtn); foot.appendChild(exportBtn); foot.appendChild(delBtn);
+    foot.appendChild(spacer); foot.appendChild(saveBtn);
 
-    box.appendChild(head); box.appendChild(body); box.appendChild(foot);
-    modal.appendChild(box);
-    document.body.appendChild(modal);
-
-    modal.addEventListener('mousedown', (e) => { if (e.target === modal) this._cancel(); });
-    document.addEventListener('keydown', (e) => {
-      if (!modal.classList.contains('open')) return;
-      if (e.key === 'Escape') { e.preventDefault(); this._cancel(); }
-    });
+    root.appendChild(body); root.appendChild(foot);
+    if (this.mountInto) this.mountInto.appendChild(root);
 
     tagsInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ',') {
@@ -391,13 +393,22 @@ export class EditNodeModal {
       } else if (e.key === 'Backspace' && tagsInput.value === '' && this._tags.length) {
         this._tags.pop();
         this._renderTags();
+        this._commitTagsInline();
       }
     });
     tagsInput.addEventListener('blur', () => this._commitPendingTag());
+    titleInput.addEventListener('blur', () => this._commitLabelInline());
+    titleInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); titleInput.blur(); }
+      else if (e.key === 'Escape') {
+        e.preventDefault();
+        titleInput.value = this._lastCommittedLabel || '';
+        titleInput.blur();
+      }
+    });
     mdInput.addEventListener('input', () => this._refreshPreviewIfShown());
 
-    this.modalEl = modal;
-    this.titleHeadEl = titleHead;
+    this.rootEl = root;
     this.signinHintEl = signinHint;
     this.titleLabelEl = titleLabel;
     this.titleInputEl = titleInput;
@@ -426,8 +437,9 @@ export class EditNodeModal {
     this.translationsLangSelEl = translationsLangSel;
     this.translationsAddBtnEl = translationsAddBtn;
     this.deleteBtnEl = delBtn;
-    this.cancelBtnEl = cancelBtn;
     this.saveBtnEl = saveBtn;
+    this.lockBtnEl = lockBtn;
+    this.exportBtnEl = exportBtn;
     this.imageFieldEl = imageField;
     this.imageLabelEl = imageLabel;
     this.imagePreviewEl = imagePreview;
@@ -453,8 +465,13 @@ export class EditNodeModal {
     this.mdToolbarRef = mdToolbarRef;
 
     this._state = null;
+    this.currentView = null;
     this._tags = [];
     this._readonly = false;
+    this._lastCommittedLabel = '';
+    this._lastCommittedTagsKey = '';
+    this._lastCommittedBranchesKey = '';
+    this._suppressInlineCommits = false;
   }
 
   _makeWandButton(field) {
@@ -616,7 +633,13 @@ export class EditNodeModal {
     }[s] || s);
   }
 
-  open(view, md) {
+  async open(view, md) {
+    if (!view) return;
+    if (md === undefined) {
+      const n = this.getNode(view.id);
+      md = n ? nodeMarkdown(n) : (view.text || '');
+    }
+    this._suppressInlineCommits = true;
     this._state = {
       id: view.id,
       kind: view.kind || 'puzzle',
@@ -634,8 +657,13 @@ export class EditNodeModal {
       text_style: view.text_style ? { ...view.text_style } : null,
       media: view.media ? { ...view.media } : null,
       branches: Array.isArray(view.branches) ? [...view.branches] : [],
+      locked: !!view.locked,
     };
+    this.currentView = view;
     this._tags = [...this._state.tags];
+    this._lastCommittedLabel = this._state.title || '';
+    this._lastCommittedTagsKey = this._tagsKey(this._tags);
+    this._lastCommittedBranchesKey = this._branchesKey(this._state.branches);
     this._translations = view.translations ? JSON.parse(JSON.stringify(view.translations)) : null;
     this._renderTranslations();
     this._renderBranches();
@@ -655,11 +683,10 @@ export class EditNodeModal {
       }
     }
     this._readonly = !this.canEdit();
-    this.modalEl.classList.toggle('em-readonly', this._readonly);
+    if (this.rootEl) this.rootEl.classList.toggle('em-readonly', this._readonly);
     if (this.signinHintEl) this.signinHintEl.classList.toggle('visible', this._readonly);
     this.deleteBtnEl.style.display = this._readonly ? 'none' : 'inline-block';
     this.saveBtnEl.disabled = this._readonly;
-    this.titleHeadEl.textContent = tr('edit_modal_title');
     this.titleInputEl.value = this._state.title;
     this._setStatus(this._state.status, true);
     this._renderTags();
@@ -680,26 +707,82 @@ export class EditNodeModal {
       this.mdInputEl.style.minHeight = '160px';
     }
     this._setBodyTab('edit');
-    this.modalEl.classList.add('open');
-    setTimeout(() => { if (!this._readonly) this.titleInputEl.focus(); }, 30);
+    this._refreshLockButton();
+    if (this.panelEl) this.panelEl.classList.add('open');
+    this._suppressInlineCommits = false;
   }
 
-  close() {
-    this.modalEl.classList.remove('open');
-    this._state = null;
+  isOpen() {
+    return !!(this.panelEl && this.panelEl.classList.contains('open'));
   }
 
-  isOpen() { return this.modalEl.classList.contains('open'); }
+  currentSlug() {
+    return this.currentView ? this.currentView.slug : null;
+  }
+
+  currentMarkdown() {
+    return (this._state && this._state.md) || '';
+  }
+
+  setNodeMeta(view) {
+    if (!this.isOpen() || !this._state) return;
+    if (!view || view.id !== this._state.id) return;
+    this._suppressInlineCommits = true;
+    this.currentView = view;
+    this._state.title = view.title || '';
+    this._state.status = view.status || 'unsolved';
+    this._state.tags = Array.isArray(view.tags) ? [...view.tags] : [];
+    this._state.branches = Array.isArray(view.branches) ? [...view.branches] : [];
+    this._state.locked = !!view.locked;
+    this._state.color = view.color || '';
+    this._state.parent = view.parent || '';
+    this._state.caption = view.caption ? { ...view.caption } : this._state.caption;
+    this._tags = [...this._state.tags];
+    this._lastCommittedLabel = this._state.title;
+    this._lastCommittedTagsKey = this._tagsKey(this._tags);
+    this._lastCommittedBranchesKey = this._branchesKey(this._state.branches);
+    if (document.activeElement !== this.titleInputEl) {
+      this.titleInputEl.value = this._state.title;
+    }
+    this._setStatus(this._state.status, true);
+    this._renderTags();
+    this._renderBranches();
+    this._setColor(this._state.color, true);
+    this._refreshLockButton();
+    this._suppressInlineCommits = false;
+  }
+
+  refreshLocalised() {
+    this._retranslate();
+  }
+
+  refreshStatusOptions() {
+    if (!this.statusBtnEls) return;
+    for (const s of STATUSES) {
+      const b = this.statusBtnEls[s];
+      if (b && b.lastChild) b.lastChild.textContent = this._statusLabel(s);
+    }
+  }
+
+  refreshStatusDot(status) {
+    if (!this._state) return;
+    this._state.status = status;
+    this._setStatus(status, true);
+  }
 
   _setStatus(s, silent) {
     if (!STATUSES.includes(s)) return;
     if (!this._state) return;
+    const prev = this._state.status;
     this._state.status = s;
     for (const k of STATUSES) {
       const b = this.statusBtnEls[k];
       if (b) b.classList.toggle('active', k === s);
     }
-    void silent;
+    if (!silent && !this._suppressInlineCommits && prev !== s) {
+      if (this._readonly) { this.onUnauthedSubmit(); return; }
+      this.onStatusChange(this._state.id, s);
+    }
   }
 
   _setCaptionSide(side, silent) {
@@ -743,12 +826,46 @@ export class EditNodeModal {
 
   _commitPendingTag() {
     const v = (this.tagsInputEl.value || '').trim();
+    this.tagsInputEl.value = '';
     if (!v) return;
     const lower = v.toLowerCase();
     const exists = this._tags.some((t) => String(t).toLowerCase() === lower);
-    if (!exists) this._tags.push(v);
-    this.tagsInputEl.value = '';
+    if (exists) return;
+    this._tags.push(v);
     this._renderTags();
+    this._commitTagsInline();
+  }
+
+  _commitTagsInline() {
+    if (this._suppressInlineCommits || !this._state) return;
+    if (this._readonly) { this.onUnauthedSubmit(); return; }
+    const key = this._tagsKey(this._tags);
+    if (key === this._lastCommittedTagsKey) return;
+    this._lastCommittedTagsKey = key;
+    this._state.tags = [...this._tags];
+    this.onTagsChange(this._state.id, [...this._tags]);
+  }
+
+  _commitLabelInline() {
+    if (this._suppressInlineCommits || !this._state) return;
+    const next = (this.titleInputEl.value || '').trim();
+    if (next === this._lastCommittedLabel) return;
+    if (this._readonly) {
+      this.titleInputEl.value = this._lastCommittedLabel || '';
+      this.onUnauthedSubmit();
+      return;
+    }
+    this._lastCommittedLabel = next;
+    this._state.title = next;
+    this.onLabelChange(this._state.id, next);
+  }
+
+  _tagsKey(arr) {
+    return JSON.stringify(Array.isArray(arr) ? arr : []);
+  }
+
+  _branchesKey(arr) {
+    return JSON.stringify(Array.isArray(arr) ? arr.slice().sort() : []);
   }
 
   _renderTags() {
@@ -764,6 +881,7 @@ export class EditNodeModal {
       const x = el('button', { type: 'button', html: '&times;', onclick: () => {
         this._tags.splice(i, 1);
         this._renderTags();
+        this._commitTagsInline();
       }});
       chip.appendChild(x);
       this.tagsHostEl.insertBefore(chip, refNode);
@@ -848,7 +966,7 @@ export class EditNodeModal {
       this._branchesHostEl.appendChild(empty);
       return;
     }
-    const cur = new Set(this._state.branches || []);
+    const cur = new Set((this._state && this._state.branches) || []);
     for (const b of branches) {
       const chip = document.createElement('button');
       chip.type = 'button';
@@ -857,15 +975,49 @@ export class EditNodeModal {
       chip.textContent = b.label || b.id;
       chip.addEventListener('click', (e) => {
         e.preventDefault();
-        const c = this._state.branches || [];
+        if (!this._state) return;
+        const c = Array.isArray(this._state.branches) ? this._state.branches.slice() : [];
         const idx = c.indexOf(b.id);
         if (idx >= 0) c.splice(idx, 1);
         else c.push(b.id);
         this._state.branches = c;
         this._renderBranches();
+        this._commitBranchesInline();
       });
       this._branchesHostEl.appendChild(chip);
     }
+  }
+
+  _commitBranchesInline() {
+    if (this._suppressInlineCommits || !this._state) return;
+    if (this._readonly) { this.onUnauthedSubmit(); return; }
+    const key = this._branchesKey(this._state.branches);
+    if (key === this._lastCommittedBranchesKey) return;
+    this._lastCommittedBranchesKey = key;
+    this.onBranchesChange(this._state.id, [...(this._state.branches || [])]);
+  }
+
+  _toggleLock() {
+    if (!this._state) return;
+    if (this._readonly) { this.onUnauthedSubmit(); return; }
+    const next = !this._state.locked;
+    this._state.locked = next;
+    this._refreshLockButton();
+    this.onLockToggle(this._state.id, next);
+  }
+
+  _refreshLockButton() {
+    if (!this.lockBtnEl) return;
+    const locked = !!(this._state && this._state.locked);
+    this.lockBtnEl.textContent = tr(locked ? 'ctx_unlock' : 'ctx_lock');
+    this.lockBtnEl.classList.toggle('locked', locked);
+  }
+
+  _exportMd() {
+    if (!this._state) return;
+    const slug = (this.currentView && this.currentView.slug) || this._state.id;
+    const md = this.mdInputEl ? this.mdInputEl.value : (this._state.md || '');
+    this.onExportMd(slug, md);
   }
 
   _rebuildParentSelect(currentParent) {
@@ -886,9 +1038,37 @@ export class EditNodeModal {
     this.parentSelectEl.value = currentParent || '';
   }
 
-  _cancel() {
-    this.close();
-    this.onCancel();
+  requestClose() {
+    if (this.onConfirmCloseWithUnsaved && this._isBodyDirty()) {
+      this.onConfirmCloseWithUnsaved((discard) => {
+        if (discard) this._closeImmediate();
+      });
+      return;
+    }
+    this._closeImmediate();
+  }
+
+  _isBodyDirty() {
+    if (!this._state) return false;
+    const cur = this.mdInputEl ? this.mdInputEl.value : '';
+    return cur !== (this._state.md || '');
+  }
+
+  _closeImmediate() {
+    if (this.panelEl) this.panelEl.classList.remove('open');
+    this._state = null;
+    this.currentView = null;
+    this._tags = [];
+    this._lastCommittedLabel = '';
+    this._lastCommittedTagsKey = '';
+    this._lastCommittedBranchesKey = '';
+    if (this.titleInputEl) this.titleInputEl.value = '';
+    if (this.tagsInputEl) this.tagsInputEl.value = '';
+    if (this.mdInputEl) this.mdInputEl.value = '';
+    if (this.captionTextEl) this.captionTextEl.value = '';
+    this._renderTags();
+    this._refreshLockButton();
+    if (typeof this.onClose === 'function') this.onClose();
   }
 
   _save() {
@@ -936,8 +1116,9 @@ export class EditNodeModal {
     if (this._state.media) payload.media = { ...this._state.media };
     else payload.media = null;
     payload.branches = Array.isArray(this._state.branches) ? [...this._state.branches] : [];
-    this.close();
+    this._state.md = payload.md;
     this.onSave(payload);
+    if (typeof this.onContentChange === 'function') this.onContentChange(payload.id, payload.md, true);
   }
 
   _delete() {
@@ -945,32 +1126,31 @@ export class EditNodeModal {
     if (!this._state) return;
     const id = this._state.id;
     if (!confirm(tr('edit_modal_delete_confirm'))) return;
-    this.close();
+    this._closeImmediate();
     this.onDelete(id);
   }
 
   _retranslate() {
-    this.titleHeadEl.textContent = tr('edit_modal_title');
     if (this.signinHintEl) this.signinHintEl.textContent = tr('edit_modal_signin_hint');
-    this.titleLabelEl.textContent = tr('edit_modal_title');
-    this.statusLabelEl.textContent = tr('edit_modal_status');
-    this.tagsLabelEl.textContent = tr('edit_modal_tags');
-    this.bodyLabelEl.textContent = tr('edit_modal_body');
-    this.bodyTabEditEl.textContent = tr('edit_modal_body_edit');
-    this.bodyTabPreviewEl.textContent = tr('edit_modal_body_preview');
-    this.captionLabelEl.textContent = tr('edit_modal_caption');
+    if (this.titleLabelEl) this.titleLabelEl.textContent = tr('edit_modal_title');
+    if (this.statusLabelEl) this.statusLabelEl.textContent = tr('edit_modal_status');
+    if (this.tagsLabelEl) this.tagsLabelEl.textContent = tr('edit_modal_tags');
+    if (this.bodyLabelEl) this.bodyLabelEl.textContent = tr('edit_modal_body');
+    if (this.bodyTabEditEl) this.bodyTabEditEl.textContent = tr('edit_modal_body_edit');
+    if (this.bodyTabPreviewEl) this.bodyTabPreviewEl.textContent = tr('edit_modal_body_preview');
+    if (this.captionLabelEl) this.captionLabelEl.textContent = tr('edit_modal_caption');
     for (const k of SIDES) {
       const b = this.captionSideEls[k];
       if (b) b.lastChild.textContent = this._sideLabel(k);
     }
-    this.colorLabelEl.textContent = tr('edit_modal_color');
-    this.parentLabelEl.textContent = tr('edit_modal_parent_group');
+    if (this.colorLabelEl) this.colorLabelEl.textContent = tr('edit_modal_color');
+    if (this.parentLabelEl) this.parentLabelEl.textContent = tr('edit_modal_parent_group');
     if (this.translationsLabelEl) this.translationsLabelEl.textContent = tr('translations_header');
     if (this.translationsAddBtnEl) this.translationsAddBtnEl.textContent = tr('translations_add');
     if (this._branchesLabelEl) this._branchesLabelEl.textContent = tr('branches_assign_label');
-    this.deleteBtnEl.textContent = tr('edit_modal_delete');
-    this.cancelBtnEl.textContent = tr('edit_modal_cancel');
-    this.saveBtnEl.textContent = tr('edit_modal_save');
+    if (this.deleteBtnEl) this.deleteBtnEl.textContent = tr('edit_modal_delete');
+    if (this.saveBtnEl) this.saveBtnEl.textContent = tr('edit_modal_save');
+    if (this.exportBtnEl) this.exportBtnEl.textContent = tr('side_panel_export_md');
     if (this.imageLabelEl) this.imageLabelEl.textContent = tr('edit_modal_image');
     if (this.imagePreviewEmptyEl) this.imagePreviewEmptyEl.textContent = tr('edit_modal_image_empty');
     if (this.cropBtnEl) this.cropBtnEl.textContent = tr('edit_modal_crop_image');
@@ -979,9 +1159,10 @@ export class EditNodeModal {
       const b = this.statusBtnEls[s];
       if (b && b.lastChild) b.lastChild.textContent = this._statusLabel(s);
     }
-    if (this.parentSelectEl.options.length > 0) {
+    if (this.parentSelectEl && this.parentSelectEl.options.length > 0) {
       this.parentSelectEl.options[0].textContent = tr('edit_modal_parent_none');
     }
+    this._refreshLockButton();
   }
 
   isReadonly() { return this._readonly; }
