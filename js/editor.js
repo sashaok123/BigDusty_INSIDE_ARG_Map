@@ -1,7 +1,7 @@
 /* Editor modal for creating/editing hotspots + right-click context menu.
    Discards are routed through a 3-button confirm to prevent data loss. */
 
-import { STATUSES, statusLabel, slugify } from './hotspots.js';
+import { STATUSES, statusLabel, slugify } from './nodes.js';
 import { tr } from './i18n.js';
 
 export class EditorModal {

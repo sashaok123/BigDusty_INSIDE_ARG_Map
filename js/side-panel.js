@@ -1,9 +1,10 @@
-/* Side panel that renders the active hotspot's markdown. Owns the status
-   dropdown + edit overlay + close behaviour. */
+/* Side panel that renders the active node's markdown. Owns the status
+   dropdown + edit overlay + close behaviour. Reads inline markdown from text
+   nodes and falls back to data/puzzles/<slug>.md for legacy entries. */
 
 import { renderMarkdown, attachCodeCopyButtons } from './markdown.js';
 import { loadPuzzleMarkdown, setCachedMarkdown } from './data-loader.js';
-import { statusLabel, statusVarName, STATUSES } from './hotspots.js';
+import { statusLabel, statusVarName, STATUSES, isPuzzleNode, nodeMarkdown } from './nodes.js';
 import { tr } from './i18n.js';
 
 export class SidePanel {
@@ -24,6 +25,7 @@ export class SidePanel {
     this.overlaySaveEl = opts.overlaySaveEl;
     this.overlayCancelEl = opts.overlayCancelEl;
 
+    this.getNode = opts.getNode || (() => null);
     this.onStatusChange = opts.onStatusChange || (() => {});
     this.onContentChange = opts.onContentChange || (() => {});
     this.onConfirmCloseWithUnsaved = opts.onConfirmCloseWithUnsaved || ((cb) => cb(true));
@@ -31,17 +33,13 @@ export class SidePanel {
     this.onExportMd = opts.onExportMd || (() => {});
 
     this.currentId = null;
-    this.currentHotspot = null;
+    this.currentView = null;
     this.currentMd = '';
     this.editing = false;
     this.unsaved = false;
 
-    this._wireStatusOptions();
-    this._wireEvents();
-  }
-
-  _wireStatusOptions() {
     this.refreshStatusOptions();
+    this._wireEvents();
   }
 
   refreshStatusOptions() {
@@ -73,11 +71,11 @@ export class SidePanel {
       this.unsaved = this.overlayTextareaEl.value !== this.currentMd;
     });
     this.saveBtnEl.addEventListener('click', () => {
-      this.onContentChange(this.currentId, this.currentMd, /* persist */ true);
+      this.onContentChange(this.currentId, this.currentMd, true);
     });
     this.exportBtnEl.addEventListener('click', () => {
-      if (this.currentHotspot) {
-        this.onExportMd(this.currentHotspot.slug, this.currentMd);
+      if (this.currentView) {
+        this.onExportMd(this.currentView.slug, this.currentMd);
       }
     });
     document.addEventListener('keydown', (e) => {
@@ -87,23 +85,23 @@ export class SidePanel {
     });
   }
 
-  async open(hotspot) {
+  async open(view) {
     if (this.editing && this.unsaved) {
       this.onConfirmCloseWithUnsaved((discard) => {
         if (discard) {
           this._discardEdits();
-          this.open(hotspot);
+          this.open(view);
         }
       });
       return;
     }
-    this.currentId = hotspot.id;
-    this.currentHotspot = hotspot;
-    this.titleEl.textContent = hotspot.title;
-    this.statusSelectEl.value = hotspot.status;
-    this.statusDotEl.style.background = statusVarName(hotspot.status);
+    this.currentId = view.id;
+    this.currentView = view;
+    this.titleEl.textContent = view.title;
+    this.statusSelectEl.value = view.status;
+    this.statusDotEl.style.background = statusVarName(view.status);
     this.tagsEl.innerHTML = '';
-    (hotspot.tags || []).forEach((t) => {
+    (view.tags || []).forEach((t) => {
       const span = document.createElement('span');
       span.className = 'tag';
       span.textContent = t;
@@ -111,7 +109,17 @@ export class SidePanel {
     });
     this.bodyEl.innerHTML = `<p style="color:var(--text-muted);font-family:var(--font-mono);font-size:12px">${tr('side_panel_loading')}</p>`;
     this.panelEl.classList.add('open');
-    const md = await loadPuzzleMarkdown(hotspot.slug);
+
+    const node = this.getNode(view.id);
+    if (node && isPuzzleNode(node)) {
+      const inline = nodeMarkdown(node);
+      if (inline) {
+        this.currentMd = inline;
+        this._renderBody();
+        return;
+      }
+    }
+    const md = await loadPuzzleMarkdown(view.slug);
     this.currentMd = md;
     this._renderBody();
   }
@@ -120,14 +128,14 @@ export class SidePanel {
     this.statusDotEl.style.background = statusVarName(status);
   }
 
-  setHotspotMeta(hotspot) {
-    if (!this.currentId || hotspot.id !== this.currentId) return;
-    this.currentHotspot = hotspot;
-    this.titleEl.textContent = hotspot.title;
-    this.statusSelectEl.value = hotspot.status;
-    this.statusDotEl.style.background = statusVarName(hotspot.status);
+  setNodeMeta(view) {
+    if (!this.currentId || view.id !== this.currentId) return;
+    this.currentView = view;
+    this.titleEl.textContent = view.title;
+    this.statusSelectEl.value = view.status;
+    this.statusDotEl.style.background = statusVarName(view.status);
     this.tagsEl.innerHTML = '';
-    (hotspot.tags || []).forEach((t) => {
+    (view.tags || []).forEach((t) => {
       const span = document.createElement('span');
       span.className = 'tag';
       span.textContent = t;
@@ -152,12 +160,12 @@ export class SidePanel {
   saveEdit() {
     const newMd = this.overlayTextareaEl.value;
     this.currentMd = newMd;
-    if (this.currentHotspot) setCachedMarkdown(this.currentHotspot.slug, newMd);
+    if (this.currentView) setCachedMarkdown(this.currentView.slug, newMd);
     this._renderBody();
     this.editing = false;
     this.unsaved = false;
     this.overlayEl.classList.remove('open');
-    this.onContentChange(this.currentId, newMd, /* persist */ true);
+    this.onContentChange(this.currentId, newMd, true);
   }
 
   cancelEdit() {
@@ -177,7 +185,7 @@ export class SidePanel {
   }
 
   isOpen() { return this.panelEl.classList.contains('open'); }
-  currentSlug() { return this.currentHotspot ? this.currentHotspot.slug : null; }
+  currentSlug() { return this.currentView ? this.currentView.slug : null; }
   currentMarkdown() { return this.currentMd; }
 
   requestClose() {
@@ -196,7 +204,7 @@ export class SidePanel {
   _closeImmediate() {
     this.panelEl.classList.remove('open');
     this.currentId = null;
-    this.currentHotspot = null;
+    this.currentView = null;
     this.currentMd = '';
     this.onClose();
   }

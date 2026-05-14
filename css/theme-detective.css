@@ -1,0 +1,110 @@
+/* Detective board theme. Toggled by adding `detective` class to <body>.
+   No external textures; the corkboard look is built from layered radial
+   gradients. Edges shift to a warm red, edge labels get a sticky-tape
+   appearance. */
+
+body.detective {
+  --bg: #2a1b08;
+}
+body.detective #viewport {
+  background:
+    radial-gradient(circle at 12% 18%, rgba(255, 220, 160, 0.06) 0 14px, transparent 16px),
+    radial-gradient(circle at 38% 62%, rgba(255, 200, 140, 0.05) 0 18px, transparent 20px),
+    radial-gradient(circle at 72% 30%, rgba(255, 210, 150, 0.05) 0 20px, transparent 22px),
+    radial-gradient(circle at 88% 84%, rgba(255, 220, 160, 0.04) 0 16px, transparent 18px),
+    radial-gradient(ellipse 60% 80% at 50% 50%, #5a3a18 0%, #3d2810 70%, #2a1b08 100%);
+}
+
+body.detective #map-canvas {
+  filter: contrast(0.92) saturate(0.86);
+}
+
+body.detective #arrow-layer path[data-id] {
+  stroke: #b94a32 !important;
+}
+body.detective #arrow-layer .arrow-label-bg {
+  fill: #f4e8c4;
+  stroke: #b94a32;
+  filter: drop-shadow(1px 1px 2px rgba(0, 0, 0, 0.45));
+}
+body.detective #arrow-layer .arrow-label-text {
+  fill: #2a1b08;
+}
+body.detective #arrow-layer marker path {
+  fill: #b94a32;
+}
+
+body.detective .filter-btn {
+  border-color: #6a4d28;
+}
+body.detective .filter-btn.active {
+  border-color: #b94a32;
+  color: #f4d68a;
+  background: rgba(185, 74, 50, 0.18);
+}
+body.detective #toolbar {
+  background: rgba(40, 28, 14, 0.96);
+  border-bottom-color: #6a4d28;
+}
+body.detective #toolbar .logo {
+  color: #f4d68a;
+}
+
+body.detective .minimap {
+  background: rgba(45, 30, 16, 0.96);
+  border-color: #6a4d28;
+}
+body.detective .minimap-title {
+  color: #c8a268;
+}
+
+body.detective .outline-panel {
+  background: rgba(45, 30, 16, 0.96);
+  border-right-color: #6a4d28;
+}
+body.detective .outline-title { color: #f4d68a; }
+body.detective .outline-row:hover {
+  background: rgba(185, 74, 50, 0.16);
+  border-left-color: #b94a32;
+}
+
+body.detective .pin-overlay {
+  position: absolute;
+  pointer-events: none;
+  z-index: 720;
+}
+
+body.detective #panel {
+  background: rgba(45, 30, 16, 0.97);
+  border-left-color: #6a4d28;
+}
+body.detective #panel-title { color: #f4d68a; }
+body.detective .md-rendered { color: #efe2c4; }
+body.detective .md-rendered h1,
+body.detective .md-rendered h2,
+body.detective .md-rendered h3 { color: #f4d68a; }
+body.detective .md-rendered code,
+body.detective .md-rendered pre { background: rgba(20, 12, 4, 0.6); color: #f4d68a; }
+
+body.detective .command-palette-box {
+  background: #2a1b08;
+  border-color: #6a4d28;
+}
+body.detective .command-palette-input { color: #f4d68a; }
+body.detective .command-cat {
+  color: #c8a268;
+  background: rgba(185, 74, 50, 0.06);
+}
+body.detective .command-row { color: #efe2c4; }
+body.detective .command-row.selected { background: rgba(185, 74, 50, 0.22); }
+
+body.detective #shortcut-overlay-box {
+  background: #2a1b08;
+  border-color: #6a4d28;
+}
+body.detective #shortcut-overlay-box h2 { color: #f4d68a; }
+body.detective #shortcut-overlay-box kbd {
+  background: #3d2810;
+  border-color: #6a4d28;
+  color: #f4d68a;
+}

@@ -1,7 +1,7 @@
 /* Live search dropdown. Debounce 150 ms. Click result -> pan map + open
    side panel. Dims non-matching hotspots (does not hide them). */
 
-import { matchesSearch } from './hotspots.js';
+import { matchesSearch } from './nodes.js';
 import { tr } from './i18n.js';
 
 const DEBOUNCE_MS = 150;
