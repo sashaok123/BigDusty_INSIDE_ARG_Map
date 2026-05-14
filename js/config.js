@@ -4,7 +4,7 @@
    before the <script type="module" src="js/app.js"> tag. */
 
 export const API_BASE = (typeof window !== 'undefined' && window.__ARG_API_BASE__)
-  || 'https://YOUR_RAILWAY_URL_HERE.up.railway.app';
+  || 'https://insideargmap-production.up.railway.app';
 
 export const CANVAS_ID = 'main';
 
