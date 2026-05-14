@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
 from .database import Base, get_engine, get_session_factory
-from .routers import admin, auth, canvas, images
+from .routers import admin, auth, canvas, comments, images
 from .seed import seed_initial_admin, seed_initial_canvas
 
 logger = logging.getLogger(__name__)
@@ -48,6 +48,7 @@ def create_app() -> FastAPI:
     app.include_router(admin.router)
     app.include_router(canvas.router)
     app.include_router(images.router)
+    app.include_router(comments.router)
 
     @app.get("/health", tags=["health"])
     async def health() -> dict[str, str]:

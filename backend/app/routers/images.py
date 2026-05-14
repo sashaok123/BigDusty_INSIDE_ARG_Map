@@ -1,5 +1,6 @@
-"""Image upload and serving endpoints. Bytes are stored in Postgres as bytea
-with sha256 dedupe; images are served with immutable cache headers."""
+"""Media upload and serving endpoints. Bytes are stored in Postgres as bytea
+with sha256 dedupe; media items are served with immutable cache headers.
+The same table holds images and short video clips (mp4/webm up to 100 MB)."""
 
 import hashlib
 import uuid
@@ -16,10 +17,13 @@ from ..database import get_db
 from ..deps import get_current_user
 from ..models import CanvasImage, User
 
-router = APIRouter(tags=["images"])
+router = APIRouter(tags=["media"])
 
-ALLOWED_MIMES = {"image/png", "image/jpeg", "image/webp"}
+ALLOWED_IMAGE_MIMES = {"image/png", "image/jpeg", "image/webp"}
+ALLOWED_VIDEO_MIMES = {"video/mp4", "video/webm"}
+ALLOWED_MIMES = ALLOWED_IMAGE_MIMES | ALLOWED_VIDEO_MIMES
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
+MAX_VIDEO_BYTES = 100 * 1024 * 1024
 
 
 def _image_url(canvas_id: str, image_id: uuid.UUID) -> str:
@@ -37,16 +41,17 @@ async def upload_image(
     if mime not in ALLOWED_MIMES:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail=f"Unsupported image type: {mime or 'unknown'}",
+            detail=f"Unsupported media type: {mime or 'unknown'}",
         )
     contents = await file.read()
     size = len(contents)
     if size == 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file")
-    if size > MAX_IMAGE_BYTES:
+    max_bytes = MAX_VIDEO_BYTES if mime in ALLOWED_VIDEO_MIMES else MAX_IMAGE_BYTES
+    if size > max_bytes:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"Image too large ({size} bytes, max {MAX_IMAGE_BYTES})",
+            detail=f"Media too large ({size} bytes, max {max_bytes})",
         )
     digest = hashlib.sha256(contents).hexdigest()
     existing = await db.scalar(select(CanvasImage).where(CanvasImage.sha256 == digest))
@@ -81,7 +86,8 @@ async def upload_image(
             "size": again.size,
         }
     await db.refresh(record)
-    await log_action(db, user.id, "image_uploaded", {"image_id": str(record.id), "mime": record.mime, "size": record.size, "sha256": record.sha256})
+    action = "video_uploaded" if mime in ALLOWED_VIDEO_MIMES else "image_uploaded"
+    await log_action(db, user.id, action, {"media_id": str(record.id), "mime": record.mime, "size": record.size, "sha256": record.sha256})
     await db.commit()
     return {
         "id": str(record.id),

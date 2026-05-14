@@ -139,3 +139,29 @@ class AuditEntryOut(BaseModel):
     action: str
     payload: dict[str, Any] | None = None
     created_at: Any
+
+
+class CommentCreateRequest(BaseModel):
+    x: float
+    y: float
+    body: str = Field(..., min_length=1, max_length=4000)
+
+
+class CommentReplyRequest(BaseModel):
+    body: str = Field(..., min_length=1, max_length=4000)
+
+
+class CommentMessage(BaseModel):
+    author: str
+    body: str
+    at: Any
+
+
+class CommentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    canvas_id: str
+    x: float
+    y: float
+    thread: list[CommentMessage]
+    created_at: Any

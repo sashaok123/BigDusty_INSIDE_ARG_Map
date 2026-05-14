@@ -1,0 +1,188 @@
+/* Comment pins and thread popover. Pins are positioned by JS over the viewport
+   and react to the viewer transform. */
+
+.comments-layer { pointer-events: none; }
+
+.comment-pin {
+  width: 28px;
+  height: 28px;
+  border-radius: 14px 14px 14px 4px;
+  background: var(--accent);
+  color: var(--bg);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  border: 2px solid var(--panel-bg);
+  cursor: pointer;
+  box-shadow: var(--shadow-soft);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform .12s ease;
+}
+.comment-pin:hover { transform: scale(1.08); }
+
+.comments-panel {
+  position: fixed;
+  width: 300px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-modal);
+  display: flex;
+  flex-direction: column;
+  max-height: 60vh;
+}
+.comments-panel-head {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--panel-border);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.comments-panel-close {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 18px;
+  cursor: pointer;
+}
+.comments-panel-thread {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 14px;
+}
+.comments-msg {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--panel-border);
+}
+.comments-msg:last-child { border-bottom: none; }
+.comments-msg-author {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--accent);
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+.comments-msg-body {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+.comments-panel-reply {
+  padding: 10px 14px;
+  border-top: 1px solid var(--panel-border);
+  display: flex;
+  gap: 6px;
+}
+.comments-panel-reply input {
+  flex: 1;
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: var(--radius);
+  outline: none;
+}
+.comments-panel-reply input:focus { border-color: var(--accent); }
+
+body.comment-arm { cursor: crosshair; }
+
+.align-floater {
+  position: fixed;
+  z-index: 1400;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+}
+.align-floater-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text);
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius);
+}
+.align-floater-btn:hover {
+  background: var(--accent-soft-bg);
+  color: var(--accent);
+  border-color: var(--field-border);
+}
+.align-floater-sep {
+  display: inline-block;
+  width: 1px;
+  height: 20px;
+  background: var(--panel-border);
+  margin: 4px 4px;
+}
+
+.auth-settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+.auth-settings-field input,
+.auth-settings-field select {
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: var(--radius);
+  outline: none;
+}
+.auth-settings-test {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.auth-settings-test-out {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text);
+  flex: 1;
+}
+.auth-settings-test-out.error { color: var(--unsolved); }
+
+.auth-confirm-text {
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 8px 0;
+}
+.auth-confirm-hint {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  margin: 4px 0 8px;
+}
+
+.snap-guides { pointer-events: none; }
+.snap-guides line { vector-effect: non-scaling-stroke; }
+
+.video-node {
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-soft);
+}
+.video-node iframe { display: block; }
+.video-node video { display: block; }

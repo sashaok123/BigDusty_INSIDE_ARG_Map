@@ -333,6 +333,26 @@ export function absoluteImageUrl(url) {
   return url;
 }
 
+export async function listComments(canvasId) {
+  return _request(`/canvas/${encodeURIComponent(canvasId)}/comments`);
+}
+
+export async function createComment(canvasId, payload) {
+  return _request(`/canvas/${encodeURIComponent(canvasId)}/comments`, {
+    method: 'POST',
+    body: payload,
+    auth: true,
+  });
+}
+
+export async function replyToComment(canvasId, commentId, payload) {
+  return _request(`/canvas/${encodeURIComponent(canvasId)}/comments/${encodeURIComponent(commentId)}/reply`, {
+    method: 'POST',
+    body: payload,
+    auth: true,
+  });
+}
+
 export async function uploadImage(blob, filename) {
   if (!isLoggedIn()) {
     const err = new Error('auth_required');

@@ -1,13 +1,60 @@
-/* Rich edit modal for nodes (puzzle, sticky, group, file). Opens on
-   double-click, right-click Edit, or Enter on a selected node. Fields:
-   title, status segmented control, tag chip input, body editor with
-   Edit/Preview tabs, caption (text + side + offset), color palette,
-   parent-group dropdown, Save / Cancel / Delete. For image file-nodes
-   also shows a preview with Crop / Replace buttons. */
+/* Rich edit modal for nodes (puzzle, sticky, group, file, text, video).
+   Opens on double-click, right-click Edit, or Enter on a selected node.
+   Provides: title, status segmented control, tag chip input, body editor
+   with Markdown formatting toolbar + Edit/Preview tabs, caption row,
+   colour palette, parent-group dropdown, font/size/colour controls for
+   free-text nodes, per-field magic-wand auto-translate, image preview
+   with Crop/Replace, video URL editor. */
 
 import { tr, LANGS } from './i18n.js';
 import { STATUSES, statusVarName, isGroupNode } from './nodes.js';
 import { renderMarkdown } from './markdown.js';
+import { translateMany, translateOne, providerLabel } from './translate.js';
+import { getTranslationProvider } from './settings.js';
+import { buildMarkdownToolbar } from './md-toolbar.js';
+
+const TEXT_SIZES = ['S', 'M', 'L', 'XL'];
+const TEXT_FAMILIES = ['system', 'mono', 'serif'];
+const TEXT_ALIGNS = ['left', 'center', 'right'];
+const TEXT_COLOR_SWATCHES = [
+  { id: 'auto',   swatch: 'auto' },
+  { id: '#16181c', swatch: '#16181c' },
+  { id: '#ffffff', swatch: '#ffffff' },
+  { id: '#e83d3d', swatch: '#e83d3d' },
+  { id: '#e88a3d', swatch: '#e88a3d' },
+  { id: '#e8c83d', swatch: '#e8c83d' },
+  { id: '#3de88a', swatch: '#3de88a' },
+  { id: '#3dc8e8', swatch: '#3dc8e8' },
+  { id: '#9a6ce8', swatch: '#9a6ce8' },
+];
+const YOUTUBE_RE = /(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{6,})/;
+const VIMEO_RE = /vimeo\.com\/(?:video\/)?(\d+)/;
+
+export function detectVideoUrl(url) {
+  if (typeof url !== 'string' || !url.trim()) return null;
+  const u = url.trim();
+  let m = u.match(YOUTUBE_RE);
+  if (m) {
+    return {
+      kind: 'youtube',
+      provider: 'youtube',
+      videoId: m[1],
+      url: u,
+      embedUrl: `https://www.youtube.com/embed/${m[1]}`,
+    };
+  }
+  m = u.match(VIMEO_RE);
+  if (m) {
+    return {
+      kind: 'vimeo',
+      provider: 'vimeo',
+      videoId: m[1],
+      url: u,
+      embedUrl: `https://player.vimeo.com/video/${m[1]}`,
+    };
+  }
+  return null;
+}
 
 const IMAGE_EXT_RE = /\.(png|jpe?g|webp|gif|bmp)(\?.*)?$/i;
 const IMAGE_MIME_RE = /^image\//i;
@@ -76,9 +123,13 @@ export class EditNodeModal {
     const signinHint = el('div', { id: 'edit-modal-signin-hint', text: tr('edit_modal_signin_hint') });
 
     const titleField = el('div', { class: 'em-field' });
+    const titleHeadRow = el('div', { class: 'em-field-head' });
     const titleLabel = el('label', { text: tr('edit_modal_title') });
+    const titleWand = this._makeWandButton('label');
+    titleHeadRow.appendChild(titleLabel);
+    titleHeadRow.appendChild(titleWand);
     const titleInput = el('input', { type: 'text' });
-    titleField.appendChild(titleLabel); titleField.appendChild(titleInput);
+    titleField.appendChild(titleHeadRow); titleField.appendChild(titleInput);
 
     const statusField = el('div', { class: 'em-field' });
     const statusLabel = el('label', { text: tr('edit_modal_status') });
@@ -108,7 +159,11 @@ export class EditNodeModal {
     tagsField.appendChild(tagsLabel); tagsField.appendChild(tagsHost);
 
     const bodyField = el('div', { class: 'em-field' });
+    const bodyHead = el('div', { class: 'em-field-head' });
     const bodyLabel = el('label', { text: tr('edit_modal_body') });
+    const bodyWandBtn = this._makeWandButton('body');
+    bodyHead.appendChild(bodyLabel);
+    bodyHead.appendChild(bodyWandBtn);
     const tabs = el('div', { class: 'em-tabs' });
     const tabEdit = el('button', { type: 'button', class: 'active', text: tr('edit_modal_body_edit'),
       onclick: () => this._setBodyTab('edit') });
@@ -116,9 +171,12 @@ export class EditNodeModal {
       onclick: () => this._setBodyTab('preview') });
     tabs.appendChild(tabEdit); tabs.appendChild(tabPreview);
     const mdInput = el('textarea', { spellcheck: 'false' });
+    const mdToolbarRef = buildMarkdownToolbar(() => mdInput);
     const previewEl = el('div', { class: 'em-preview md-rendered' });
     previewEl.style.display = 'none';
-    bodyField.appendChild(bodyLabel); bodyField.appendChild(tabs);
+    bodyField.appendChild(bodyHead);
+    bodyField.appendChild(tabs);
+    bodyField.appendChild(mdToolbarRef.el);
     bodyField.appendChild(mdInput); bodyField.appendChild(previewEl);
 
     const captionField = el('div', { class: 'em-field' });
@@ -213,6 +271,81 @@ export class EditNodeModal {
     imageField.appendChild(imageRow);
     imageField.style.display = 'none';
 
+    const textStyleField = el('div', { class: 'em-field em-text-style' });
+    const textStyleLabel = el('label', { text: tr('edit_modal_text_style') });
+    const textStyleRow = el('div', { class: 'em-text-style-row' });
+    const sizeSeg = el('div', { class: 'em-segmented' });
+    const sizeBtns = {};
+    for (const s of TEXT_SIZES) {
+      const b = el('button', { type: 'button', text: s });
+      b.addEventListener('click', () => this._setTextStyle({ size: s }));
+      sizeSeg.appendChild(b);
+      sizeBtns[s] = b;
+    }
+    const familySeg = el('div', { class: 'em-segmented' });
+    const familyBtns = {};
+    for (const f of TEXT_FAMILIES) {
+      const b = el('button', { type: 'button', text: tr(`edit_modal_text_family_${f}`) });
+      b.addEventListener('click', () => this._setTextStyle({ family: f }));
+      familySeg.appendChild(b);
+      familyBtns[f] = b;
+    }
+    const alignSeg = el('div', { class: 'em-segmented' });
+    const alignBtns = {};
+    for (const a of TEXT_ALIGNS) {
+      const b = el('button', { type: 'button', text: tr(`edit_modal_text_align_${a}`) });
+      b.addEventListener('click', () => this._setTextStyle({ align: a }));
+      alignSeg.appendChild(b);
+      alignBtns[a] = b;
+    }
+    const colorPickerRow = el('div', { class: 'em-text-color-row' });
+    const textColorBtns = {};
+    for (const c of TEXT_COLOR_SWATCHES) {
+      const b = el('div', { class: c.id === 'auto' ? 'em-text-color em-text-color-auto'
+                            : 'em-text-color', role: 'button', tabindex: '0' });
+      if (c.id === 'auto') b.textContent = 'A';
+      else b.style.background = c.swatch;
+      b.addEventListener('click', () => this._setTextStyle({ color: c.id === 'auto' ? 'auto' : c.id }));
+      colorPickerRow.appendChild(b);
+      textColorBtns[c.id] = b;
+    }
+    const wrapToggleRow = el('div', { class: 'em-text-wrap-row' });
+    const wrapToggleLabel = el('span', { class: 'em-text-wrap-label', text: tr('edit_modal_text_wrap') });
+    const wrapToggleSeg = el('div', { class: 'em-segmented' });
+    const wrapWordBtn = el('button', { type: 'button', text: tr('edit_modal_text_wrap_word') });
+    wrapWordBtn.addEventListener('click', () => this._setTextStyle({ wrap: 'word' }));
+    const wrapNoneBtn = el('button', { type: 'button', text: tr('edit_modal_text_wrap_none') });
+    wrapNoneBtn.addEventListener('click', () => this._setTextStyle({ wrap: 'none' }));
+    wrapToggleSeg.appendChild(wrapWordBtn);
+    wrapToggleSeg.appendChild(wrapNoneBtn);
+    wrapToggleRow.appendChild(wrapToggleLabel);
+    wrapToggleRow.appendChild(wrapToggleSeg);
+    textStyleRow.appendChild(sizeSeg);
+    textStyleRow.appendChild(familySeg);
+    textStyleRow.appendChild(alignSeg);
+    textStyleField.appendChild(textStyleLabel);
+    textStyleField.appendChild(textStyleRow);
+    textStyleField.appendChild(colorPickerRow);
+    textStyleField.appendChild(wrapToggleRow);
+    textStyleField.style.display = 'none';
+
+    const videoField = el('div', { class: 'em-field em-video' });
+    const videoLabel = el('label', { text: tr('edit_modal_video_url') });
+    const videoRow = el('div', { class: 'em-video-row' });
+    const videoInput = el('input', { type: 'text', placeholder: tr('edit_modal_video_placeholder') });
+    const videoApplyBtn = el('button', { type: 'button', class: 'modal-btn', text: tr('edit_modal_video_apply') });
+    const videoHint = el('div', { class: 'em-video-hint' });
+    videoRow.appendChild(videoInput);
+    videoRow.appendChild(videoApplyBtn);
+    videoApplyBtn.addEventListener('click', () => this._applyVideoUrl());
+    videoInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); this._applyVideoUrl(); }
+    });
+    videoField.appendChild(videoLabel);
+    videoField.appendChild(videoRow);
+    videoField.appendChild(videoHint);
+    videoField.style.display = 'none';
+
     body.appendChild(signinHint);
     body.appendChild(titleField);
     const row = el('div', { class: 'em-row' });
@@ -220,6 +353,8 @@ export class EditNodeModal {
     body.appendChild(row);
     body.appendChild(tagsField);
     body.appendChild(bodyField);
+    body.appendChild(textStyleField);
+    body.appendChild(videoField);
     body.appendChild(captionField);
     body.appendChild(parentField);
     body.appendChild(translationsField);
@@ -295,10 +430,127 @@ export class EditNodeModal {
     this.imagePreviewEmptyEl = imagePreviewEmpty;
     this.cropBtnEl = cropBtn;
     this.replaceBtnEl = replaceBtn;
+    this.textStyleFieldEl = textStyleField;
+    this.textStyleLabelEl = textStyleLabel;
+    this.sizeBtnEls = sizeBtns;
+    this.familyBtnEls = familyBtns;
+    this.alignBtnEls = alignBtns;
+    this.textColorBtnEls = textColorBtns;
+    this.wrapWordBtnEl = wrapWordBtn;
+    this.wrapNoneBtnEl = wrapNoneBtn;
+    this.wrapToggleLabelEl = wrapToggleLabel;
+    this.videoFieldEl = videoField;
+    this.videoLabelEl = videoLabel;
+    this.videoInputEl = videoInput;
+    this.videoApplyBtnEl = videoApplyBtn;
+    this.videoHintEl = videoHint;
+    this.titleWandEl = titleWand;
+    this.bodyWandEl = bodyWandBtn;
+    this.mdToolbarRef = mdToolbarRef;
 
     this._state = null;
     this._tags = [];
     this._readonly = false;
+  }
+
+  _makeWandButton(field) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'em-wand';
+    b.title = tr('translate_to_all');
+    b.setAttribute('aria-label', tr('translate_to_all'));
+    b.dataset.field = field;
+    b.innerHTML = '<span aria-hidden="true">&#x2728;</span>';
+    b.addEventListener('click', () => this._translateField(field));
+    return b;
+  }
+
+  _setTextStyle(patch) {
+    if (this._readonly) { this.onUnauthedSubmit(); return; }
+    if (!this._state) return;
+    if (!this._state.text_style) this._state.text_style = {};
+    Object.assign(this._state.text_style, patch || {});
+    this._syncTextStyleButtons();
+  }
+
+  _syncTextStyleButtons() {
+    const ts = (this._state && this._state.text_style) || {};
+    for (const s of TEXT_SIZES) {
+      const b = this.sizeBtnEls[s];
+      if (b) b.classList.toggle('active', (ts.size || 'M') === s);
+    }
+    for (const f of TEXT_FAMILIES) {
+      const b = this.familyBtnEls[f];
+      if (b) b.classList.toggle('active', (ts.family || 'system') === f);
+    }
+    for (const a of TEXT_ALIGNS) {
+      const b = this.alignBtnEls[a];
+      if (b) b.classList.toggle('active', (ts.align || 'left') === a);
+    }
+    const cur = ts.color || 'auto';
+    for (const [id, b] of Object.entries(this.textColorBtnEls)) {
+      b.classList.toggle('active', id === cur);
+    }
+    if (this.wrapWordBtnEl) this.wrapWordBtnEl.classList.toggle('active', (ts.wrap || 'word') !== 'none');
+    if (this.wrapNoneBtnEl) this.wrapNoneBtnEl.classList.toggle('active', ts.wrap === 'none');
+  }
+
+  _applyVideoUrl() {
+    if (this._readonly) { this.onUnauthedSubmit(); return; }
+    if (!this._state) return;
+    const url = (this.videoInputEl.value || '').trim();
+    if (!url) {
+      this._state.media = null;
+      if (this.videoHintEl) this.videoHintEl.textContent = '';
+      return;
+    }
+    const info = detectVideoUrl(url);
+    if (!info) {
+      this.videoHintEl.textContent = tr('edit_modal_video_unknown');
+      this.videoHintEl.classList.add('em-video-hint-error');
+      return;
+    }
+    this._state.media = info;
+    this._state.kind = 'video';
+    if (this.videoHintEl) {
+      this.videoHintEl.textContent = tr('edit_modal_video_recognised', { provider: info.provider });
+      this.videoHintEl.classList.remove('em-video-hint-error');
+    }
+  }
+
+  async _translateField(field) {
+    if (this._readonly) { this.onUnauthedSubmit(); return; }
+    const provider = getTranslationProvider();
+    if (!provider || provider.name === 'none') {
+      try { document.dispatchEvent(new CustomEvent('toast', { detail: { msg: tr('translate_set_up_hint'), kind: 'info' } })); } catch (e) { void e; }
+      return;
+    }
+    const src = field === 'body'
+      ? (this.mdInputEl.value || '')
+      : field === 'caption'
+        ? (this.captionTextEl.value || '')
+        : (this.titleInputEl.value || '');
+    if (!src.trim()) return;
+    if (!this._translations) this._translations = {};
+    const targets = LANGS.filter((l) => l !== 'en');
+    try {
+      const results = await translateMany(src, 'en', targets, provider);
+      for (const [lang, value] of Object.entries(results)) {
+        if (!value) continue;
+        if (!this._translations[lang]) this._translations[lang] = { label: '', body: '' };
+        if (field === 'body') this._translations[lang].body = value;
+        else if (field === 'caption') {
+          this._translations[lang].caption = this._translations[lang].caption || {};
+          this._translations[lang].caption.text = value;
+        }
+        else this._translations[lang].label = value;
+      }
+      this._renderTranslations();
+      try { document.dispatchEvent(new CustomEvent('toast', { detail: { msg: tr('translate_done', { provider: providerLabel(provider.name) }), kind: 'info' } })); } catch (e) { void e; }
+    } catch (e) {
+      console.warn('[edit-node-modal] translate failed', e);
+      try { document.dispatchEvent(new CustomEvent('toast', { detail: { msg: tr('translate_failed'), kind: 'error' } })); } catch (er) { void er; }
+    }
   }
 
   _setImagePreview(url) {
@@ -375,6 +627,8 @@ export class EditNodeModal {
       color: view.color || '',
       parent: view.parent || '',
       rect: view.rect ? { ...view.rect } : null,
+      text_style: view.text_style ? { ...view.text_style } : null,
+      media: view.media ? { ...view.media } : null,
     };
     this._tags = [...this._state.tags];
     this._translations = view.translations ? JSON.parse(JSON.stringify(view.translations)) : null;
@@ -382,6 +636,18 @@ export class EditNodeModal {
     const isImage = looksLikeImage(this._state);
     this.imageFieldEl.style.display = isImage ? 'flex' : 'none';
     if (isImage) this._setImagePreview(this._state.file || '');
+    const isText = this._state.kind === 'text';
+    if (this.textStyleFieldEl) this.textStyleFieldEl.style.display = isText ? 'flex' : 'none';
+    const isVideo = this._state.kind === 'video' || (this._state.media && (this._state.media.kind === 'youtube' || this._state.media.kind === 'vimeo'));
+    if (this.videoFieldEl) this.videoFieldEl.style.display = isVideo ? 'flex' : 'none';
+    if (isVideo) {
+      this.videoInputEl.value = (this._state.media && this._state.media.url) || '';
+      if (this.videoHintEl) {
+        if (this._state.media && this._state.media.provider) {
+          this.videoHintEl.textContent = tr('edit_modal_video_recognised', { provider: this._state.media.provider });
+        } else this.videoHintEl.textContent = '';
+      }
+    }
     this._readonly = !this.canEdit();
     this.modalEl.classList.toggle('em-readonly', this._readonly);
     if (this.signinHintEl) this.signinHintEl.classList.toggle('visible', this._readonly);
@@ -393,6 +659,8 @@ export class EditNodeModal {
     this._renderTags();
     this._rebuildTagSuggestions();
     this.mdInputEl.value = this._state.md;
+    if (!this._state.text_style) this._state.text_style = {};
+    this._syncTextStyleButtons();
     const cap = this._state.caption || { text: '', side: 'bottom', offset: 12 };
     this.captionTextEl.value = cap.text || '';
     this._setCaptionSide(cap.side || 'bottom', true);
@@ -606,12 +874,19 @@ export class EditNodeModal {
     if (this._translations && Object.keys(this._translations).length > 0) {
       const cleaned = {};
       for (const [l, slot] of Object.entries(this._translations)) {
-        if (slot && (slot.label || slot.body)) cleaned[l] = { ...slot };
+        if (slot && (slot.label || slot.body || (slot.caption && slot.caption.text))) cleaned[l] = { ...slot };
       }
       payload.translations = Object.keys(cleaned).length ? cleaned : null;
     } else {
       payload.translations = null;
     }
+    if (this._state.text_style && Object.keys(this._state.text_style).length) {
+      payload.text_style = { ...this._state.text_style };
+    } else {
+      payload.text_style = null;
+    }
+    if (this._state.media) payload.media = { ...this._state.media };
+    else payload.media = null;
     this.close();
     this.onSave(payload);
   }

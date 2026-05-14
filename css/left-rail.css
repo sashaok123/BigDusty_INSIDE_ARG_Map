@@ -147,27 +147,28 @@
   border-color: var(--accent);
 }
 
-/* Tools section visibility: only shown when authed AND editor mode */
+/* Tools section visibility: only shown in editor mode (rail itself is open
+   whenever the user is authed, so Browse-mode users can switch back). */
 #left-rail .rail-tools { display: none; }
 body.authed.editor-mode #left-rail .rail-tools { display: flex; }
 
-/* Whole rail hidden when not authed or not in editor mode */
+/* Rail is hidden only when anonymous. */
 #left-rail { display: none; }
-body.authed.editor-mode #left-rail { display: flex; }
+body.authed #left-rail { display: flex; }
 
-/* Push the main viewport over by the rail width when rail is visible */
+/* Push the main viewport over by the rail width whenever the rail is open. */
 body { padding-left: 0; }
-body.authed.editor-mode { padding-left: var(--rail-w); }
-body.authed.editor-mode #toolbar { left: var(--rail-w); }
-body.authed.editor-mode #viewport { left: var(--rail-w); }
-body.authed.editor-mode #zoom-controls { left: calc(var(--rail-w) + 14px); }
-body.authed.editor-mode #offline-banner { left: calc(var(--rail-w) + 8px); }
-body.authed.editor-mode #selection-status { left: calc(var(--rail-w) + 14px); }
+body.authed { padding-left: var(--rail-w); }
+body.authed #toolbar { left: var(--rail-w); }
+body.authed #viewport { left: var(--rail-w); }
+body.authed #zoom-controls { left: calc(var(--rail-w) + 14px); }
+body.authed #offline-banner { left: calc(var(--rail-w) + 8px); }
+body.authed #selection-status { left: calc(var(--rail-w) + 14px); }
 
 /* Mobile: collapse rail to bottom strip on narrow screens */
 @media (max-width: 720px) {
-  body.authed.editor-mode { padding-left: 0; padding-bottom: 56px; }
-  body.authed.editor-mode #left-rail {
+  body.authed { padding-left: 0; padding-bottom: 56px; }
+  body.authed #left-rail {
     top: auto;
     bottom: 0;
     left: 0;
@@ -197,9 +198,9 @@ body.authed.editor-mode #selection-status { left: calc(var(--rail-w) + 14px); }
     bottom: calc(100% + 6px);
     flex-direction: row;
   }
-  body.authed.editor-mode #toolbar { left: 0; }
-  body.authed.editor-mode #viewport { left: 0; bottom: 56px; }
-  body.authed.editor-mode #zoom-controls { bottom: 72px; left: 14px; }
-  body.authed.editor-mode #offline-banner { left: 8px; bottom: 64px; }
-  body.authed.editor-mode #selection-status { left: 14px; bottom: 64px; }
+  body.authed #toolbar { left: 0; }
+  body.authed #viewport { left: 0; bottom: 56px; }
+  body.authed #zoom-controls { bottom: 72px; left: 14px; }
+  body.authed #offline-banner { left: 8px; bottom: 64px; }
+  body.authed #selection-status { left: 14px; bottom: 64px; }
 }

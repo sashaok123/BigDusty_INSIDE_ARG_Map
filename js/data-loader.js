@@ -118,6 +118,26 @@ export function normaliseNode(raw) {
       node.translations[lang] = slot;
     }
   }
+  if (raw.text_style && typeof raw.text_style === 'object') {
+    const ts = {};
+    if (typeof raw.text_style.size === 'string') ts.size = raw.text_style.size;
+    if (typeof raw.text_style.family === 'string') ts.family = raw.text_style.family;
+    if (typeof raw.text_style.color === 'string') ts.color = raw.text_style.color;
+    if (typeof raw.text_style.align === 'string') ts.align = raw.text_style.align;
+    if (typeof raw.text_style.wrap === 'string') ts.wrap = raw.text_style.wrap;
+    node.text_style = ts;
+  }
+  if (raw.media && typeof raw.media === 'object') {
+    const m = {};
+    if (typeof raw.media.kind === 'string') m.kind = raw.media.kind;
+    if (typeof raw.media.url === 'string') m.url = raw.media.url;
+    if (typeof raw.media.videoId === 'string') m.videoId = raw.media.videoId;
+    if (typeof raw.media.embedUrl === 'string') m.embedUrl = raw.media.embedUrl;
+    if (typeof raw.media.provider === 'string') m.provider = raw.media.provider;
+    node.media = m;
+  }
+  if (typeof raw.mime === 'string') node.mime = raw.mime;
+  if (raw.kind === 'video') node.kind = 'video';
   return node;
 }
 

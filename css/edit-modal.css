@@ -500,3 +500,193 @@
   padding: 5px 8px;
   border-radius: var(--radius);
 }
+
+.em-field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.em-wand {
+  background: transparent;
+  border: 1px solid var(--field-border);
+  color: var(--accent);
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  line-height: 1;
+}
+.em-wand:hover { background: var(--accent-soft-bg); border-color: var(--accent); }
+
+.md-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+  margin-bottom: 6px;
+  padding: 5px 6px;
+  border: 1px solid var(--field-border);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+}
+.md-tb-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  min-width: 26px;
+}
+.md-tb-btn:hover {
+  background: var(--accent-soft-bg);
+  border-color: var(--field-border);
+}
+.md-tb-sep {
+  display: inline-block;
+  width: 1px;
+  height: 16px;
+  background: var(--field-border);
+  margin: 0 4px;
+}
+
+.em-text-style { display: flex; flex-direction: column; }
+.em-text-style-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.em-text-color-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.em-text-color {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius);
+  border: 2px solid transparent;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.em-text-color.em-text-color-auto {
+  background: var(--field-bg);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-dim);
+}
+.em-text-color.active { border-color: var(--accent); }
+.em-text-wrap-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.em-text-wrap-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+}
+
+.em-video { display: flex; flex-direction: column; }
+.em-video-row {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+.em-video-row input[type="text"] {
+  flex: 1;
+}
+.em-video-hint {
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.5px;
+}
+.em-video-hint.em-video-hint-error { color: var(--unsolved); }
+
+.video-dialog {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.36);
+  z-index: 2400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+.video-dialog-box {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-modal);
+  width: 520px;
+  max-width: 96vw;
+}
+.video-dialog-head, .video-dialog-foot {
+  padding: 12px 18px;
+}
+.video-dialog-head {
+  border-bottom: 1px solid var(--panel-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.video-dialog-head h2 {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.video-dialog-close {
+  background: none; border: none; color: var(--text-dim);
+  font-size: 22px; cursor: pointer;
+}
+.video-dialog-body {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.video-dialog-body label {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.video-dialog-input {
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  outline: none;
+}
+.video-dialog-input:focus { border-color: var(--accent); }
+.video-dialog-hint {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  min-height: 14px;
+}
+.video-dialog-hint.error { color: var(--unsolved); }
+.video-dialog-foot {
+  border-top: 1px solid var(--panel-border);
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
