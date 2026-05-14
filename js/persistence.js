@@ -1,8 +1,11 @@
-/* localStorage persistence + JSON export/import. State shape:
-   { version: 1, hotspots: [...], puzzles: { slug: "md text", ... } } */
+/* localStorage persistence + canvas import/export. Current shape (v3):
+   { version: 3, canvas: { nodes: [...], edges: [...] }, lang, puzzles }. */
+
+import { legacyToCanvas, serializeCanvas } from './data-loader.js';
 
 const STORAGE_KEY = 'arg_map_state';
 const DEBOUNCE_MS = 500;
+const STATE_VERSION = 3;
 
 let saveTimer = null;
 
@@ -52,8 +55,9 @@ export function clearState() {
   }
 }
 
-export function downloadJSON(state, filename = 'arg_map_state.json') {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+export function downloadCanvasFile(nodes, edges, filename = 'canvas.canvas') {
+  const payload = serializeCanvas(nodes, edges);
+  const blob = new Blob([JSON.stringify(payload, null, 2) + '\n'], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -64,19 +68,13 @@ export function downloadJSON(state, filename = 'arg_map_state.json') {
   setTimeout(() => URL.revokeObjectURL(url), 200);
 }
 
-export function importJSON(file) {
+export function importCanvasFile(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
         const data = JSON.parse(ev.target.result);
-        if (typeof data !== 'object' || data === null) {
-          throw new Error('Not an object');
-        }
-        if (!Array.isArray(data.hotspots)) {
-          throw new Error('Missing hotspots[]');
-        }
-        resolve(data);
+        resolve(parseImported(data));
       } catch (e) {
         reject(e);
       }
@@ -84,4 +82,24 @@ export function importJSON(file) {
     reader.onerror = () => reject(new Error('File read failed'));
     reader.readAsText(file);
   });
+}
+
+function parseImported(data) {
+  if (!data || typeof data !== 'object') throw new Error('Not an object');
+  if (Array.isArray(data.nodes) && Array.isArray(data.edges)) {
+    return { nodes: data.nodes, edges: data.edges };
+  }
+  if (data.version === STATE_VERSION && data.canvas
+      && Array.isArray(data.canvas.nodes) && Array.isArray(data.canvas.edges)) {
+    return { nodes: data.canvas.nodes, edges: data.canvas.edges };
+  }
+  if (Array.isArray(data.hotspots)) {
+    const legacy = {
+      blocks: [],
+      hotspots: data.hotspots,
+      arrows: Array.isArray(data.arrows) ? data.arrows : [],
+    };
+    return legacyToCanvas(legacy);
+  }
+  throw new Error('Unknown file shape');
 }

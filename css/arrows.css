@@ -75,3 +75,38 @@
 }
 .arrow-props-actions button.danger { border-color: var(--unsolved); color: var(--unsolved); }
 .arrow-props-actions button.danger:hover { background: rgba(232,61,61,0.14); }
+
+.arrow-anchor-handle {
+  fill: rgba(232, 107, 46, 0.94);
+  stroke: #0a0a0c;
+  stroke-width: 1.2;
+  transition: fill .12s;
+}
+.arrow-anchor-handle:hover { fill: rgba(61, 232, 200, 0.95); }
+
+.arrow-waypoint-handle {
+  fill: rgba(85, 170, 255, 0.95);
+  stroke: #0a0a0c;
+  stroke-width: 1.2;
+}
+.arrow-waypoint-handle:hover { fill: rgba(180, 220, 255, 1); }
+
+.arrow-endpoint-handle {
+  fill: rgba(232, 107, 46, 0.88);
+  stroke: #0a0a0c;
+  stroke-width: 1.2;
+}
+.arrow-endpoint-handle:hover { fill: rgba(61, 232, 200, 0.95); }
+
+.arrow-junction-handle {
+  fill: rgba(232, 200, 61, 0.95);
+  stroke: #0a0a0c;
+  stroke-width: 1.2;
+}
+.arrow-junction-handle:hover { fill: rgba(255, 230, 100, 1); }
+
+.arrow-snap-target {
+  fill: none;
+  stroke: rgba(61, 232, 200, 0.85);
+  stroke-width: 2;
+}

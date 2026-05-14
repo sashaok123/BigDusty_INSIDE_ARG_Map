@@ -13,3 +13,6 @@ _scratch/
 _local/
 *.bak
 *.tmp
+
+# Local task notes, never published
+tasks/

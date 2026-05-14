@@ -1,0 +1,57 @@
+.minimap {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  width: 220px;
+  background: rgba(15, 15, 20, 0.96);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  z-index: 850;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  user-select: none;
+}
+.minimap.closed { display: none; }
+.minimap.open   { display: block; }
+
+.minimap-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px 4px;
+  border-bottom: 1px solid var(--panel-border);
+}
+.minimap-title {
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  font-size: 9px;
+}
+.minimap-close {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+  border-radius: 3px;
+}
+.minimap-close:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.minimap-body {
+  padding: 4px;
+}
+.minimap-canvas {
+  width: 220px;
+  height: 160px;
+  display: block;
+  background: #0a0a0c;
+  border-radius: 2px;
+  cursor: crosshair;
+}
+.minimap-canvas:active { cursor: grabbing; }

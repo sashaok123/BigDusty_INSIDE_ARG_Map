@@ -2,14 +2,17 @@
    Pan/zoom + hotspot rendering. Hotspot click only fires when pointer travel
    < 5 px between mousedown and mouseup. */
 
-const MIN_SCALE = 0.25;
+import { lodFor } from './lod.js';
+
+const MIN_SCALE = 0.05;
 const MAX_SCALE = 8;
 const CLICK_SLOP = 5;
 const STATUS_COLOR = {
-  solved:   { stroke: '#3de88a', fill: 'rgba(61,232,138,0.18)', fillHover: 'rgba(61,232,138,0.32)' },
-  partial:  { stroke: '#e8c83d', fill: 'rgba(232,200,61,0.18)', fillHover: 'rgba(232,200,61,0.34)' },
-  unsolved: { stroke: '#e83d3d', fill: 'rgba(232,61,61,0.18)',  fillHover: 'rgba(232,61,61,0.34)' },
-  nodata:   { stroke: '#8888aa', fill: 'rgba(136,136,170,0.14)', fillHover: 'rgba(136,136,170,0.28)' },
+  'solved':   { stroke: '#3de88a', fill: 'rgba(61,232,138,0.18)', fillHover: 'rgba(61,232,138,0.32)' },
+  'partial':  { stroke: '#e8c83d', fill: 'rgba(232,200,61,0.18)', fillHover: 'rgba(232,200,61,0.34)' },
+  'unsolved': { stroke: '#e83d3d', fill: 'rgba(232,61,61,0.18)',  fillHover: 'rgba(232,61,61,0.34)' },
+  'no-data':  { stroke: '#8888aa', fill: 'rgba(136,136,170,0.14)', fillHover: 'rgba(136,136,170,0.28)' },
+  'dead-end': { stroke: '#5a5a72', fill: 'rgba(90,90,114,0.14)',   fillHover: 'rgba(90,90,114,0.28)' },
 };
 
 const HANDLE_SIZE = 8;
@@ -31,11 +34,14 @@ export class Viewer {
     this.panY = 0;
 
     this.hotspots = [];
-    this.statusFilter = new Set(['solved', 'partial', 'unsolved', 'nodata']);
+    this.statusFilter = new Set(['solved', 'partial', 'unsolved', 'no-data', 'dead-end']);
+    this.activeFilter = 'all';
+    this.fadeNonMatching = true;
     this.searchTerm = '';
     this.searchMatches = null;
     this.hoverId = null;
     this.activeId = null;
+    this.outlineHighlightId = null;
     this.tooltip = null;
 
     this.mode = 'viewer';
@@ -50,10 +56,25 @@ export class Viewer {
     this.cursorPos = null;
 
     this._raf = null;
+    this._subscribers = new Set();
 
     this._installEvents();
     this._installResize();
   }
+
+  subscribe(fn) {
+    if (typeof fn !== 'function') return () => {};
+    this._subscribers.add(fn);
+    return () => this._subscribers.delete(fn);
+  }
+
+  _notifySubscribers(kind, payload) {
+    for (const fn of this._subscribers) {
+      try { fn(kind, payload); } catch (e) { console.warn('[viewer] subscriber failed', e); }
+    }
+  }
+
+  getLod() { return lodFor(this.scale); }
 
   async setBlocks(blocks) {
     this.blocks = blocks.map((b) => ({ id: b.id, rect: { ...b.rect }, file: b.file }));
@@ -113,8 +134,18 @@ export class Viewer {
     this.requestDraw();
   }
 
-  setStatusFilter(filterSet) {
+  setStatusFilter(filterSet, opts) {
     this.statusFilter = filterSet instanceof Set ? filterSet : new Set(filterSet);
+    const o = opts || {};
+    this.fadeNonMatching = o.fade !== false;
+    this.activeFilter = o.activeFilter || this.activeFilter;
+    this._notifySubscribers('filter', { filter: this.statusFilter, activeFilter: this.activeFilter });
+    this.requestDraw();
+  }
+
+  setOutlineHighlight(id) {
+    if (this.outlineHighlightId === id) return;
+    this.outlineHighlightId = id;
     this.requestDraw();
   }
 
@@ -216,8 +247,13 @@ export class Viewer {
   }
 
   _isVisible(h) {
+    if (this.fadeNonMatching) return true;
     if (!this.statusFilter.has(h.status)) return false;
     return true;
+  }
+
+  _matchesFilter(h) {
+    return this.statusFilter.has(h.status);
   }
 
   _matchesSearch(h) {
@@ -235,6 +271,12 @@ export class Viewer {
 
   _notifyTransform() {
     this.onTransformChange({ scale: this.scale, panX: this.panX, panY: this.panY });
+    this._notifySubscribers('transform', { scale: this.scale, panX: this.panX, panY: this.panY });
+  }
+
+  notifyNodesChanged() {
+    this._notifySubscribers('nodes', null);
+    this.requestDraw();
   }
 
   _draw() {
@@ -258,15 +300,24 @@ export class Viewer {
     ctx.imageSmoothingEnabled = this.scale < 1.5;
     ctx.imageSmoothingQuality = 'high';
 
-    for (const b of this.blocks) {
-      const img = this.blockImages.get(b.id);
-      if (!img) continue;
-      ctx.drawImage(img, b.rect.x, b.rect.y, b.rect.w, b.rect.h);
+    const lod = this.getLod();
+
+    if (lod.thumbnailsVisible) {
+      for (const b of this.blocks) {
+        const img = this.blockImages.get(b.id);
+        if (!img) continue;
+        ctx.drawImage(img, b.rect.x, b.rect.y, b.rect.w, b.rect.h);
+      }
+    } else {
+      ctx.fillStyle = 'rgba(40,40,52,0.65)';
+      for (const b of this.blocks) {
+        ctx.fillRect(b.rect.x, b.rect.y, b.rect.w, b.rect.h);
+      }
     }
 
     for (const h of this.hotspots) {
       if (!this._isVisible(h)) continue;
-      this._drawHotspot(ctx, h);
+      this._drawHotspot(ctx, h, lod);
     }
 
     if (this.dragState && this.dragState.kind === 'draw' && this.dragState.current) {
@@ -290,20 +341,36 @@ export class Viewer {
     this._updateTooltip();
   }
 
-  _drawHotspot(ctx, h) {
+  _drawHotspot(ctx, h, lod) {
     const c = STATUS_COLOR[h.status] || STATUS_COLOR.unsolved;
-    const dim = this.searchTerm && !this._matchesSearch(h);
+    const searchDim = this.searchTerm && !this._matchesSearch(h);
+    const filterDim = this.fadeNonMatching && !this._matchesFilter(h);
     const isHover = this.hoverId === h.id || this.activeId === h.id;
+    const isOutlineHL = this.outlineHighlightId === h.id;
     const { x, y, w, h: hh } = h.rect;
 
-    ctx.lineWidth = (isHover ? 2.5 : 1.6) / this.scale;
-    ctx.globalAlpha = dim ? 0.3 : 1;
+    let alpha = 1;
+    if (filterDim) alpha = 0.1;
+    else if (searchDim) alpha = 0.3;
+
+    ctx.lineWidth = (isHover || isOutlineHL ? 2.5 : 1.6) / this.scale;
+    ctx.globalAlpha = alpha;
     ctx.strokeStyle = c.stroke;
     ctx.fillStyle = isHover ? c.fillHover : c.fill;
     ctx.fillRect(x, y, w, hh);
     ctx.strokeRect(x, y, w, hh);
 
-    if (this.mode === 'editor' && (isHover || this.activeId === h.id)) {
+    if (isOutlineHL) {
+      ctx.save();
+      ctx.lineWidth = 4 / this.scale;
+      ctx.strokeStyle = '#e86b2e';
+      ctx.globalAlpha = alpha;
+      const pad = 4 / this.scale;
+      ctx.strokeRect(x - pad, y - pad, w + pad * 2, hh + pad * 2);
+      ctx.restore();
+    }
+
+    if (this.mode === 'editor' && lod && lod.handlesVisible && (isHover || this.activeId === h.id)) {
       ctx.fillStyle = '#e86b2e';
       ctx.strokeStyle = '#0a0a0c';
       ctx.lineWidth = 1.5 / this.scale;
@@ -531,4 +598,23 @@ export class Viewer {
   getImageSize() { return { w: this.imageW, h: this.imageH }; }
   getTransform() { return { scale: this.scale, panX: this.panX, panY: this.panY }; }
   getBlocks() { return this.blocks; }
+  getHotspots() { return this.hotspots; }
+  getCanvas() { return this.canvas; }
+
+  setTransform(t) {
+    if (!t) return;
+    if (Number.isFinite(t.scale)) this.scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, t.scale));
+    if (Number.isFinite(t.panX))  this.panX  = t.panX;
+    if (Number.isFinite(t.panY))  this.panY  = t.panY;
+    this._notifyTransform();
+    this.requestDraw();
+  }
+
+  centerOnPoint(wx, wy) {
+    const r = this.canvas.getBoundingClientRect();
+    this.panX = r.width / 2  - wx * this.scale;
+    this.panY = r.height / 2 - wy * this.scale;
+    this._notifyTransform();
+    this.requestDraw();
+  }
 }

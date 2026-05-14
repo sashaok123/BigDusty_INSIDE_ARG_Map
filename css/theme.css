@@ -53,6 +53,7 @@ button, input, select, textarea {
 .dot-partial  { background: var(--partial); }
 .dot-unsolved { background: var(--unsolved); }
 .dot-nodata   { background: var(--nodata); }
+.dot-deadend  { background: #5a5a72; }
 
 .hidden { display: none !important; }
 
@@ -76,3 +77,36 @@ button, input, select, textarea {
 }
 #toast.show { opacity: 1; transform: translateY(0); }
 #toast.error { border-color: var(--unsolved); }
+
+#migration-banner {
+  position: fixed;
+  left: 50%;
+  top: calc(var(--toolbar-h) + 12px);
+  transform: translateX(-50%);
+  display: none;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--panel-bg);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  z-index: 900;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  max-width: 720px;
+}
+#migration-banner.open { display: flex; }
+#migration-banner-text { color: var(--text); }
+#migration-banner button {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  padding: 6px 12px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+#migration-banner-button { border-color: var(--accent); color: var(--accent); }
+#migration-banner button:hover { background: var(--hover); }

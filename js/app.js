@@ -1,45 +1,57 @@
 /* Top-level bootstrap. Wires viewer + arrow layer + side panel + editor +
-   search + i18n. Owns state, syncs persistence. */
+   search + i18n + minimap + outline + command palette + keyboard. Owns the
+   canvas nodes/edges maps, syncs persistence. */
 
 import { Viewer } from './viewer.js';
 import { SidePanel } from './side-panel.js';
 import { SearchBar } from './search.js';
 import { EditorModal, ContextMenu } from './editor.js';
-import { ArrowLayer, loadArrows, normaliseArrow } from './arrows.js';
+import { ArrowLayer } from './arrows.js';
+import { Minimap } from './minimap.js';
+import { OutlinePanel } from './outline.js';
+import { CommandPalette } from './command-palette.js';
+import { KeyboardShortcuts } from './keyboard.js';
+import { StatusFilter } from './status-filter.js';
 import {
-  loadHotspots,
-  loadBlocks,
-  loadPuzzleMarkdown,
+  loadCanvas,
   setCachedMarkdown,
   snapshotMarkdownCache,
   restoreMarkdownCache,
+  normaliseNode,
+  normaliseEdge,
+  serializeCanvas,
 } from './data-loader.js';
 import {
   saveState,
   saveStateImmediate,
   loadState,
   clearState,
-  downloadJSON,
-  importJSON,
+  downloadCanvasFile,
+  importCanvasFile,
 } from './persistence.js';
 import {
   STATUSES,
-  findHotspot,
-  addHotspot,
-  updateHotspot,
-  removeHotspot,
+  findNode,
+  addPuzzleNode,
+  updatePuzzleNode,
+  removeNode,
   uniqueId,
-  normalizeHotspot,
+  toViewShape,
+  puzzleViews,
+  blockViews,
+  isPuzzleNode,
+  nodeAtParentLookup,
+  nodeMarkdown,
   statusLabel,
-} from './hotspots.js';
+} from './nodes.js';
 import { LANGS, initLang, getLang, setLang, tr } from './i18n.js';
 
-const STATE_VERSION = 2;
+const STATE_VERSION = 3;
+const DETECTIVE_KEY = 'arg_map_detective_theme';
 
 const state = {
-  hotspots: [],
-  blocks: [],
-  arrows: [],
+  nodes: new Map(),
+  edges: new Map(),
   imageW: 0,
   imageH: 0,
   statusFilter: new Set(STATUSES),
@@ -55,6 +67,11 @@ let searchBar;
 let editorModal;
 let contextMenu;
 let arrowLayer;
+let minimap;
+let outlinePanel;
+let commandPalette;
+let keyboard;
+let statusFilter;
 
 function $(id) { return document.getElementById(id); }
 
@@ -70,10 +87,8 @@ function toast(msg, kind) {
 function snapshot() {
   return {
     version: STATE_VERSION,
-    image_w: state.imageW,
-    image_h: state.imageH,
-    hotspots: state.hotspots,
-    arrows: state.arrows,
+    canvas: serializeCanvas(state.nodes, state.edges),
+    lang: getLang(),
     puzzles: snapshotMarkdownCache(),
   };
 }
@@ -92,17 +107,31 @@ async function bootstrap() {
   setupEditorModal();
   setupArrowLayer();
   setupToolbar();
+  setupMigrationBanner();
   contextMenu = new ContextMenu(document.body);
 
+  setupStatusFilter();
+  setupMinimap();
+  setupOutline();
+  setupCommandPalette();
+  setupKeyboard();
+  setupDetectiveTheme();
+
   await loadInitialData();
+  await outlinePanel.loadInitial();
   applyFilters();
 
   document.addEventListener('i18n:changed', () => {
     applyStaticTranslations();
-    if (sidePanel && sidePanel.isOpen() && sidePanel.currentHotspot) {
+    if (sidePanel && sidePanel.isOpen() && sidePanel.currentView) {
       sidePanel.refreshLocalised();
     }
     if (arrowLayer) arrowLayer.retranslate();
+    if (minimap) minimap.retranslate();
+    if (outlinePanel) outlinePanel.retranslate();
+    if (commandPalette) commandPalette.retranslate();
+    if (keyboard) keyboard.retranslate();
+    refreshMigrationBannerText();
   });
 }
 
@@ -110,42 +139,60 @@ function setupViewer() {
   viewer = new Viewer($('map-canvas'), {
     drawPreviewEl: $('draw-preview'),
     onHotspotClick: (id) => {
-      const h = findHotspot(state.hotspots, id);
-      if (!h) return;
-      if (state.mode === 'editor') {
-        loadPuzzleMarkdown(h.slug).then((md) => editorModal.openEdit(h, md));
-      } else {
-        viewer.setActiveId(id);
-        sidePanel.open(h);
+      const n = findNode(state.nodes, id);
+      if (!n) return;
+      const view = toViewShape(n);
+      if (state.mode === 'editor' && isPuzzleNode(n)) {
+        editorModal.openEdit(view, nodeMarkdown(n));
+        return;
       }
+      viewer.setActiveId(id);
+      sidePanel.open(view);
     },
     onHotspotRightClick: (id, ev) => {
-      const h = findHotspot(state.hotspots, id);
-      if (!h) return;
-      contextMenu.open(ev.clientX, ev.clientY, [
+      const n = findNode(state.nodes, id);
+      if (!n || !isPuzzleNode(n)) return;
+      const view = toViewShape(n);
+      const items = [
         { label: tr('context_edit_hotspot'), fn: () => {
-          loadPuzzleMarkdown(h.slug).then((md) => editorModal.openEdit(h, md));
+          editorModal.openEdit(view, nodeMarkdown(n));
         } },
-        { label: tr('context_delete_hotspot'), danger: true, fn: () => {
-          editorModal.showConfirm({
-            title: tr('editor_delete_title'),
-            message: tr('context_delete_confirm_msg', { title: h.title }),
-            actions: [
-              { label: tr('editor_cancel_button'), kind: 'cancel', fn: () => editorModal.hideConfirm() },
-              { label: tr('editor_delete_button'), kind: 'danger', fn: () => {
-                editorModal.hideConfirm();
-                deleteHotspot(h.id);
-              } },
-            ],
-          });
-        } },
-      ]);
+      ];
+      if (outlinePanel) {
+        if (outlinePanel.hasNode(id)) {
+          items.push({ label: tr('outline_remove_from_outline'), fn: () => {
+            outlinePanel.removeByNodeId(id);
+            scheduleSave();
+          } });
+        } else {
+          items.push({ label: tr('outline_add_to_outline'), fn: () => {
+            outlinePanel.addNodeAtEnd(id, 0);
+            scheduleSave();
+          } });
+        }
+      }
+      items.push({ label: tr('context_delete_hotspot'), danger: true, fn: () => {
+        editorModal.showConfirm({
+          title: tr('editor_delete_title'),
+          message: tr('context_delete_confirm_msg', { title: view.title }),
+          actions: [
+            { label: tr('editor_cancel_button'), kind: 'cancel', fn: () => editorModal.hideConfirm() },
+            { label: tr('editor_delete_button'), kind: 'danger', fn: () => {
+              editorModal.hideConfirm();
+              deletePuzzleNode(view.id);
+            } },
+          ],
+        });
+      } });
+      contextMenu.open(ev.clientX, ev.clientY, items);
     },
     onCanvasDrawRect: (rect) => {
-      editorModal.openCreate(rect, { md: '# New puzzle\n\n## Status\nunsolved\n\n## TLDR\n\n## Background\n\n## Current state\n\n## Techniques tried\n\n## References\n\n## Open questions\n' });
+      editorModal.openCreate(rect, {
+        md: '# New puzzle\n\n## Status\nunsolved\n\n## TLDR\n\n## Background\n\n## Current state\n\n## Techniques tried\n\n## References\n\n## Open questions\n',
+      });
     },
     onHotspotResize: (id, rect) => {
-      updateHotspot(state.hotspots, id, { rect });
+      updatePuzzleNode(state.nodes, id, { rect });
     },
     onHotspotResizeEnd: () => {
       scheduleSave();
@@ -161,11 +208,9 @@ function setupArrowLayer() {
   arrowLayer = new ArrowLayer({
     svg: $('arrow-layer'),
     viewport: $('viewport'),
-    getBlocks: () => state.blocks,
+    getNodes: () => state.nodes,
     getTransform: () => viewer.getTransform(),
-    onArrowsChange: () => {
-      state.arrows = arrowLayer.getArrows();
-    },
+    onEdgesChange: () => {},
     onScheduleSave: () => scheduleSave(),
   });
 }
@@ -186,18 +231,24 @@ function setupSidePanel() {
     overlayTextareaEl: $('md-edit-textarea'),
     overlaySaveEl: $('md-edit-save'),
     overlayCancelEl: $('md-edit-cancel'),
+    getNode: (id) => findNode(state.nodes, id),
     onStatusChange: (id, status) => {
-      updateHotspot(state.hotspots, id, { status });
-      const h = findHotspot(state.hotspots, id);
-      sidePanel.setHotspotMeta(h);
-      sidePanel.refreshStatusDot(status);
-      viewer.setHotspots(state.hotspots);
+      updatePuzzleNode(state.nodes, id, { status });
+      const n = findNode(state.nodes, id);
+      if (!n) return;
+      const view = toViewShape(n);
+      sidePanel.setNodeMeta(view);
+      sidePanel.refreshStatusDot(view.status);
+      refreshPuzzleViewsInViewer();
       scheduleSave();
     },
     onContentChange: (id, md, persist) => {
-      const h = findHotspot(state.hotspots, id);
-      if (!h) return;
-      setCachedMarkdown(h.slug, md);
+      const n = findNode(state.nodes, id);
+      if (!n) return;
+      if (isPuzzleNode(n)) {
+        updatePuzzleNode(state.nodes, id, { md });
+        if (n.slug) setCachedMarkdown(n.slug, md);
+      }
       if (persist) {
         toast(tr('toast_md_saved'));
         scheduleSave();
@@ -235,13 +286,14 @@ function setupSearchBar() {
   searchBar = new SearchBar({
     inputEl: $('search'),
     resultsEl: $('search-results'),
-    getHotspots: () => state.hotspots,
+    getHotspots: () => puzzleViews(state.nodes),
     onPick: (id) => {
-      const h = findHotspot(state.hotspots, id);
-      if (!h) return;
-      viewer.centerOnHotspot(h);
+      const n = findNode(state.nodes, id);
+      if (!n) return;
+      const view = toViewShape(n);
+      viewer.centerOnHotspot(view);
       viewer.setActiveId(id);
-      sidePanel.open(h);
+      sidePanel.open(view);
     },
     onTermChange: (term, ids) => {
       state.searchTerm = term;
@@ -270,74 +322,77 @@ function setupEditorModal() {
     confirmActionsEl: $('confirm-actions'),
     onSave: (payload) => {
       if (payload.mode === 'edit') {
-        const slugChanged = payload.slug !== payload.id && state.hotspots.some((h) => h.slug === payload.slug && h.id !== payload.id);
-        const finalSlug = slugChanged ? `${payload.slug}-${Date.now().toString(36)}` : payload.slug;
-        updateHotspot(state.hotspots, payload.id, {
+        const existing = findNode(state.nodes, payload.id);
+        if (!existing) return;
+        const slugClash = state.nodes.has(payload.slug) && payload.slug !== payload.id
+          && state.nodes.get(payload.slug) !== existing;
+        const finalSlug = slugClash ? `${payload.slug}-${Date.now().toString(36)}` : payload.slug;
+        updatePuzzleNode(state.nodes, payload.id, {
           title: payload.title,
           slug: finalSlug,
           status: payload.status,
           tags: payload.tags,
           rect: payload.rect,
+          md: payload.md,
         });
-        setCachedMarkdown(finalSlug, payload.md);
-        viewer.setHotspots(state.hotspots);
-        const h = findHotspot(state.hotspots, payload.id);
-        sidePanel.setHotspotMeta(h);
+        if (finalSlug) setCachedMarkdown(finalSlug, payload.md);
+        refreshPuzzleViewsInViewer();
+        const view = toViewShape(findNode(state.nodes, payload.id));
+        sidePanel.setNodeMeta(view);
         if (sidePanel.isOpen() && sidePanel.currentSlug() === finalSlug) {
-          loadPuzzleMarkdown(finalSlug).then(() => sidePanel.open(h));
+          sidePanel.open(view);
         }
         scheduleSave();
         toast(tr('toast_hotspot_updated'));
-      } else {
-        const id = uniqueId(state.hotspots, payload.slug || payload.title);
-        const finalSlug = payload.slug && !state.hotspots.some((h) => h.slug === payload.slug)
-          ? payload.slug
-          : id;
-        const h = {
-          id,
-          title: payload.title,
-          slug: finalSlug,
-          status: payload.status,
-          tags: payload.tags,
-          rect: payload.rect,
-          block_id: null,
-        };
-        addHotspot(state.hotspots, h);
-        setCachedMarkdown(finalSlug, payload.md);
-        viewer.setHotspots(state.hotspots);
-        scheduleSave();
-        toast(tr('toast_hotspot_added'));
+        return;
       }
+      const id = uniqueId(state.nodes, payload.slug || payload.title);
+      const finalSlug = payload.slug && !state.nodes.has(payload.slug)
+        ? payload.slug
+        : id;
+      const parent = nodeAtParentLookup(state.nodes, payload.rect);
+      addPuzzleNode(state.nodes, {
+        id,
+        title: payload.title,
+        slug: finalSlug,
+        status: payload.status,
+        tags: payload.tags,
+        rect: payload.rect,
+        md: payload.md,
+        parent,
+      });
+      setCachedMarkdown(finalSlug, payload.md);
+      refreshPuzzleViewsInViewer();
+      scheduleSave();
+      toast(tr('toast_hotspot_added'));
     },
-    onDelete: (id) => deleteHotspot(id),
+    onDelete: (id) => deletePuzzleNode(id),
     onCancel: () => {},
   });
 }
 
-function deleteHotspot(id) {
-  const h = findHotspot(state.hotspots, id);
-  if (!h) return;
-  removeHotspot(state.hotspots, id);
-  viewer.setHotspots(state.hotspots);
-  if (sidePanel.isOpen() && sidePanel.currentSlug() === h.slug) {
+function deletePuzzleNode(id) {
+  const n = findNode(state.nodes, id);
+  if (!n || !isPuzzleNode(n)) return;
+  const slug = n.slug;
+  removeNode(state.nodes, id);
+  if (arrowLayer) arrowLayer.notifyNodeDeleted(id);
+  if (outlinePanel) outlinePanel.removeByNodeId(id);
+  refreshPuzzleViewsInViewer();
+  if (viewer) viewer.notifyNodesChanged();
+  if (sidePanel.isOpen() && sidePanel.currentSlug() === slug) {
     sidePanel.requestClose();
   }
   scheduleSave();
   toast(tr('toast_hotspot_deleted'));
 }
 
-function setupToolbar() {
-  document.querySelectorAll('.filter-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const f = btn.dataset.filter;
-      if (state.activeFilter === f && f !== 'all') {
-        setActiveFilter('all');
-      } else {
-        setActiveFilter(f);
-      }
-    });
-  });
+function refreshPuzzleViewsInViewer() {
+  viewer.setHotspots(puzzleViews(state.nodes));
+  if (viewer) viewer.notifyNodesChanged();
+}
 
+function setupToolbar() {
   document.querySelectorAll('.mode-switch button').forEach((btn) => {
     btn.addEventListener('click', () => {
       setMode(btn.dataset.mode);
@@ -355,8 +410,7 @@ function setupToolbar() {
   $('btn-zoom-fit').addEventListener('click', () => viewer.fitToScreen());
 
   $('btn-export').addEventListener('click', () => {
-    downloadJSON(snapshot(), 'arg_map_state.json');
-    toast(tr('toast_exported'));
+    exportCanvasAndOutline();
   });
 
   $('btn-import').addEventListener('click', () => $('file-import').click());
@@ -364,9 +418,10 @@ function setupToolbar() {
     const f = e.target.files[0];
     if (!f) return;
     try {
-      const data = await importJSON(f);
-      applyImportedState(data);
-      toast(tr('toast_imported', { n: data.hotspots.length }));
+      const imported = await importCanvasFile(f);
+      applyImportedCanvas(imported);
+      const count = puzzleViews(state.nodes).length;
+      toast(tr('toast_imported', { n: count }));
     } catch (err) {
       toast(tr('toast_import_failed', { error: err.message }), 'error');
     }
@@ -387,6 +442,29 @@ function setupToolbar() {
       ],
     });
   });
+
+  const outlineBtn = $('btn-outline');
+  if (outlineBtn) outlineBtn.addEventListener('click', () => outlinePanel && outlinePanel.toggle());
+  const minimapBtn = $('btn-minimap');
+  if (minimapBtn) minimapBtn.addEventListener('click', () => minimap && minimap.toggle());
+  const paletteBtn = $('btn-palette');
+  if (paletteBtn) paletteBtn.addEventListener('click', () => commandPalette && commandPalette.open());
+}
+
+function exportCanvasAndOutline() {
+  downloadCanvasFile(state.nodes, state.edges, 'canvas.canvas');
+  if (outlinePanel && outlinePanel.dirty) {
+    const blob = new Blob([JSON.stringify(outlinePanel.serialize(), null, 2) + '\n'], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'outline.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 200);
+  }
+  toast(tr('toast_exported'));
 }
 
 function setupLangSelect() {
@@ -414,25 +492,8 @@ function applyStaticTranslations() {
   document.querySelectorAll('[data-i18n-aria]').forEach((el) => {
     el.setAttribute('aria-label', tr(el.dataset.i18nAria));
   });
-  refreshFilterDots();
   if (sidePanel) sidePanel.refreshStatusOptions();
   if (editorModal) editorModal.refreshStatusOptions();
-}
-
-function refreshFilterDots() {
-}
-
-function setActiveFilter(filter) {
-  state.activeFilter = filter;
-  if (filter === 'all') {
-    state.statusFilter = new Set(STATUSES);
-  } else {
-    state.statusFilter = new Set([filter]);
-  }
-  document.querySelectorAll('.filter-btn').forEach((b) => {
-    b.classList.toggle('active', b.dataset.filter === filter);
-  });
-  viewer.setStatusFilter(state.statusFilter);
 }
 
 function setMode(mode) {
@@ -445,62 +506,358 @@ function setMode(mode) {
 }
 
 function applyFilters() {
-  viewer.setStatusFilter(state.statusFilter);
+  viewer.setStatusFilter(state.statusFilter, { fade: true, activeFilter: state.activeFilter });
+  if (arrowLayer) arrowLayer.setStatusFilter(state.statusFilter, { fade: true });
+  if (minimap)    minimap.setStatusFilter(state.statusFilter, { fade: true });
 }
 
 async function loadInitialData() {
-  const blocksData = await loadBlocks();
-  state.blocks = (blocksData.blocks || []).map((b) => ({ id: b.id, rect: { ...b.rect }, file: b.file }));
-  const blocksById = new Map(state.blocks.map((b) => [b.id, b]));
+  const loaded = await loadCanvas();
+  const stored = loadState();
+  const useStored = stored && stored.version === STATE_VERSION
+    && stored.canvas && Array.isArray(stored.canvas.nodes) && Array.isArray(stored.canvas.edges);
 
-  await viewer.setBlocks(state.blocks);
+  let nodes;
+  let edges;
+  if (useStored) {
+    nodes = new Map();
+    for (const n of stored.canvas.nodes) {
+      const nn = normaliseNode(n);
+      if (nn.id) nodes.set(nn.id, nn);
+    }
+    edges = new Map();
+    for (const e of stored.canvas.edges) {
+      const ee = normaliseEdge(e);
+      if (ee.id) edges.set(ee.id, ee);
+    }
+    if (stored.puzzles) restoreMarkdownCache(stored.puzzles);
+    toast(tr('toast_loaded_local'));
+  } else {
+    nodes = loaded.nodes;
+    edges = loaded.edges;
+  }
+
+  state.nodes = nodes;
+  state.edges = edges;
+
+  const blocks = blockViews(nodes);
+  await viewer.setBlocks(blocks);
   const sz = viewer.getImageSize();
   state.imageW = sz.w;
   state.imageH = sz.h;
 
-  const stored = loadState();
-  let hotspotsRaw;
-  let arrowsRaw;
-  let loadedFromStorage = false;
-  if (stored && Array.isArray(stored.hotspots)) {
-    hotspotsRaw = stored.hotspots;
-    arrowsRaw = Array.isArray(stored.arrows) ? stored.arrows : null;
-    if (stored.puzzles) restoreMarkdownCache(stored.puzzles);
-    loadedFromStorage = true;
-    toast(tr('toast_loaded_local'));
-  } else {
-    const baseData = await loadHotspots();
-    hotspotsRaw = baseData.hotspots || [];
-  }
-
-  state.hotspots = hotspotsRaw.map((h) => normalizeHotspot(h, state.imageW, state.imageH, blocksById));
-  viewer.setHotspots(state.hotspots);
-
-  if (!arrowsRaw) {
-    const fileArrows = await loadArrows();
-    arrowsRaw = fileArrows.arrows;
-  }
-  state.arrows = (arrowsRaw || []).map(normaliseArrow);
-  arrowLayer.setArrows(state.arrows);
+  refreshPuzzleViewsInViewer();
+  arrowLayer.setEdges(edges);
   arrowLayer.setMode(state.mode);
 
-  if (loadedFromStorage) {
+  if (useStored) {
     saveStateImmediate(snapshot());
+  }
+
+  if (loaded.fellBack && !useStored) {
+    showMigrationBanner();
   }
 }
 
-function applyImportedState(data) {
-  state.imageW = data.image_w || state.imageW;
-  state.imageH = data.image_h || state.imageH;
-  const blocksById = new Map(state.blocks.map((b) => [b.id, b]));
-  state.hotspots = (data.hotspots || []).map((h) => normalizeHotspot(h, state.imageW, state.imageH, blocksById));
-  if (data.puzzles) restoreMarkdownCache(data.puzzles);
-  viewer.setHotspots(state.hotspots);
-  if (Array.isArray(data.arrows)) {
-    state.arrows = data.arrows.map(normaliseArrow);
-    arrowLayer.setArrows(state.arrows);
-  }
+function applyImportedCanvas(imported) {
+  state.nodes = new Map();
+  for (const n of imported.nodes) state.nodes.set(n.id, n);
+  state.edges = new Map();
+  for (const e of imported.edges) state.edges.set(e.id, e);
+  refreshPuzzleViewsInViewer();
+  arrowLayer.setEdges(state.edges);
   scheduleSave();
+}
+
+function setupMigrationBanner() {
+  const banner = $('migration-banner');
+  if (!banner) return;
+  $('migration-banner-button').addEventListener('click', () => {
+    downloadCanvasFile(state.nodes, state.edges, 'canvas.canvas');
+    toast(tr('toast_exported'));
+    hideMigrationBanner();
+  });
+  $('migration-banner-dismiss').addEventListener('click', () => hideMigrationBanner());
+}
+
+function showMigrationBanner() {
+  const banner = $('migration-banner');
+  if (banner) banner.classList.add('open');
+  refreshMigrationBannerText();
+}
+
+function hideMigrationBanner() {
+  const banner = $('migration-banner');
+  if (banner) banner.classList.remove('open');
+}
+
+function refreshMigrationBannerText() {
+  const text = $('migration-banner-text');
+  const button = $('migration-banner-button');
+  const dismiss = $('migration-banner-dismiss');
+  if (text) text.textContent = tr('migration_banner_text');
+  if (button) button.textContent = tr('migration_banner_button');
+  if (dismiss) dismiss.textContent = tr('migration_banner_dismiss');
+}
+
+function setupStatusFilter() {
+  const chips = Array.from(document.querySelectorAll('.filter-btn'));
+  statusFilter = new StatusFilter({
+    chips,
+    onChange: (info) => {
+      state.activeFilter = info.activeKey;
+      state.statusFilter = info.effectiveSet;
+      applyFilters();
+    },
+  });
+  state.activeFilter = statusFilter.getActiveKey();
+  state.statusFilter = statusFilter.getEffectiveSet();
+}
+
+function setupMinimap() {
+  minimap = new Minimap({
+    viewer,
+    container: document.body,
+  });
+}
+
+function setupOutline() {
+  outlinePanel = new OutlinePanel({
+    container: document.body,
+    getNodes: () => state.nodes,
+    onFlyTo: (id, view) => {
+      viewer.centerOnHotspot(view);
+      viewer.setActiveId(id);
+      sidePanel.open(view);
+    },
+    onHighlight: (id) => {
+      viewer.setOutlineHighlight(id);
+    },
+    onScheduleSave: () => scheduleSave(),
+  });
+}
+
+function setupCommandPalette() {
+  commandPalette = new CommandPalette({
+    container: document.body,
+    getEntries: () => collectCommandEntries(),
+    onActivate: () => {},
+  });
+}
+
+function collectCommandEntries() {
+  const out = [];
+  for (const n of state.nodes.values()) {
+    if (!isPuzzleNode(n)) continue;
+    const view = toViewShape(n);
+    out.push({
+      id: `node:${n.id}`,
+      category: 'nodes',
+      title: view.title,
+      hint: view.status,
+      fn: () => {
+        viewer.centerOnHotspot(view);
+        viewer.setActiveId(n.id);
+        sidePanel.open(view);
+      },
+    });
+  }
+  out.push(
+    { id: 'cmd:toggle-minimap',  category: 'commands', title: tr('command_toggle_minimap'),  hint: 'M',     fn: () => minimap && minimap.toggle() },
+    { id: 'cmd:toggle-outline',  category: 'commands', title: tr('command_toggle_outline'),  hint: 'O',     fn: () => outlinePanel && outlinePanel.toggle() },
+    { id: 'cmd:reset-zoom',      category: 'commands', title: tr('command_reset_zoom'),      hint: '0',     fn: () => viewer && resetZoom() },
+    { id: 'cmd:fit-all',         category: 'commands', title: tr('command_fit_all'),         hint: '',      fn: () => viewer && viewer.fitToScreen() },
+    { id: 'cmd:export-canvas',   category: 'commands', title: tr('command_export_canvas'),   hint: '',      fn: () => exportCanvasAndOutline() },
+    { id: 'cmd:import-canvas',   category: 'commands', title: tr('command_import_canvas'),   hint: '',      fn: () => $('file-import') && $('file-import').click() },
+    { id: 'cmd:switch-viewer',   category: 'commands', title: tr('command_switch_viewer'),   hint: 'E',     fn: () => setMode('viewer') },
+    { id: 'cmd:switch-editor',   category: 'commands', title: tr('command_switch_editor'),   hint: 'E',     fn: () => setMode('editor') },
+    { id: 'cmd:show-shortcuts',  category: 'commands', title: tr('command_show_shortcuts'),  hint: '?',     fn: () => keyboard && keyboard.showOverlay() },
+    { id: 'cmd:change-language', category: 'commands', title: tr('command_change_language'), hint: '',      fn: () => commandPalette.enterLangSubmode() },
+  );
+  out.push(
+    { id: 'filter:solved',     category: 'filters', title: `${tr('filter_all')} -> ${tr('filter_solved')}`,   fn: () => statusFilter.apply('solved',   new Set(['solved'])) },
+    { id: 'filter:partial',    category: 'filters', title: `${tr('filter_all')} -> ${tr('filter_partial')}`,  fn: () => statusFilter.apply('partial',  new Set(['partial'])) },
+    { id: 'filter:unsolved',   category: 'filters', title: `${tr('filter_all')} -> ${tr('filter_unsolved')}`, fn: () => statusFilter.apply('unsolved', new Set(['unsolved'])) },
+    { id: 'filter:dead-end',   category: 'filters', title: `${tr('filter_all')} -> ${tr('filter_dead_end')}`, fn: () => statusFilter.apply('dead-end', new Set(['dead-end'])) },
+    { id: 'filter:clear',      category: 'filters', title: tr('filter_clear'), fn: () => statusFilter.clear() },
+  );
+  if (outlinePanel) {
+    const items = outlinePanel.getItems();
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      out.push({
+        id: `outline:${i}`,
+        category: 'outline',
+        title: it.title || it.nodeId || `(#${i + 1})`,
+        hint: it.note || '',
+        fn: () => {
+          const n = findNode(state.nodes, it.nodeId);
+          if (!n) return;
+          const view = toViewShape(n);
+          viewer.centerOnHotspot(view);
+          viewer.setActiveId(it.nodeId);
+          sidePanel.open(view);
+          if (outlinePanel) outlinePanel.open();
+        },
+      });
+    }
+  }
+  out.push({ id: 'setting:detective', category: 'settings', title: tr('command_toggle_detective'), fn: () => toggleDetectiveTheme() });
+  return out;
+}
+
+function setupKeyboard() {
+  keyboard = new KeyboardShortcuts({
+    overlayContainer: document.body,
+    handlers: {
+      onCommandPalette: () => commandPalette && commandPalette.open(),
+      onEscape: () => {
+        if (commandPalette && commandPalette.isOpen()) {
+          commandPalette.close();
+          return;
+        }
+        if (sidePanel && sidePanel.isOpen()) {
+          sidePanel.requestClose();
+          return;
+        }
+        viewer.setActiveId(null);
+      },
+      onMinimapToggle: () => minimap && minimap.toggle(),
+      onOutlineToggle: () => outlinePanel && outlinePanel.toggle(),
+      onFilterCycle: () => statusFilter && statusFilter.cycle(),
+      onModeToggle: () => setMode(state.mode === 'viewer' ? 'editor' : 'viewer'),
+      onCreateChild: () => createChildNode(),
+      onCreateSibling: () => createSiblingNode(),
+      onDeleteSelected: () => confirmDeleteSelected(),
+      onZoomIn: () => {
+        const r = $('map-canvas').getBoundingClientRect();
+        viewer.zoomAt(r.width / 2, r.height / 2, 1.2);
+      },
+      onZoomOut: () => {
+        const r = $('map-canvas').getBoundingClientRect();
+        viewer.zoomAt(r.width / 2, r.height / 2, 1 / 1.2);
+      },
+      onZoomReset: () => resetZoom(),
+      onSetStatus: (info) => setSelectedStatus(info && info.status),
+    },
+  });
+}
+
+function resetZoom() {
+  if (!viewer) return;
+  const r = $('map-canvas').getBoundingClientRect();
+  viewer.zoomAt(r.width / 2, r.height / 2, 1 / viewer.getScale());
+}
+
+function createChildNode() {
+  const id = viewer.activeId;
+  if (!id) return false;
+  const n = findNode(state.nodes, id);
+  if (!n || !isPuzzleNode(n)) return false;
+  const view = toViewShape(n);
+  const newRect = {
+    x: view.rect.x + view.rect.w + 200,
+    y: view.rect.y,
+    w: view.rect.w,
+    h: view.rect.h,
+  };
+  const title = `${view.title} child`;
+  const newId = uniqueId(state.nodes, title);
+  addPuzzleNode(state.nodes, {
+    id: newId,
+    title,
+    slug: newId,
+    status: 'unsolved',
+    tags: [],
+    rect: newRect,
+    md: `# ${title}\n`,
+    parent: view.parent,
+  });
+  refreshPuzzleViewsInViewer();
+  viewer.setActiveId(newId);
+  scheduleSave();
+  toast(tr('node_created'));
+  return true;
+}
+
+function createSiblingNode() {
+  const id = viewer.activeId;
+  if (!id) return false;
+  const n = findNode(state.nodes, id);
+  if (!n || !isPuzzleNode(n)) return false;
+  const view = toViewShape(n);
+  const newRect = {
+    x: view.rect.x,
+    y: view.rect.y + view.rect.h + 200,
+    w: view.rect.w,
+    h: view.rect.h,
+  };
+  const title = `${view.title} sibling`;
+  const newId = uniqueId(state.nodes, title);
+  addPuzzleNode(state.nodes, {
+    id: newId,
+    title,
+    slug: newId,
+    status: 'unsolved',
+    tags: [],
+    rect: newRect,
+    md: `# ${title}\n`,
+    parent: view.parent,
+  });
+  refreshPuzzleViewsInViewer();
+  viewer.setActiveId(newId);
+  scheduleSave();
+  toast(tr('node_created'));
+  return true;
+}
+
+function confirmDeleteSelected() {
+  const id = viewer.activeId;
+  if (!id) return false;
+  const n = findNode(state.nodes, id);
+  if (!n || !isPuzzleNode(n)) return false;
+  const view = toViewShape(n);
+  editorModal.showConfirm({
+    title: tr('editor_delete_title'),
+    message: tr('context_delete_confirm_msg', { title: view.title }),
+    actions: [
+      { label: tr('editor_cancel_button'), kind: 'cancel', fn: () => editorModal.hideConfirm() },
+      { label: tr('editor_delete_button'), kind: 'danger', fn: () => {
+        editorModal.hideConfirm();
+        deletePuzzleNode(id);
+      } },
+    ],
+  });
+  return true;
+}
+
+function setSelectedStatus(status) {
+  if (!status) return false;
+  const id = viewer.activeId;
+  if (!id) return false;
+  const n = findNode(state.nodes, id);
+  if (!n || !isPuzzleNode(n)) return false;
+  if (!STATUSES.includes(status)) return false;
+  updatePuzzleNode(state.nodes, id, { status });
+  refreshPuzzleViewsInViewer();
+  scheduleSave();
+  toast(tr('node_status_changed', { status: statusLabel(status) }));
+  return true;
+}
+
+function setupDetectiveTheme() {
+  let enabled = false;
+  try { enabled = localStorage.getItem(DETECTIVE_KEY) === '1'; }
+  catch (e) { void e; }
+  if (enabled) document.body.classList.add('detective');
+}
+
+function toggleDetectiveTheme() {
+  const next = !document.body.classList.contains('detective');
+  document.body.classList.toggle('detective', next);
+  try { localStorage.setItem(DETECTIVE_KEY, next ? '1' : '0'); }
+  catch (e) { void e; }
+  viewer.setBackgroundFromCSS();
 }
 
 window.addEventListener('DOMContentLoaded', () => {
