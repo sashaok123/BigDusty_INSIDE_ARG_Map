@@ -65,6 +65,12 @@ export class KeyboardShortcuts {
       this._call('onRedo', ev);
       return;
     }
+    if (meta && (k === 'g' || k === 'G')) {
+      ev.preventDefault();
+      if (ev.shiftKey) this._call('onUngroupSelection', ev);
+      else this._call('onGroupSelection', ev);
+      return;
+    }
     if (k === 'm' || k === 'M') {
       if (meta) return;
       ev.preventDefault();

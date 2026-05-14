@@ -33,17 +33,27 @@ import {
   STATUSES,
   findNode,
   addPuzzleNode,
+  addStickyNode,
+  addGroupNode,
   updatePuzzleNode,
   removeNode,
   uniqueId,
   toViewShape,
   puzzleViews,
   blockViews,
+  groupViews,
   isPuzzleNode,
+  isStickyNode,
+  isGroupNode,
+  isEditableNode,
+  groupDescendantIds,
+  nextGroupLabel,
   nodeAtParentLookup,
   nodeMarkdown,
   statusLabel,
 } from './nodes.js';
+import { EditorToolbar } from './editor-toolbar.js';
+import { EditNodeModal } from './edit-node-modal.js';
 import { LANGS, initLang, getLang, setLang, tr } from './i18n.js';
 import { AuthUI } from './auth-ui.js';
 import { Realtime } from './realtime.js';
@@ -75,12 +85,18 @@ const state = {
   backendOnline: false,
   revision: 0,
   recentSelfMutations: [],
+  selection: new Set(),
+  history: { past: [], future: [] },
 };
+
+const HISTORY_LIMIT = 50;
 
 let viewer;
 let sidePanel;
 let searchBar;
 let editorModal;
+let editNodeModal;
+let editorToolbar;
 let contextMenu;
 let arrowLayer;
 let minimap;
@@ -90,6 +106,7 @@ let keyboard;
 let statusFilter;
 let authUI;
 let realtime;
+let selectionStatusEl;
 
 function $(id) { return document.getElementById(id); }
 
@@ -136,6 +153,9 @@ async function bootstrap() {
   setupKeyboard();
   setupDetectiveTheme();
   setupAuthUI();
+  setupEditNodeModal();
+  setupEditorToolbar();
+  setupSelectionStatus();
 
   await loadInitialData();
   await outlinePanel.loadInitial();
@@ -157,6 +177,7 @@ async function bootstrap() {
     refreshMigrationBannerText();
     refreshRealtimeStatusLabel();
     refreshOfflineBanner();
+    refreshSelectionStatus();
   });
 }
 
@@ -174,6 +195,7 @@ function setupAuthUI() {
       if (realtime) realtime._reconnectNow();
       if (state.mode === 'editor') setMode('viewer');
     },
+    onMessage: (msg) => { if (msg) toast(msg); },
   });
   subscribeAuth((kind) => {
     if (kind === 'login' || kind === 'logout' || kind === 'expired') applyAuthState();
@@ -183,6 +205,12 @@ function setupAuthUI() {
 function applyAuthState() {
   const authed = isLoggedIn();
   document.body.classList.toggle('authed', authed);
+  if (!authed) {
+    document.body.classList.remove('editor-mode');
+    state.selection = new Set();
+    if (viewer) viewer.setSelection(new Set());
+    refreshSelectionStatus();
+  }
   if (!authed && state.mode === 'editor') setMode('viewer');
 }
 
@@ -203,54 +231,54 @@ function setupViewer() {
       const n = findNode(state.nodes, id);
       if (!n) return;
       const view = toViewShape(n);
-      if (state.mode === 'editor' && isPuzzleNode(n)) {
-        editorModal.openEdit(view, nodeMarkdown(n));
-        return;
-      }
       viewer.setActiveId(id);
       sidePanel.open(view);
     },
+    onHotspotDoubleClick: (id) => openRichEdit(id),
     onHotspotRightClick: (id, ev) => {
       const n = findNode(state.nodes, id);
-      if (!n || !isPuzzleNode(n)) return;
+      if (!n) return;
       const view = toViewShape(n);
-      const items = [
-        { label: tr('context_edit_hotspot'), fn: () => {
-          editorModal.openEdit(view, nodeMarkdown(n));
-        } },
-      ];
-      if (outlinePanel) {
-        if (outlinePanel.hasNode(id)) {
-          items.push({ label: tr('outline_remove_from_outline'), fn: () => {
-            outlinePanel.removeByNodeId(id);
-            scheduleSave();
-          } });
-        } else {
-          items.push({ label: tr('outline_add_to_outline'), fn: () => {
-            outlinePanel.addNodeAtEnd(id, 0);
-            scheduleSave();
-          } });
-        }
+      const items = [];
+      if (isEditableNode(n)) {
+        items.push({ label: tr('context_edit_hotspot'), fn: () => openRichEdit(id) });
       }
-      items.push({ label: tr('context_delete_hotspot'), danger: true, fn: () => {
-        editorModal.showConfirm({
-          title: tr('editor_delete_title'),
-          message: tr('context_delete_confirm_msg', { title: view.title }),
-          actions: [
-            { label: tr('editor_cancel_button'), kind: 'cancel', fn: () => editorModal.hideConfirm() },
-            { label: tr('editor_delete_button'), kind: 'danger', fn: () => {
-              editorModal.hideConfirm();
-              deletePuzzleNode(view.id);
-            } },
-          ],
-        });
-      } });
+      if (isGroupNode(n)) {
+        items.push({ label: tr('group_ungroup'), fn: () => ungroupGroup(id) });
+        items.push({ label: tr('group_delete_with_children'), danger: true, fn: () => deleteGroupWithChildren(id) });
+        items.push({ label: tr('group_delete_keep_children'), fn: () => deleteGroupKeepChildren(id) });
+      } else {
+        if (outlinePanel && isPuzzleNode(n)) {
+          if (outlinePanel.hasNode(id)) {
+            items.push({ label: tr('outline_remove_from_outline'), fn: () => {
+              outlinePanel.removeByNodeId(id);
+              scheduleSave();
+            } });
+          } else {
+            items.push({ label: tr('outline_add_to_outline'), fn: () => {
+              outlinePanel.addNodeAtEnd(id, 0);
+              scheduleSave();
+            } });
+          }
+        }
+        items.push({ label: tr('context_delete_hotspot'), danger: true, fn: () => {
+          editorModal.showConfirm({
+            title: tr('editor_delete_title'),
+            message: tr('context_delete_confirm_msg', { title: view.title }),
+            actions: [
+              { label: tr('editor_cancel_button'), kind: 'cancel', fn: () => editorModal.hideConfirm() },
+              { label: tr('editor_delete_button'), kind: 'danger', fn: () => {
+                editorModal.hideConfirm();
+                deletePuzzleNode(view.id);
+              } },
+            ],
+          });
+        } });
+      }
       contextMenu.open(ev.clientX, ev.clientY, items);
     },
     onCanvasDrawRect: (rect) => {
-      editorModal.openCreate(rect, {
-        md: '# New puzzle\n\n## Status\nunsolved\n\n## TLDR\n\n## Background\n\n## Current state\n\n## Techniques tried\n\n## References\n\n## Open questions\n',
-      });
+      handleDrawRect(rect);
     },
     onHotspotResize: (id, rect) => {
       updatePuzzleNode(state.nodes, id, { rect });
@@ -264,6 +292,20 @@ function setupViewer() {
     },
     onTransformChange: () => {
       if (arrowLayer) arrowLayer.requestDraw();
+    },
+    onSelectionChange: ({ ids }) => {
+      state.selection = new Set(ids);
+      refreshSelectionStatus();
+    },
+    onMarqueeSelect: ({ ids }) => {
+      state.selection = new Set(ids);
+      refreshSelectionStatus();
+    },
+    onDragSelection: ({ ids, dx, dy }) => {
+      applyDragSelection(ids, dx, dy, false);
+    },
+    onDragSelectionEnd: ({ ids, dx, dy }) => {
+      applyDragSelection(ids, dx, dy, true);
     },
   });
   viewer.attachTooltip($('hotspot-tooltip'));
@@ -489,7 +531,326 @@ function deletePuzzleNode(id) {
 
 function refreshPuzzleViewsInViewer() {
   viewer.setHotspots(puzzleViews(state.nodes));
+  viewer.setGroups(groupViews(state.nodes));
   if (viewer) viewer.notifyNodesChanged();
+}
+
+function setupEditorToolbar() {
+  editorToolbar = new EditorToolbar({
+    handlers: {
+      onCreateModeChange: (mode) => {
+        if (viewer) viewer.setCreateMode(mode);
+      },
+      onRoutingChange: () => {},
+      onGroupSelection: () => groupCurrentSelection(),
+      onUngroup: () => ungroupCurrentSelection(),
+      onDeleteSelection: () => deleteCurrentSelection(),
+      onUndo: () => doUndo(),
+      onRedo: () => doRedo(),
+    },
+  });
+  if (viewer) viewer.setCreateMode(editorToolbar.getCreateMode());
+}
+
+function setupEditNodeModal() {
+  editNodeModal = new EditNodeModal({
+    getNodes: () => state.nodes,
+    canEdit: () => isLoggedIn(),
+    onSave: (payload) => persistRichEditSave(payload),
+    onDelete: (id) => deletePuzzleNode(id),
+    onCancel: () => {},
+    onUnauthedSubmit: () => { if (authUI) authUI.openLogin(); },
+  });
+}
+
+function setupSelectionStatus() {
+  const el = document.createElement('div');
+  el.id = 'selection-status';
+  document.body.appendChild(el);
+  selectionStatusEl = el;
+  refreshSelectionStatus();
+}
+
+function refreshSelectionStatus() {
+  if (!selectionStatusEl) return;
+  const n = state.selection.size;
+  if (n > 0 && state.mode === 'editor') {
+    selectionStatusEl.textContent = tr('selection_count', { n });
+    selectionStatusEl.classList.add('visible');
+  } else {
+    selectionStatusEl.classList.remove('visible');
+  }
+}
+
+function openRichEdit(id) {
+  const n = findNode(state.nodes, id);
+  if (!n) return;
+  const view = toViewShape(n);
+  const md = nodeMarkdown(n);
+  if (editNodeModal) editNodeModal.open(view, md);
+}
+
+function handleDrawRect(rect) {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  const createMode = (editorToolbar && editorToolbar.getCreateMode()) || 'block';
+  if (createMode === 'group') {
+    createGroupFromRect(rect);
+    return;
+  }
+  if (createMode === 'sticky') {
+    createStickyFromRect(rect);
+    return;
+  }
+  editorModal.openCreate(rect, {
+    md: '# New puzzle\n\n## Status\nunsolved\n\n## TLDR\n\n## Background\n\n## Current state\n\n## Techniques tried\n\n## References\n\n## Open questions\n',
+  });
+}
+
+function createStickyFromRect(rect) {
+  pushHistory();
+  const id = uniqueId(state.nodes, 'sticky');
+  const parent = nodeAtParentLookup(state.nodes, rect);
+  const md = `# Sticky\n`;
+  addStickyNode(state.nodes, { id, title: 'Sticky', slug: id, status: 'no-data', tags: [], rect, md, parent, color: '3' });
+  refreshPuzzleViewsInViewer();
+  const newNode = findNode(state.nodes, id);
+  if (newNode) pushNodeCreate(toViewShape(newNode), md);
+  scheduleSave();
+  toast(tr('node_created'));
+}
+
+function createGroupFromRect(rect) {
+  pushHistory();
+  const id = uniqueId(state.nodes, 'group');
+  const label = tr('group_default_label', { n: nextGroupLabel(state.nodes) });
+  addGroupNode(state.nodes, { id, label, rect });
+  refreshPuzzleViewsInViewer();
+  const n = findNode(state.nodes, id);
+  if (n) pushNodeCreate(toViewShape(n), '');
+  scheduleSave();
+  toast(tr('node_created'));
+}
+
+function applyDragSelection(ids, dx, dy, commit) {
+  if (!ids || !ids.length) return;
+  if (!isLoggedIn()) return;
+  const allIds = new Set();
+  for (const id of ids) {
+    allIds.add(id);
+    const n = findNode(state.nodes, id);
+    if (n && isGroupNode(n)) {
+      for (const sid of groupDescendantIds(state.nodes, id)) allIds.add(sid);
+    }
+  }
+  if (!applyDragSelection._orig) applyDragSelection._orig = new Map();
+  const orig = applyDragSelection._orig;
+  for (const id of allIds) {
+    const n = findNode(state.nodes, id);
+    if (!n) continue;
+    if (!orig.has(id)) orig.set(id, { x: n.x, y: n.y });
+    const o = orig.get(id);
+    n.x = o.x + dx;
+    n.y = o.y + dy;
+  }
+  refreshPuzzleViewsInViewer();
+  if (commit) {
+    for (const id of allIds) {
+      const n = findNode(state.nodes, id);
+      if (!n) continue;
+      pushNodePatch(id, { x: n.x, y: n.y });
+    }
+    applyDragSelection._orig = null;
+    scheduleSave();
+  }
+}
+
+function groupCurrentSelection() {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  if (state.selection.size === 0) return;
+  pushHistory();
+  const ids = Array.from(state.selection);
+  const rect = computeUnionBbox(ids);
+  if (!rect) return;
+  const pad = 24;
+  const expandedRect = { x: rect.x - pad, y: rect.y - pad, w: rect.w + pad * 2, h: rect.h + pad * 2 };
+  const newId = uniqueId(state.nodes, 'group');
+  const label = tr('group_default_label', { n: nextGroupLabel(state.nodes) });
+  addGroupNode(state.nodes, { id: newId, label, rect: expandedRect });
+  for (const id of ids) {
+    const n = findNode(state.nodes, id);
+    if (n) {
+      n.parent = newId;
+      pushNodePatch(id, { parent: newId });
+    }
+  }
+  state.selection = new Set([newId]);
+  if (viewer) viewer.setSelection(state.selection);
+  refreshPuzzleViewsInViewer();
+  refreshSelectionStatus();
+  const g = findNode(state.nodes, newId);
+  if (g) pushNodeCreate(toViewShape(g), '');
+  scheduleSave();
+  toast(tr('node_created'));
+}
+
+function ungroupCurrentSelection() {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  for (const id of Array.from(state.selection)) {
+    const n = findNode(state.nodes, id);
+    if (n && isGroupNode(n)) ungroupGroup(id);
+  }
+}
+
+function ungroupGroup(groupId) {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  const g = findNode(state.nodes, groupId);
+  if (!g || !isGroupNode(g)) return;
+  pushHistory();
+  const children = [];
+  for (const n of state.nodes.values()) {
+    if (n.parent === groupId) {
+      children.push(n.id);
+      delete n.parent;
+      pushNodePatch(n.id, { parent: null });
+    }
+  }
+  removeNode(state.nodes, groupId);
+  pushNodeDelete(groupId);
+  state.selection = new Set(children);
+  if (viewer) viewer.setSelection(state.selection);
+  if (arrowLayer) arrowLayer.notifyNodeDeleted(groupId);
+  refreshPuzzleViewsInViewer();
+  refreshSelectionStatus();
+  scheduleSave();
+}
+
+function deleteGroupWithChildren(groupId) {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  const g = findNode(state.nodes, groupId);
+  if (!g || !isGroupNode(g)) return;
+  pushHistory();
+  const desc = groupDescendantIds(state.nodes, groupId);
+  for (const cid of desc) {
+    removeNode(state.nodes, cid);
+    pushNodeDelete(cid);
+    if (arrowLayer) arrowLayer.notifyNodeDeleted(cid);
+  }
+  removeNode(state.nodes, groupId);
+  pushNodeDelete(groupId);
+  if (arrowLayer) arrowLayer.notifyNodeDeleted(groupId);
+  state.selection = new Set();
+  if (viewer) viewer.setSelection(state.selection);
+  refreshPuzzleViewsInViewer();
+  refreshSelectionStatus();
+  scheduleSave();
+}
+
+function deleteGroupKeepChildren(groupId) {
+  ungroupGroup(groupId);
+}
+
+function deleteCurrentSelection() {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  if (state.selection.size === 0) return;
+  pushHistory();
+  for (const id of Array.from(state.selection)) {
+    const n = findNode(state.nodes, id);
+    if (!n) continue;
+    if (isGroupNode(n)) deleteGroupKeepChildren(id);
+    else deletePuzzleNode(id);
+  }
+  state.selection = new Set();
+  if (viewer) viewer.setSelection(state.selection);
+  refreshSelectionStatus();
+}
+
+function computeUnionBbox(ids) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  let any = false;
+  for (const id of ids) {
+    const n = findNode(state.nodes, id);
+    if (!n) continue;
+    any = true;
+    if (n.x < minX) minX = n.x;
+    if (n.y < minY) minY = n.y;
+    if (n.x + n.width  > maxX) maxX = n.x + n.width;
+    if (n.y + n.height > maxY) maxY = n.y + n.height;
+  }
+  if (!any) return null;
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+}
+
+function pushHistory() {
+  const snap = serializeNodes();
+  state.history.past.push(snap);
+  if (state.history.past.length > HISTORY_LIMIT) state.history.past.shift();
+  state.history.future = [];
+}
+
+function serializeNodes() {
+  return {
+    nodes: Array.from(state.nodes.entries()).map(([id, n]) => [id, JSON.parse(JSON.stringify(n))]),
+  };
+}
+
+function restoreNodes(snap) {
+  if (!snap || !Array.isArray(snap.nodes)) return;
+  state.nodes = new Map(snap.nodes);
+  refreshPuzzleViewsInViewer();
+}
+
+function doUndo() {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  if (state.history.past.length === 0) return;
+  state.history.future.push(serializeNodes());
+  const snap = state.history.past.pop();
+  restoreNodes(snap);
+  scheduleSave();
+}
+
+function doRedo() {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  if (state.history.future.length === 0) return;
+  state.history.past.push(serializeNodes());
+  const snap = state.history.future.pop();
+  restoreNodes(snap);
+  scheduleSave();
+}
+
+function persistRichEditSave(payload) {
+  if (!payload || !payload.id) return;
+  const n = findNode(state.nodes, payload.id);
+  if (!n) return;
+  pushHistory();
+  const patch = {
+    title: payload.title,
+    status: payload.status,
+    tags: payload.tags,
+    color: payload.color || undefined,
+    caption: payload.caption,
+    parent: payload.parent,
+  };
+  if (isPuzzleNode(n) || isStickyNode(n)) {
+    patch.md = payload.md;
+  } else if (isGroupNode(n)) {
+    patch.label = payload.title;
+  }
+  updatePuzzleNode(state.nodes, payload.id, patch);
+  const updated = findNode(state.nodes, payload.id);
+  if (!updated) return;
+  refreshPuzzleViewsInViewer();
+  const wireBody = {
+    status: updated.status,
+    tags: updated.tags || [],
+    label: updated.label,
+    color: updated.color,
+    parent: updated.parent || null,
+    caption: updated.caption || null,
+  };
+  if (updated.type === 'text') wireBody.text = updated.text || '';
+  pushNodePatch(payload.id, wireBody);
+  scheduleSave();
+  toast(tr('toast_hotspot_updated'));
 }
 
 function setupToolbar() {
@@ -607,6 +968,12 @@ function setMode(mode) {
   document.querySelectorAll('.mode-switch button').forEach((b) => {
     b.classList.toggle('active', b.dataset.mode === mode);
   });
+  document.body.classList.toggle('editor-mode', mode === 'editor');
+  if (mode !== 'editor') {
+    state.selection = new Set();
+    if (viewer) viewer.setSelection(new Set());
+    refreshSelectionStatus();
+  }
 }
 
 function applyFilters() {
@@ -1026,6 +1393,12 @@ function setupKeyboard() {
           sidePanel.requestClose();
           return;
         }
+        if (state.selection.size > 0) {
+          state.selection = new Set();
+          if (viewer) viewer.setSelection(state.selection);
+          refreshSelectionStatus();
+          return;
+        }
         viewer.setActiveId(null);
       },
       onMinimapToggle: () => minimap && minimap.toggle(),
@@ -1033,8 +1406,21 @@ function setupKeyboard() {
       onFilterCycle: () => statusFilter && statusFilter.cycle(),
       onModeToggle: () => setMode(state.mode === 'viewer' ? 'editor' : 'viewer'),
       onCreateChild: () => createChildNode(),
-      onCreateSibling: () => createSiblingNode(),
-      onDeleteSelected: () => confirmDeleteSelected(),
+      onCreateSibling: () => {
+        if (state.selection.size === 1) {
+          const id = Array.from(state.selection)[0];
+          openRichEdit(id);
+          return true;
+        }
+        return createSiblingNode();
+      },
+      onDeleteSelected: () => {
+        if (state.mode === 'editor' && state.selection.size > 0) {
+          deleteCurrentSelection();
+          return true;
+        }
+        return confirmDeleteSelected();
+      },
       onZoomIn: () => {
         const r = $('map-canvas').getBoundingClientRect();
         viewer.zoomAt(r.width / 2, r.height / 2, 1.2);
@@ -1045,6 +1431,10 @@ function setupKeyboard() {
       },
       onZoomReset: () => resetZoom(),
       onSetStatus: (info) => setSelectedStatus(info && info.status),
+      onGroupSelection: () => { groupCurrentSelection(); return true; },
+      onUngroupSelection: () => { ungroupCurrentSelection(); return true; },
+      onUndo: () => { doUndo(); return true; },
+      onRedo: () => { doRedo(); return true; },
     },
   });
 }

@@ -1,28 +1,15 @@
-#auth-login-icon {
-  position: fixed;
-  bottom: 6px;
-  right: 8px;
-  width: 22px;
-  height: 22px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: 1px solid transparent;
-  color: var(--text-dim);
-  cursor: pointer;
-  opacity: 0.2;
-  border-radius: 4px;
-  transition: opacity .18s, transform .18s, border-color .18s;
-  z-index: 980;
-  padding: 0;
+#auth-signin-btn.auth-signin {
+  background: var(--accent-soft-bg);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
 }
-#auth-login-icon:hover {
-  opacity: 0.8;
-  transform: scale(1.06);
-  border-color: var(--panel-border);
+#auth-signin-btn.auth-signin:hover {
+  background: var(--accent-soft-bg-hover);
+  color: var(--accent);
+  border-color: var(--accent);
 }
-#auth-login-icon.hidden { display: none; }
+#auth-signin-btn.hidden { display: none; }
 
 #auth-user-chip {
   display: none;
@@ -283,3 +270,105 @@ body:not(.authed) .mode-switch { display: none; }
 body:not(.authed) #btn-edit-md,
 body:not(.authed) #btn-save-md { display: none; }
 body:not(.authed) #panel-status-select { pointer-events: none; opacity: 0.7; }
+
+.auth-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--panel-border);
+  background: var(--panel-2);
+}
+.auth-tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  padding: 10px 18px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color .15s, border-color .15s, background .15s;
+}
+.auth-tab:hover { background: var(--hover); color: var(--text); }
+.auth-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  background: var(--panel-bg);
+}
+
+.auth-invite-result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  background: var(--accent-soft-bg);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+}
+.auth-invite-label {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.auth-invite-result input[type="text"] {
+  flex: 1;
+  margin-bottom: 0;
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 6px 8px;
+  color: var(--text);
+  border-radius: var(--radius);
+}
+
+.auth-invitations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.auth-invite-exp {
+  margin-left: 10px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.auth-setup-welcome {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text);
+  margin-bottom: 14px;
+  line-height: 1.5;
+  letter-spacing: 0.5px;
+  padding: 10px 12px;
+  background: var(--accent-soft-bg);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+}
+
+.auth-modal-body input[readonly] {
+  background: var(--panel-2);
+  color: var(--text-dim);
+}
+
+#edit-modal-signin-hint {
+  display: none;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  background: var(--accent-soft-bg);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent);
+  letter-spacing: 0.5px;
+}
+body:not(.authed) #edit-modal-signin-hint.visible { display: block; }

@@ -55,6 +55,34 @@ class PatchUserRequest(BaseModel):
     is_admin: bool | None = None
 
 
+class InvitationCreateRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=64)
+    is_admin: bool = False
+
+
+class InvitationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    username: str = Field(..., validation_alias="username_display")
+    expires_at: Any
+    used_at: Any | None = None
+    is_admin_initial: bool
+    setup_url: str | None = None
+    token: str | None = None
+
+
+class InvitationCheckOut(BaseModel):
+    valid: bool
+    username: str | None = None
+    expires_at: Any | None = None
+    is_admin_initial: bool = False
+
+
+class SetupAccountRequest(BaseModel):
+    token: str = Field(..., min_length=1, max_length=128)
+    password: str = Field(..., min_length=8, max_length=256)
+
+
 class CanvasOut(BaseModel):
     revision: int
     data: dict[str, Any]

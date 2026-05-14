@@ -1,17 +1,15 @@
-/* Hidden login UI. Three ways to surface the login modal:
-   1. Ctrl/Cmd+Shift+L anywhere
-   2. tiny `?` icon bottom-right (low opacity by default)
-   3. URL flag `?login`
-   After login a user chip appears in the toolbar with a dropdown
-   (Change password / Logout / [admin] Manage users). */
+/* Login + account UI. Toolbar Sign in button (visible when not authed) and
+   user chip with dropdown (Change password / Logout / [admin] Manage users).
+   Ctrl/Cmd+Shift+L still opens the login modal. URL flag `?login` works too.
+   Admin's Manage users modal has a Users tab and an Invitations tab. */
 
 import {
   login, logout, changePassword, listUsers, createUser, deleteUser,
   resetPassword, setAdmin, subscribeAuth, getCurrentUser, isLoggedIn,
+  listInvitations, createInvitation, deleteInvitation,
+  checkInvitation, setupAccount,
 } from './api-client.js';
 import { tr } from './i18n.js';
-
-const SVG_NS = 'http://www.w3.org/2000/svg';
 
 function $(id) { return document.getElementById(id); }
 
@@ -30,32 +28,22 @@ function el(tag, attrs, kids) {
   return e;
 }
 
-function svgIcon() {
-  const s = document.createElementNS(SVG_NS, 'svg');
-  s.setAttribute('viewBox', '0 0 24 24');
-  s.setAttribute('width', '14');
-  s.setAttribute('height', '14');
-  s.setAttribute('aria-hidden', 'true');
-  const p = document.createElementNS(SVG_NS, 'path');
-  p.setAttribute('fill', 'currentColor');
-  p.setAttribute('d', 'M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5zm-3 5a3 3 0 1 1 6 0v3H9V7zm3 7a2 2 0 0 1 1 3.74V19a1 1 0 1 1-2 0v-1.26A2 2 0 0 1 12 14z');
-  s.appendChild(p);
-  return s;
-}
-
 export class AuthUI {
   constructor(opts) {
     this.toolbarEl = opts.toolbarEl;
     this.afterModeSwitchEl = opts.afterModeSwitchEl;
     this.onLogin  = opts.onLogin  || (() => {});
     this.onLogout = opts.onLogout || (() => {});
+    this.onMessage = opts.onMessage || (() => {});
     this._open = false;
+    this._activeTab = 'users';
 
     this._buildLoginModal();
     this._buildChangePwModal();
     this._buildManageUsersModal();
-    this._buildLoginIcon();
+    this._buildSignInButton();
     this._buildUserChip();
+    this._buildSetupModal();
 
     document.addEventListener('keydown', (e) => this._onGlobalKey(e));
     document.addEventListener('auth:expired', () => this._onAuthExpired());
@@ -69,6 +57,7 @@ export class AuthUI {
     if (/[?&]login(=|&|$)/.test(location.search)) {
       setTimeout(() => this.openLogin(), 50);
     }
+    this._checkInviteParam();
   }
 
   _onGlobalKey(e) {
@@ -84,17 +73,23 @@ export class AuthUI {
     this.openLogin(tr('login_error_credentials'));
   }
 
-  _buildLoginIcon() {
-    const a = el('button', {
-      id: 'auth-login-icon',
+  _buildSignInButton() {
+    const btn = el('button', {
+      id: 'auth-signin-btn',
+      class: 'tb-btn auth-signin',
       type: 'button',
       title: tr('login_title'),
       'aria-label': tr('login_title'),
       onclick: () => this.openLogin(),
     });
-    a.appendChild(svgIcon());
-    document.body.appendChild(a);
-    this.loginIconEl = a;
+    btn.textContent = tr('sign_in_button');
+    const langWrap = $('lang-select-wrap');
+    if (langWrap && langWrap.parentNode) {
+      langWrap.parentNode.insertBefore(btn, langWrap);
+    } else if (this.toolbarEl) {
+      this.toolbarEl.appendChild(btn);
+    }
+    this.signInBtnEl = btn;
   }
 
   _buildLoginModal() {
@@ -231,10 +226,10 @@ export class AuthUI {
     if (u) {
       this.chipNameEl.textContent = u.username;
       this.chipEl.classList.add('open');
-      this.loginIconEl.classList.add('hidden');
+      if (this.signInBtnEl) this.signInBtnEl.classList.add('hidden');
     } else {
       this.chipEl.classList.remove('open');
-      this.loginIconEl.classList.remove('hidden');
+      if (this.signInBtnEl) this.signInBtnEl.classList.remove('hidden');
       this._closeMenu();
     }
   }
@@ -268,8 +263,8 @@ export class AuthUI {
 
     submit.addEventListener('click', async () => {
       err.textContent = '';
-      if (newIn.value.length < 8) { err.textContent = tr('login_error_credentials'); return; }
-      if (newIn.value !== confIn.value) { err.textContent = tr('login_error_credentials'); return; }
+      if (newIn.value.length < 8) { err.textContent = tr('setup_account_password_too_short'); return; }
+      if (newIn.value !== confIn.value) { err.textContent = tr('setup_account_passwords_must_match'); return; }
       submit.disabled = true;
       try {
         await changePassword(oldIn.value, newIn.value);
@@ -311,8 +306,16 @@ export class AuthUI {
     const close = el('button', { type: 'button', class: 'auth-x', html: '&times;',
       onclick: () => modal.classList.remove('open') });
     head.appendChild(titleEl); head.appendChild(close);
-    const body = el('div', { class: 'auth-modal-body' });
 
+    const tabs = el('div', { class: 'auth-tabs' });
+    const tabUsers = el('button', { type: 'button', class: 'auth-tab active', text: tr('admin_tab_users'),
+      onclick: () => this._switchUsersTab('users') });
+    const tabInv = el('button', { type: 'button', class: 'auth-tab', text: tr('admin_tab_invitations'),
+      onclick: () => this._switchUsersTab('invitations') });
+    tabs.appendChild(tabUsers); tabs.appendChild(tabInv);
+
+    const body = el('div', { class: 'auth-modal-body' });
+    const usersPane = el('div', { class: 'auth-tab-pane', 'data-tab': 'users' });
     const addRow = el('div', { class: 'auth-users-add' });
     const addUser = el('input', { type: 'text', placeholder: tr('login_username') });
     const addPw   = el('input', { type: 'password', placeholder: tr('login_password') });
@@ -326,9 +329,32 @@ export class AuthUI {
 
     const list = el('div', { class: 'auth-users-list' });
     const err = el('div', { class: 'auth-error' });
+    usersPane.appendChild(addRow); usersPane.appendChild(err); usersPane.appendChild(list);
 
-    body.appendChild(addRow); body.appendChild(err); body.appendChild(list);
-    box.appendChild(head); box.appendChild(body);
+    const invPane = el('div', { class: 'auth-tab-pane', 'data-tab': 'invitations' });
+    invPane.style.display = 'none';
+    const invAddRow = el('div', { class: 'auth-users-add' });
+    const invAddUser = el('input', { type: 'text', placeholder: tr('admin_invitation_username') });
+    const invAddAdminWrap = el('label', { class: 'auth-checkbox' });
+    const invAddAdmin = el('input', { type: 'checkbox' });
+    invAddAdminWrap.appendChild(invAddAdmin);
+    invAddAdminWrap.appendChild(document.createTextNode(' admin'));
+    const invAddBtn = el('button', { type: 'button', class: 'auth-primary', text: tr('admin_invitation_generate') });
+    invAddRow.appendChild(invAddUser); invAddRow.appendChild(invAddAdminWrap); invAddRow.appendChild(invAddBtn);
+
+    const invResultRow = el('div', { class: 'auth-invite-result' });
+    invResultRow.style.display = 'none';
+    const invResultLabel = el('div', { class: 'auth-invite-label', text: tr('admin_invitation_url') });
+    const invResultUrlIn = el('input', { type: 'text', readonly: 'readonly' });
+    const invResultCopy = el('button', { type: 'button', class: 'auth-primary', text: tr('admin_invitation_copy') });
+    invResultRow.appendChild(invResultLabel); invResultRow.appendChild(invResultUrlIn); invResultRow.appendChild(invResultCopy);
+
+    const invErr = el('div', { class: 'auth-error' });
+    const invList = el('div', { class: 'auth-invitations-list' });
+    invPane.appendChild(invAddRow); invPane.appendChild(invResultRow); invPane.appendChild(invErr); invPane.appendChild(invList);
+
+    body.appendChild(usersPane); body.appendChild(invPane);
+    box.appendChild(head); box.appendChild(tabs); box.appendChild(body);
     modal.appendChild(box);
     document.body.appendChild(modal);
 
@@ -348,7 +374,7 @@ export class AuthUI {
       err.textContent = '';
       const u = addUser.value.trim();
       const p = addPw.value;
-      if (!u || p.length < 8) { err.textContent = tr('login_error_credentials'); return; }
+      if (!u || p.length < 8) { err.textContent = tr('setup_account_password_too_short'); return; }
       addBtn.disabled = true;
       try {
         await createUser(u, p, addAdmin.checked);
@@ -362,14 +388,90 @@ export class AuthUI {
       }
     });
 
+    const reloadInvitations = async () => {
+      invErr.textContent = '';
+      invList.innerHTML = '';
+      try {
+        const rows = await listInvitations();
+        for (const r of rows) invList.appendChild(this._renderInvitationRow(r, reloadInvitations));
+      } catch (e) {
+        if (e && e.kind === 'network') invErr.textContent = tr('login_error_network');
+        else invErr.textContent = tr('login_error_credentials');
+      }
+    };
+
+    invAddBtn.addEventListener('click', async () => {
+      invErr.textContent = '';
+      const u = invAddUser.value.trim();
+      if (!u) { invErr.textContent = tr('setup_account_invalid_token'); return; }
+      invAddBtn.disabled = true;
+      try {
+        const result = await createInvitation(u, invAddAdmin.checked);
+        invAddUser.value = '';
+        invAddAdmin.checked = false;
+        if (result && result.setup_url) {
+          invResultUrlIn.value = result.setup_url;
+          invResultRow.style.display = 'flex';
+          invResultUrlIn.focus();
+          invResultUrlIn.select();
+        }
+        await reloadInvitations();
+      } catch (e) {
+        if (e && e.kind === 'network') invErr.textContent = tr('login_error_network');
+        else if (e && e.status === 409) invErr.textContent = tr('login_error_credentials');
+        else invErr.textContent = tr('login_error_credentials');
+      } finally {
+        invAddBtn.disabled = false;
+      }
+    });
+
+    invResultCopy.addEventListener('click', async () => {
+      const v = invResultUrlIn.value;
+      if (!v) return;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(v);
+        } else {
+          invResultUrlIn.focus(); invResultUrlIn.select();
+          document.execCommand('copy');
+        }
+        invResultCopy.textContent = tr('admin_invitation_copied');
+        setTimeout(() => { invResultCopy.textContent = tr('admin_invitation_copy'); }, 1500);
+      } catch (e) { void e; }
+    });
+
     modal.addEventListener('mousedown', (e) => { if (e.target === modal) modal.classList.remove('open'); });
 
     this.usersModalEl = modal;
     this.usersTitleEl = titleEl;
+    this.usersTabsEl = tabs;
+    this.usersTabUsersBtn = tabUsers;
+    this.usersTabInvBtn = tabInv;
+    this.usersPaneEl = usersPane;
+    this.usersInvPaneEl = invPane;
     this.usersAddBtnEl = addBtn;
     this.usersAddUserIn = addUser;
     this.usersAddPwIn = addPw;
+    this.invAddUserIn = invAddUser;
+    this.invAddBtnEl = invAddBtn;
+    this.invResultLabelEl = invResultLabel;
+    this.invResultCopyEl = invResultCopy;
+    this.invResultRowEl = invResultRow;
+    this.invResultUrlIn = invResultUrlIn;
     this._reloadUsers = reload;
+    this._reloadInvitations = reloadInvitations;
+  }
+
+  _switchUsersTab(tab) {
+    this._activeTab = tab;
+    const isUsers = tab === 'users';
+    this.usersTabUsersBtn.classList.toggle('active', isUsers);
+    this.usersTabInvBtn.classList.toggle('active', !isUsers);
+    this.usersPaneEl.style.display = isUsers ? 'block' : 'none';
+    this.usersInvPaneEl.style.display = isUsers ? 'none' : 'block';
+    if (!isUsers && typeof this._reloadInvitations === 'function') {
+      this._reloadInvitations();
+    }
   }
 
   _renderUserRow(u, reload) {
@@ -398,14 +500,151 @@ export class AuthUI {
     return row;
   }
 
+  _renderInvitationRow(inv, reload) {
+    const row = el('div', { class: 'auth-user-row' });
+    const name = el('span', { class: 'auth-user-name', text: inv.username });
+    if (inv.is_admin_initial) {
+      const badge = el('span', { class: 'auth-admin-badge', text: 'admin' });
+      name.appendChild(badge);
+    }
+    const exp = el('span', { class: 'auth-invite-exp' });
+    const expDate = inv.expires_at ? new Date(inv.expires_at) : null;
+    if (expDate && !Number.isNaN(expDate.getTime())) {
+      exp.textContent = `${tr('admin_invitation_expires')}: ${expDate.toLocaleDateString()}`;
+    }
+    name.appendChild(exp);
+    const acts = el('div', { class: 'auth-user-actions' });
+    const revoke = el('button', { type: 'button', class: 'danger', text: tr('admin_invitation_revoke'), onclick: async () => {
+      try { await deleteInvitation(inv.id); await reload(); } catch (e) { void e; }
+    }});
+    if (inv.used_at) revoke.disabled = true;
+    acts.appendChild(revoke);
+    row.appendChild(name); row.appendChild(acts);
+    return row;
+  }
+
   async _openManageUsers() {
+    this._switchUsersTab('users');
     this.usersModalEl.classList.add('open');
     if (typeof this._reloadUsers === 'function') this._reloadUsers();
   }
 
+  _buildSetupModal() {
+    const modal = el('div', { id: 'auth-setup-modal', class: 'auth-modal' });
+    const box = el('div', { class: 'auth-modal-box' });
+    const head = el('div', { class: 'auth-modal-head' });
+    const titleEl = el('h2', { text: tr('setup_account_title') });
+    const close = el('button', { type: 'button', class: 'auth-x', html: '&times;',
+      onclick: () => modal.classList.remove('open') });
+    head.appendChild(titleEl); head.appendChild(close);
+    const body = el('div', { class: 'auth-modal-body' });
+    const welcome = el('div', { class: 'auth-setup-welcome', text: tr('setup_account_welcome') });
+    const userLabel = el('label', { text: tr('setup_account_username') });
+    const userIn = el('input', { type: 'text', readonly: 'readonly' });
+    const pwLabel = el('label', { text: tr('setup_account_password') });
+    const pwIn = el('input', { type: 'password', autocomplete: 'new-password' });
+    const confLabel = el('label', { text: tr('setup_account_password_confirm') });
+    const confIn = el('input', { type: 'password', autocomplete: 'new-password' });
+    const err = el('div', { class: 'auth-error' });
+    const actions = el('div', { class: 'auth-actions' });
+    const submit = el('button', { type: 'button', class: 'auth-primary', text: tr('setup_account_submit') });
+    actions.appendChild(submit);
+    body.appendChild(welcome);
+    body.appendChild(userLabel); body.appendChild(userIn);
+    body.appendChild(pwLabel); body.appendChild(pwIn);
+    body.appendChild(confLabel); body.appendChild(confIn);
+    body.appendChild(err); body.appendChild(actions);
+    box.appendChild(head); box.appendChild(body);
+    modal.appendChild(box);
+    document.body.appendChild(modal);
+    modal.addEventListener('mousedown', (e) => { if (e.target === modal) modal.classList.remove('open'); });
+    [pwIn, confIn].forEach((i) => i.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); submit.click(); }
+    }));
+    submit.addEventListener('click', () => this._submitSetup());
+
+    this.setupModalEl = modal;
+    this.setupTitleEl = titleEl;
+    this.setupWelcomeEl = welcome;
+    this.setupUserLabel = userLabel;
+    this.setupUserIn = userIn;
+    this.setupPwLabel = pwLabel;
+    this.setupPwIn = pwIn;
+    this.setupConfLabel = confLabel;
+    this.setupConfIn = confIn;
+    this.setupErrEl = err;
+    this.setupSubmitEl = submit;
+    this._setupToken = null;
+  }
+
+  async _checkInviteParam() {
+    const m = /[?&]invite=([A-Za-z0-9_\-]+)/.exec(location.search);
+    if (!m) return;
+    const token = m[1];
+    try {
+      const info = await checkInvitation(token);
+      if (info && info.valid) {
+        this._setupToken = token;
+        this.setupUserIn.value = info.username || '';
+        this.setupPwIn.value = '';
+        this.setupConfIn.value = '';
+        this.setupErrEl.textContent = '';
+        this.setupModalEl.classList.add('open');
+        setTimeout(() => this.setupPwIn.focus(), 50);
+      }
+    } catch (e) {
+      this._setupToken = token;
+      this.setupUserIn.value = '';
+      this.setupPwIn.value = '';
+      this.setupConfIn.value = '';
+      this.setupModalEl.classList.add('open');
+      const status = e && e.status;
+      this.setupErrEl.textContent = (status === 410)
+        ? tr('setup_account_expired_token')
+        : tr('setup_account_invalid_token');
+      this.setupSubmitEl.disabled = true;
+    }
+  }
+
+  async _submitSetup() {
+    if (!this._setupToken) return;
+    this.setupErrEl.textContent = '';
+    const pw = this.setupPwIn.value;
+    const conf = this.setupConfIn.value;
+    if (pw.length < 8) { this.setupErrEl.textContent = tr('setup_account_password_too_short'); return; }
+    if (pw !== conf) { this.setupErrEl.textContent = tr('setup_account_passwords_must_match'); return; }
+    this.setupSubmitEl.disabled = true;
+    try {
+      const user = await setupAccount(this._setupToken, pw);
+      this.setupModalEl.classList.remove('open');
+      this._stripInviteParam();
+      this.onMessage(tr('setup_account_success_toast', { username: user.username }));
+      this.onLogin(user);
+    } catch (e) {
+      const status = e && e.status;
+      if (status === 410) this.setupErrEl.textContent = tr('setup_account_expired_token');
+      else if (e && e.kind === 'network') this.setupErrEl.textContent = tr('login_error_network');
+      else this.setupErrEl.textContent = tr('setup_account_invalid_token');
+    } finally {
+      this.setupSubmitEl.disabled = false;
+    }
+  }
+
+  _stripInviteParam() {
+    try {
+      const u = new URL(location.href);
+      u.searchParams.delete('invite');
+      const next = u.pathname + (u.searchParams.toString() ? `?${u.searchParams.toString()}` : '') + u.hash;
+      history.replaceState(null, '', next);
+    } catch (e) { void e; }
+  }
+
   _retranslate() {
-    this.loginIconEl.setAttribute('title', tr('login_title'));
-    this.loginIconEl.setAttribute('aria-label', tr('login_title'));
+    if (this.signInBtnEl) {
+      this.signInBtnEl.textContent = tr('sign_in_button');
+      this.signInBtnEl.setAttribute('title', tr('login_title'));
+      this.signInBtnEl.setAttribute('aria-label', tr('login_title'));
+    }
     this.loginTitleEl.textContent = tr('login_title');
     this.loginUserLabel.textContent = tr('login_username');
     this.loginPwLabel.textContent = tr('login_password');
@@ -419,6 +658,18 @@ export class AuthUI {
     this.usersAddBtnEl.textContent = tr('user_add');
     this.usersAddUserIn.placeholder = tr('login_username');
     this.usersAddPwIn.placeholder = tr('login_password');
+    this.usersTabUsersBtn.textContent = tr('admin_tab_users');
+    this.usersTabInvBtn.textContent = tr('admin_tab_invitations');
+    this.invAddUserIn.placeholder = tr('admin_invitation_username');
+    this.invAddBtnEl.textContent = tr('admin_invitation_generate');
+    this.invResultLabelEl.textContent = tr('admin_invitation_url');
+    this.invResultCopyEl.textContent = tr('admin_invitation_copy');
+    this.setupTitleEl.textContent = tr('setup_account_title');
+    this.setupWelcomeEl.textContent = tr('setup_account_welcome');
+    this.setupUserLabel.textContent = tr('setup_account_username');
+    this.setupPwLabel.textContent = tr('setup_account_password');
+    this.setupConfLabel.textContent = tr('setup_account_password_confirm');
+    this.setupSubmitEl.textContent = tr('setup_account_submit');
     if (isLoggedIn()) this._populateMenu();
   }
 }

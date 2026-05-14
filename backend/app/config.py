@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     )
     canvas_seed_path: str = Field(default="seed/canvas.canvas", alias="CANVAS_SEED_PATH")
     env: str = Field(default="production", alias="ENV")
+    frontend_base_url: str = Field(
+        default="https://sashaok123.github.io/BigDusty_INSIDE_ARG_Map/",
+        alias="FRONTEND_BASE_URL",
+    )
+    invitation_ttl_days: int = Field(default=7, alias="INVITATION_TTL_DAYS")
 
     @field_validator("database_url")
     @classmethod
