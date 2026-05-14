@@ -62,17 +62,7 @@ export class BranchesPanel {
     drawer.querySelector('.branches-manage').addEventListener('click', () => {
       if (typeof this.onManage === 'function') this.onManage();
     });
-    const chipsBar = document.createElement('div');
-    chipsBar.id = 'branches-chips';
-    chipsBar.className = 'branches-chips';
-    const toolbar = document.getElementById('toolbar');
-    if (toolbar) {
-      const center = toolbar.querySelector('.tb-zone-center');
-      (center || toolbar).appendChild(chipsBar);
-    } else {
-      document.body.appendChild(chipsBar);
-    }
-    this.chipsEl = chipsBar;
+    this.chipsEl = null;
     this._refresh();
   }
 
