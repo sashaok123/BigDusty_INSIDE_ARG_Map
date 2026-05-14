@@ -6,4 +6,4 @@ Each part of the puzzle — the 108-cell sticker grid, the in-game printer, the 
 
 The map is meant to give a new investigator everything in one read. No more digging through nine years of Discord scrollback, scattered Reddit threads, dead Wayback snapshots and unindexed wikis to figure out the current state of a single puzzle.
 
-The original concept was BigDusty's, sketched out on the Playdead Unofficial Discord in April 2026. This repository is the community version, open for anyone to read and improve.
+Concept by BigDusty on the Playdead Unofficial Discord, April 2026.
