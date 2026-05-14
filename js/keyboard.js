@@ -135,6 +135,12 @@ export class KeyboardShortcuts {
         this._call('onVideoTool', ev);
         return;
       }
+      if (k === 'u' || k === 'U') {
+        ev.preventDefault();
+        setActiveTool('audio');
+        this._call('onAudioTool', ev);
+        return;
+      }
       if (k === 'a' || k === 'A') { ev.preventDefault(); setActiveTool('arrow'); return; }
       if (k === 'g' || k === 'G') {
         ev.preventDefault();

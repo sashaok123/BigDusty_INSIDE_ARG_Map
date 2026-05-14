@@ -68,7 +68,38 @@ function finaliseCanvas(obj, { fellBack }) {
       mdCache.set(n.slug, n.text);
     }
   }
-  return { nodes, edges, fellBack };
+  const branches = normaliseBranches(obj.branches);
+  return { nodes, edges, branches, fellBack };
+}
+
+export function normaliseBranches(raw) {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const b of raw) {
+    if (!b || typeof b !== 'object') continue;
+    const id = typeof b.id === 'string' ? b.id.trim() : '';
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const label = typeof b.label === 'string' ? b.label : id;
+    const color = typeof b.color === 'string' ? b.color : '1';
+    const description = typeof b.description === 'string' ? b.description : '';
+    out.push({ id, label, color, description });
+  }
+  return out;
+}
+
+export function defaultBranchSeed() {
+  return [
+    ['stickers', '108-cell sticker puzzle', '1'],
+    ['printer', 'Printer / 5-platform passcodes', '2'],
+    ['terminal41', 'terminal41.link site', '3'],
+    ['transmission', 'Transmission PNG / chip JPEG', '4'],
+    ['breach', 'Breach SHA-256 hashes', '5'],
+    ['viewgate', '22-char viewgate input', '6'],
+    ['cummings', 'Cummings overlay / macOS', '1'],
+    ['physical', 'Physical CE contents', '2'],
+  ].map(([id, label, color]) => ({ id, label, color, description: '' }));
 }
 
 export function normaliseNode(raw) {
@@ -134,10 +165,13 @@ export function normaliseNode(raw) {
     if (typeof raw.media.videoId === 'string') m.videoId = raw.media.videoId;
     if (typeof raw.media.embedUrl === 'string') m.embedUrl = raw.media.embedUrl;
     if (typeof raw.media.provider === 'string') m.provider = raw.media.provider;
+    if (Number.isFinite(raw.media.volume_default)) m.volume_default = Math.max(0, Math.min(1, raw.media.volume_default));
     node.media = m;
   }
   if (typeof raw.mime === 'string') node.mime = raw.mime;
-  if (raw.kind === 'video') node.kind = 'video';
+  if (raw.kind === 'video' || raw.kind === 'audio' || raw.kind === 'document') node.kind = raw.kind;
+  if (typeof raw.name === 'string') node.name = raw.name;
+  if (Array.isArray(raw.branches)) node.branches = raw.branches.filter((b) => typeof b === 'string');
   return node;
 }
 
@@ -377,9 +411,13 @@ export function restoreMarkdownCache(obj) {
   }
 }
 
-export function serializeCanvas(nodes, edges) {
-  return {
+export function serializeCanvas(nodes, edges, branches) {
+  const out = {
     nodes: Array.from(nodes.values()).map((n) => ({ ...n })),
     edges: Array.from(edges.values()).map((e) => ({ ...e })),
   };
+  if (Array.isArray(branches) && branches.length) {
+    out.branches = branches.map((b) => ({ ...b }));
+  }
+  return out;
 }

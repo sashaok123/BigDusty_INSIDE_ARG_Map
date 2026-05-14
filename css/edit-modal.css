@@ -690,3 +690,32 @@
   gap: 8px;
   justify-content: flex-end;
 }
+
+.em-branches-host {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 0;
+}
+.em-branch-chip {
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  padding: 4px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  font: 11px/1.2 var(--font-mono);
+}
+.em-branch-chip:hover { border-color: var(--accent); color: var(--accent); }
+.em-branch-chip.selected {
+  background: var(--accent-soft-bg-strong, var(--accent-soft-bg));
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+.em-branches-empty {
+  font: italic 11px/1.2 var(--font-mono);
+  color: var(--text-dim);
+  padding: 4px 0;
+}
+

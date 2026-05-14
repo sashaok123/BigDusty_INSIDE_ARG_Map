@@ -142,11 +142,11 @@ export class Viewer {
   async setBlocks(blocks) {
     this.blocks = blocks.map((b) => ({ id: b.id, rect: { ...b.rect }, file: b.file }));
     this._computeBounds();
-    await Promise.all(this.blocks.map((b) => this._loadBlockImage(b)));
     this.imageReady = true;
     this._refreshBg();
     this._refreshPalette();
     this.fitToScreen();
+    this._loadVisibleBlocks();
     this.requestDraw();
     return { w: this.imageW, h: this.imageH };
   }
@@ -195,6 +195,42 @@ export class Viewer {
       };
       img.src = b.file;
     });
+  }
+
+  _isBlockNearViewport(b) {
+    if (!this.canvas) return true;
+    const r = this.canvas.getBoundingClientRect();
+    if (!r.width || !r.height) return true;
+    const margin = Math.max(r.width, r.height) * 2;
+    const screenX = b.rect.x * this.scale + this.panX;
+    const screenY = b.rect.y * this.scale + this.panY;
+    const screenW = b.rect.w * this.scale;
+    const screenH = b.rect.h * this.scale;
+    return (
+      screenX + screenW > -margin &&
+      screenY + screenH > -margin &&
+      screenX < r.width + margin &&
+      screenY < r.height + margin
+    );
+  }
+
+  _loadVisibleBlocks() {
+    if (!this.blocks || !this.blocks.length) return;
+    const pending = [];
+    for (const b of this.blocks) {
+      if (this.blockImages.has(b.id) || this._loadingBlocks?.has(b.id)) continue;
+      if (!this._isBlockNearViewport(b)) continue;
+      pending.push(b);
+    }
+    if (!pending.length) return;
+    if (!this._loadingBlocks) this._loadingBlocks = new Set();
+    for (const b of pending) {
+      this._loadingBlocks.add(b.id);
+      this._loadBlockImage(b).then(() => {
+        if (this._loadingBlocks) this._loadingBlocks.delete(b.id);
+        this.requestDraw();
+      });
+    }
   }
 
   _computeBounds() {
@@ -396,6 +432,23 @@ export class Viewer {
     this.requestDraw();
   }
 
+  fitToRect(rect) {
+    if (!rect || !this.imageReady) return;
+    const r = this.canvas.getBoundingClientRect();
+    const vw = r.width;
+    const vh = r.height;
+    if (vw <= 0 || vh <= 0) return;
+    const pad = 0.85;
+    const s = Math.min(vw / Math.max(rect.w, 1), vh / Math.max(rect.h, 1)) * pad;
+    this.scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, s));
+    const cx = rect.x + rect.w / 2;
+    const cy = rect.y + rect.h / 2;
+    this.panX = vw / 2 - cx * this.scale;
+    this.panY = vh / 2 - cy * this.scale;
+    this._notifyTransform();
+    this.requestDraw();
+  }
+
   imagePointFromClient(clientX, clientY) {
     const r = this.canvas.getBoundingClientRect();
     return {
@@ -497,6 +550,7 @@ export class Viewer {
   _notifyTransform() {
     this.onTransformChange({ scale: this.scale, panX: this.panX, panY: this.panY });
     this._notifySubscribers('transform', { scale: this.scale, panX: this.panX, panY: this.panY });
+    if (typeof this._loadVisibleBlocks === 'function') this._loadVisibleBlocks();
   }
 
   notifyNodesChanged() {
@@ -771,6 +825,7 @@ export class Viewer {
     let alpha = 1;
     if (filterDim) alpha = 0.1;
     else if (searchDim) alpha = 0.3;
+    if (typeof h.branchOpacity === 'number' && h.branchOpacity < alpha) alpha = h.branchOpacity;
 
     ctx.lineWidth = (isHover || isOutlineHL || isSelected ? 2.5 : 1.6) / this.scale;
     ctx.globalAlpha = alpha;

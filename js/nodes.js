@@ -64,8 +64,23 @@ export function isVideoNode(n) {
   return false;
 }
 
+export function isAudioNode(n) {
+  if (!n) return false;
+  if (n.kind === 'audio') return true;
+  if (typeof n.mime === 'string' && /^audio\//i.test(n.mime)) return true;
+  return !!(n.media && n.media.kind === 'audio');
+}
+
+const DOC_MIMES = new Set(['text/html', 'text/plain', 'text/markdown', 'text/csv', 'application/json', 'application/xml', 'text/xml', 'application/pdf']);
+
+export function isDocumentNode(n) {
+  if (!n) return false;
+  if (n.kind === 'document') return true;
+  return typeof n.mime === 'string' && DOC_MIMES.has(n.mime.toLowerCase());
+}
+
 export function isEditableNode(n) {
-  return n && (isPuzzleNode(n) || isStickyNode(n) || isGroupNode(n) || isTextNode(n) || isVideoNode(n));
+  return n && (isPuzzleNode(n) || isStickyNode(n) || isGroupNode(n) || isTextNode(n) || isVideoNode(n) || isAudioNode(n) || isDocumentNode(n));
 }
 
 export function nodeRect(n) {
@@ -106,6 +121,8 @@ export function toViewShape(n) {
     text_style: n.text_style && typeof n.text_style === 'object' ? { ...n.text_style } : null,
     media: n.media && typeof n.media === 'object' ? { ...n.media } : null,
     mime: n.mime || null,
+    name: typeof n.name === 'string' ? n.name : '',
+    branches: Array.isArray(n.branches) ? [...n.branches] : [],
   };
 }
 
@@ -264,6 +281,14 @@ export function updatePuzzleNode(nodes, id, patch) {
   if (patch.media !== undefined) {
     if (patch.media && typeof patch.media === 'object') n.media = { ...patch.media };
     else delete n.media;
+  }
+  if (patch.branches !== undefined) {
+    if (Array.isArray(patch.branches)) n.branches = [...patch.branches];
+    else delete n.branches;
+  }
+  if (patch.name !== undefined) {
+    if (typeof patch.name === 'string') n.name = patch.name;
+    else delete n.name;
   }
   return true;
 }
