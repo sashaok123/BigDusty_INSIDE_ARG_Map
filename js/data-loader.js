@@ -181,8 +181,8 @@ export function normaliseEdge(raw) {
 }
 
 export function normaliseEdgeLabel(raw) {
-  if (raw == null) return { text: '', position: null };
-  if (typeof raw === 'string') return { text: raw, position: null };
+  if (raw == null) return { text: '', position: null, fontSize: 14, color: 'auto', rotation: 0 };
+  if (typeof raw === 'string') return { text: raw, position: null, fontSize: 14, color: 'auto', rotation: 0 };
   if (typeof raw === 'object') {
     const text = typeof raw.text === 'string' ? raw.text : '';
     let position = null;
@@ -190,9 +190,12 @@ export function normaliseEdgeLabel(raw) {
         && Number.isFinite(raw.position.x) && Number.isFinite(raw.position.y)) {
       position = { x: raw.position.x, y: raw.position.y };
     }
-    return { text, position };
+    const fontSize = Number.isFinite(raw.fontSize) ? Math.max(8, Math.min(64, raw.fontSize)) : 14;
+    const color = typeof raw.color === 'string' && raw.color ? raw.color : 'auto';
+    const rotation = Number.isFinite(raw.rotation) ? Math.max(-180, Math.min(180, raw.rotation)) : 0;
+    return { text, position, fontSize, color, rotation };
   }
-  return { text: '', position: null };
+  return { text: '', position: null, fontSize: 14, color: 'auto', rotation: 0 };
 }
 
 function normaliseBindings(b) {

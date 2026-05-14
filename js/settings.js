@@ -9,6 +9,8 @@ const DEFAULTS = {
   deeplApiKey: '',
   openaiApiKey: '',
   openaiModel: 'gpt-4o-mini',
+  anthropicApiKey: '',
+  anthropicModel: 'claude-opus-4-7-20251001',
 };
 
 function load() {
@@ -52,5 +54,7 @@ export function getTranslationProvider() {
     deeplApiKey: s.deeplApiKey,
     openaiApiKey: s.openaiApiKey,
     openaiModel: s.openaiModel,
+    anthropicApiKey: s.anthropicApiKey,
+    anthropicModel: s.anthropicModel,
   };
 }

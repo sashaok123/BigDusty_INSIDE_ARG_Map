@@ -16,6 +16,7 @@ export function providerLabel(p) {
   if (p === 'libretranslate') return 'LibreTranslate';
   if (p === 'deepl') return 'DeepL';
   if (p === 'openai') return 'OpenAI';
+  if (p === 'anthropic') return 'Anthropic';
   return p;
 }
 
@@ -34,6 +35,9 @@ export async function translateOne(text, sourceLang, targetLang, provider) {
   }
   if (provider.name === 'openai') {
     return openaiTranslate(text, sourceLang, targetLang, provider);
+  }
+  if (provider.name === 'anthropic') {
+    return anthropicTranslate(text, sourceLang, targetLang, provider);
   }
   const err = new Error('unknown_provider');
   err.kind = 'unknown_provider';
@@ -108,6 +112,44 @@ async function deeplTranslate(text, source, target, provider) {
   const data = await res.json();
   if (data && Array.isArray(data.translations) && data.translations[0]) {
     return data.translations[0].text || '';
+  }
+  return '';
+}
+
+async function anthropicTranslate(text, source, target, provider) {
+  const key = provider.anthropicApiKey;
+  if (!key) {
+    const err = new Error('anthropic_no_key');
+    err.kind = 'anthropic_no_key';
+    throw err;
+  }
+  const model = provider.anthropicModel || 'claude-opus-4-7-20251001';
+  const srcName = LANG_NAMES[source] || source;
+  const tgtName = LANG_NAMES[target] || target;
+  const prompt = `Translate the following text from ${srcName} to ${tgtName}. Return only the translation, no explanation.\n\n---\n${text}`;
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 2000,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+  if (!res.ok) {
+    const err = new Error(`anthropic_${res.status}`);
+    err.kind = 'http';
+    err.status = res.status;
+    throw err;
+  }
+  const data = await res.json();
+  if (data && Array.isArray(data.content) && data.content[0] && typeof data.content[0].text === 'string') {
+    return data.content[0].text.trim();
   }
   return '';
 }

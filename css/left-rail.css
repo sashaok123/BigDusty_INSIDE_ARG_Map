@@ -1,30 +1,38 @@
-/* Left-side primary navigation rail. Fixed 60-px column with grouped
-   icon buttons. Replaces the second-row editor toolbar. */
+/* Left-side primary navigation rail. Labelled buttons by default (200 px
+   wide), collapses to icon-only (60 px) via the bottom Collapse button. */
 
 #left-rail {
   position: fixed;
   top: var(--toolbar-h);
   bottom: 0;
   left: 0;
-  width: var(--rail-w);
+  width: 200px;
   background: var(--rail-bg);
   border-right: 1px solid var(--rail-border);
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   padding: 8px 0;
-  gap: 6px;
+  gap: 4px;
   z-index: 1100;
   font-family: var(--font-mono);
+  transition: width .15s ease-out;
 }
+
+#left-rail.collapsed { width: 60px; }
 
 #left-rail .rail-section {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 4px;
+  align-items: stretch;
+  gap: 2px;
   width: 100%;
-  padding: 4px 0;
+  padding: 4px 8px;
+}
+
+#left-rail.collapsed .rail-section {
+  padding: 4px 6px;
+  align-items: center;
 }
 
 #left-rail .rail-section + .rail-section {
@@ -33,42 +41,37 @@
   margin-top: 4px;
 }
 
-#left-rail .rail-bottom {
+#left-rail .rail-footer {
   margin-top: auto;
   border-top: 1px solid var(--rail-border);
-  padding-top: 8px;
+  padding: 8px 8px 4px;
 }
 
-#left-rail .rail-logo {
-  font-family: var(--font-mono);
-  font-size: 8px;
-  letter-spacing: 1.4px;
-  color: var(--accent);
-  text-align: center;
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--accent-soft-bg);
-  border: 1px solid var(--accent);
-  border-radius: 6px;
-  font-weight: 700;
-}
+#left-rail.collapsed .rail-footer { padding: 8px 6px 4px; }
 
 #left-rail .rail-btn {
   background: transparent;
   border: 1px solid transparent;
-  color: var(--text-dim);
+  color: var(--text);
   cursor: pointer;
-  width: 40px;
-  height: 36px;
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 0;
+  padding: 6px 10px;
   border-radius: 6px;
-  transition: background .15s, color .15s, border-color .15s;
+  transition: background .12s, color .12s, border-color .12s;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  text-align: left;
+  width: 100%;
+  gap: 10px;
+}
+
+#left-rail.collapsed .rail-btn {
+  width: 44px;
+  height: 36px;
+  padding: 0;
+  justify-content: center;
 }
 
 #left-rail .rail-btn:hover {
@@ -90,87 +93,115 @@
 }
 
 #left-rail .rail-btn svg {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   stroke: currentColor;
   fill: none;
   stroke-width: 1.6;
   stroke-linecap: round;
   stroke-linejoin: round;
+  flex-shrink: 0;
+}
+
+#left-rail .rail-btn-label {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#left-rail.collapsed .rail-btn-label { display: none; }
+
+#left-rail .rail-btn-shortcut {
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.5px;
+  margin-left: auto;
+}
+
+#left-rail.collapsed .rail-btn-shortcut { display: none; }
+
+#left-rail .rail-btn.active .rail-btn-shortcut {
+  color: var(--accent);
 }
 
 #left-rail .rail-separator {
-  width: 28px;
+  width: 100%;
   height: 1px;
   background: var(--rail-border);
-  margin: 4px 0;
+  margin: 6px 0;
 }
 
-#left-rail .rail-submenu-wrap {
-  position: relative;
-}
+#left-rail.collapsed .rail-separator { width: 28px; }
 
-#left-rail .rail-flyout {
-  display: none;
-  position: absolute;
-  left: calc(100% + 6px);
-  top: 0;
-  flex-direction: row;
-  background: var(--panel-bg);
+#left-rail .rail-collapse-btn {
+  background: transparent;
   border: 1px solid var(--panel-border);
-  border-radius: var(--radius);
-  padding: 4px;
-  gap: 2px;
-  box-shadow: var(--shadow-soft);
-  z-index: 1300;
+  color: var(--text-dim);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 6px;
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  gap: 10px;
+  text-align: left;
 }
 
-#left-rail .rail-flyout.open { display: inline-flex; }
-
-#left-rail .rail-flyout-lang { flex-wrap: wrap; max-width: 280px; }
-
-#left-rail .rail-flyout .rail-btn {
-  width: 32px;
-  height: 32px;
+#left-rail.collapsed .rail-collapse-btn {
+  width: 44px;
+  height: 36px;
+  padding: 0;
+  justify-content: center;
 }
 
-#left-rail .rail-flyout .rail-lang-pick {
-  font-size: 10px;
-  letter-spacing: 1px;
-  font-weight: 600;
+#left-rail .rail-collapse-btn:hover {
+  background: var(--hover);
   color: var(--text);
 }
 
-#left-rail .rail-flyout .rail-lang-pick.active {
-  background: var(--accent-soft-bg-strong);
-  color: var(--accent);
-  border-color: var(--accent);
+#left-rail .rail-collapse-btn svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
 }
 
-/* Tools and logo visibility: only shown in editor mode (rail itself stays
-   visible whenever the user is authed, so Browse-mode users can switch the
-   mode without losing access). In Browse mode only the mode switch shows. */
+/* Tools visibility: only shown in editor mode. Modes section is always
+   visible when authed. */
 #left-rail .rail-tools { display: none; }
-#left-rail .rail-top   { display: none; }
 body.authed.editor-mode #left-rail .rail-tools { display: flex; }
-body.authed.editor-mode #left-rail .rail-top   { display: flex; }
 
-/* Rail is hidden only when anonymous. */
+/* Rail itself: hidden when anonymous. */
 #left-rail { display: none; }
 body.authed #left-rail { display: flex; }
 
 /* Push the main viewport over by the rail width whenever the rail is open. */
 body { padding-left: 0; }
-body.authed { padding-left: var(--rail-w); }
-body.authed #toolbar { left: var(--rail-w); }
-body.authed #viewport { left: var(--rail-w); }
-body.authed #zoom-controls { left: calc(var(--rail-w) + 14px); }
-body.authed #offline-banner { left: calc(var(--rail-w) + 8px); }
-body.authed #selection-status { left: calc(var(--rail-w) + 14px); }
+body.authed { padding-left: 200px; }
+body.authed.rail-collapsed { padding-left: 60px; }
+body.authed #toolbar { left: 200px; }
+body.authed.rail-collapsed #toolbar { left: 60px; }
+body.authed #viewport { left: 200px; }
+body.authed.rail-collapsed #viewport { left: 60px; }
+body.authed #zoom-controls { left: calc(200px + 14px); }
+body.authed.rail-collapsed #zoom-controls { left: calc(60px + 14px); }
+body.authed #offline-banner { left: calc(200px + 8px); }
+body.authed.rail-collapsed #offline-banner { left: calc(60px + 8px); }
+body.authed #selection-status { left: calc(200px + 14px); }
+body.authed.rail-collapsed #selection-status { left: calc(60px + 14px); }
 
 /* Mobile: collapse rail to bottom strip on narrow screens */
 @media (max-width: 720px) {
   body.authed { padding-left: 0; padding-bottom: 56px; }
+  body.authed.rail-collapsed { padding-left: 0; }
   body.authed #left-rail {
     top: auto;
     bottom: 0;
@@ -192,15 +223,13 @@ body.authed #selection-status { left: calc(var(--rail-w) + 14px); }
     padding: 0 8px !important;
     margin: 0 !important;
     height: 100%;
+    align-items: center;
   }
   #left-rail .rail-section:first-child { border-left: none; }
-  #left-rail .rail-logo { width: 36px; height: 36px; font-size: 7px; }
-  #left-rail .rail-flyout {
-    left: 0;
-    top: auto;
-    bottom: calc(100% + 6px);
-    flex-direction: row;
-  }
+  #left-rail .rail-btn { width: auto; }
+  #left-rail .rail-btn-label { display: none; }
+  #left-rail .rail-btn-shortcut { display: none; }
+  #left-rail .rail-footer { display: none; }
   body.authed #toolbar { left: 0; }
   body.authed #viewport { left: 0; bottom: 56px; }
   body.authed #zoom-controls { bottom: 72px; left: 14px; }

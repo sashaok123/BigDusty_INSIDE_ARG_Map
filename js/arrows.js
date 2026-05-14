@@ -5,6 +5,7 @@
 
 import { tr } from './i18n.js';
 import { isBlockNode } from './nodes.js';
+import { isSpaceHeld } from './tools.js';
 import { resolveAnchor, ensureBindings, setEndpointToNode, setEndpointDangling, findSnapTarget, defaultJunction, renderAnchorHandles, renderEndpointHandle, renderWaypointHandles, renderJunctionHandle, EdgePropsPopover, EdgeContextMenu } from './arrow-edit.js';
 import { routeEdge, ROUTINGS, isValidRouting, pointAlong } from './router.js';
 import { vertexPathD, dashFor, STYLES, isValidStyle } from './connector.js';
@@ -30,16 +31,29 @@ function ensureLabelShape(label) {
     const pos = label.position;
     const safePos = (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y))
       ? { x: pos.x, y: pos.y } : null;
-    return { text: label.text, position: safePos };
+    const fontSize = Number.isFinite(label.fontSize) ? Math.max(8, Math.min(64, label.fontSize)) : 14;
+    const color = typeof label.color === 'string' && label.color ? label.color : 'auto';
+    const rotation = Number.isFinite(label.rotation) ? Math.max(-180, Math.min(180, label.rotation)) : 0;
+    return { text: label.text, position: safePos, fontSize, color, rotation };
   }
-  if (typeof label === 'string') return { text: label, position: null };
-  return { text: '', position: null };
+  if (typeof label === 'string') return { text: label, position: null, fontSize: 14, color: 'auto', rotation: 0 };
+  return { text: '', position: null, fontSize: 14, color: 'auto', rotation: 0 };
 }
 
 function normaliseLabelValue(value, current) {
-  if (typeof value === 'string') return { text: value, position: ensureLabelShape(current).position };
-  if (value && typeof value === 'object') return ensureLabelShape(value);
-  return ensureLabelShape(current);
+  const cur = ensureLabelShape(current);
+  if (typeof value === 'string') return { ...cur, text: value };
+  if (value && typeof value === 'object') {
+    const next = ensureLabelShape(value);
+    return {
+      text: typeof value.text === 'string' ? value.text : cur.text,
+      position: value.position === null ? null : (next.position || cur.position),
+      fontSize: Number.isFinite(value.fontSize) ? next.fontSize : cur.fontSize,
+      color: typeof value.color === 'string' && value.color ? next.color : cur.color,
+      rotation: Number.isFinite(value.rotation) ? next.rotation : cur.rotation,
+    };
+  }
+  return cur;
 }
 
 
@@ -136,7 +150,6 @@ export class ArrowLayer {
 
   setMode(mode) {
     this.mode = mode;
-    this.svg.style.pointerEvents = mode === 'editor' ? 'auto' : 'none';
     if (mode !== 'editor') {
       this._deselect();
     }
@@ -183,6 +196,34 @@ export class ArrowLayer {
     }
   }
 
+  createEdgeFromPoints(opts) {
+    const id = this._nextId();
+    const fromPt = opts && opts.fromPt ? { x: opts.fromPt.x, y: opts.fromPt.y } : { x: 0, y: 0 };
+    const toPt = opts && opts.toPt ? { x: opts.toPt.x, y: opts.toPt.y } : { x: fromPt.x + 100, y: fromPt.y };
+    const newEdge = {
+      id,
+      fromNode: opts && opts.fromId ? opts.fromId : '',
+      toNode:   opts && opts.toId   ? opts.toId   : '',
+      routing: 'orthogonal',
+      style:   'solid',
+      color:   'accent',
+      label:   '',
+      bindings: {
+        from: { mode: 'orbit', fixedPoint: [0.5, 0.5] },
+        to:   { mode: 'orbit', fixedPoint: [0.5, 0.5] },
+      },
+    };
+    if (!newEdge.fromNode) newEdge.fromPoint = fromPt;
+    if (!newEdge.toNode) newEdge.toPoint = toPt;
+    this.edges.set(id, newEdge);
+    this._rebuildBoundIndex();
+    this._selectEdge(id, null);
+    this.onEdgesChange();
+    this.onScheduleSave();
+    this.onEdgeMutation('create', id, newEdge);
+    return id;
+  }
+
   notifyNodeDeleted(nodeId) {
     const ids = this.boundEdges.get(nodeId);
     if (!ids) return;
@@ -225,19 +266,60 @@ export class ArrowLayer {
     if (patch.label   !== undefined) e.label   = normaliseLabelValue(patch.label, e.label);
     if (patch.labelText !== undefined) {
       const cur = ensureLabelShape(e.label);
-      e.label = { text: String(patch.labelText), position: cur.position };
+      e.label = { ...cur, text: String(patch.labelText) };
     }
     if (patch.labelPosition !== undefined) {
       const cur = ensureLabelShape(e.label);
-      e.label = { text: cur.text, position: patch.labelPosition || null };
+      e.label = { ...cur, position: patch.labelPosition || null };
+    }
+    if (patch.labelFontSize !== undefined) {
+      const cur = ensureLabelShape(e.label);
+      const fs = Number(patch.labelFontSize);
+      e.label = { ...cur, fontSize: Number.isFinite(fs) ? Math.max(8, Math.min(64, fs)) : cur.fontSize };
+    }
+    if (patch.labelColor !== undefined) {
+      const cur = ensureLabelShape(e.label);
+      const col = typeof patch.labelColor === 'string' && patch.labelColor ? patch.labelColor : 'auto';
+      e.label = { ...cur, color: col };
+    }
+    if (patch.labelRotation !== undefined) {
+      const cur = ensureLabelShape(e.label);
+      const r = Number(patch.labelRotation);
+      e.label = { ...cur, rotation: Number.isFinite(r) ? Math.max(-180, Math.min(180, r)) : 0 };
+    }
+    if (patch.labelPositionPreset !== undefined) {
+      const cur = ensureLabelShape(e.label);
+      const preset = patch.labelPositionPreset;
+      const nodes = this.getNodes();
+      const from = resolveAnchor(e, 'from', nodes, null).point;
+      const to = resolveAnchor(e, 'to', nodes, null).point;
+      let nextPos = null;
+      if (preset === 'midpoint') nextPos = null;
+      else if (preset === 'near_source') nextPos = { x: from.x + (to.x - from.x) * 0.2, y: from.y + (to.y - from.y) * 0.2 };
+      else if (preset === 'near_target') nextPos = { x: from.x + (to.x - from.x) * 0.8, y: from.y + (to.y - from.y) * 0.8 };
+      else if (preset === 'free') nextPos = cur.position || { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+      e.label = { ...cur, position: nextPos };
     }
     if (patch.branchLabel && typeof patch.branchLabel === 'object') {
-      const { index, text, position } = patch.branchLabel;
+      const { index, text, position, fontSize, color, rotation, positionPreset } = patch.branchLabel;
       if (Array.isArray(e.branches) && Number.isInteger(index) && e.branches[index]) {
         const cur = ensureLabelShape(e.branches[index].label);
-        const nextText = text !== undefined ? String(text) : cur.text;
-        const nextPos = position !== undefined ? (position || null) : cur.position;
-        e.branches[index].label = { text: nextText, position: nextPos };
+        let next = { ...cur };
+        if (text !== undefined) next.text = String(text);
+        if (position !== undefined) next.position = position || null;
+        if (Number.isFinite(fontSize)) next.fontSize = Math.max(8, Math.min(64, fontSize));
+        if (typeof color === 'string' && color) next.color = color;
+        if (Number.isFinite(rotation)) next.rotation = Math.max(-180, Math.min(180, rotation));
+        if (positionPreset) {
+          const nodes = this.getNodes();
+          const junction = e.junction || resolveAnchor(e, 'from', nodes, null).point;
+          const targetNode = nodes.get(e.branches[index].toNode);
+          const targetPt = targetNode ? { x: targetNode.x + targetNode.width / 2, y: targetNode.y + targetNode.height / 2 } : junction;
+          if (positionPreset === 'midpoint') next.position = null;
+          else if (positionPreset === 'near_source') next.position = { x: junction.x + (targetPt.x - junction.x) * 0.2, y: junction.y + (targetPt.y - junction.y) * 0.2 };
+          else if (positionPreset === 'near_target') next.position = { x: junction.x + (targetPt.x - junction.x) * 0.8, y: junction.y + (targetPt.y - junction.y) * 0.8 };
+        }
+        e.branches[index].label = next;
       }
     }
     this.requestDraw();
@@ -478,6 +560,7 @@ export class ArrowLayer {
     }
     path.setAttribute('data-id', edge.id);
     path.style.cursor = this.mode === 'editor' ? 'pointer' : 'default';
+    if (this.mode === 'editor') path.classList.add('arrow-path-interactive');
     if (this.selectedId === edge.id) {
       path.setAttribute('filter', '');
       path.classList.add('arrow-selected-glow');
@@ -521,6 +604,7 @@ export class ArrowLayer {
     path.setAttribute('data-id', edge.id);
     path.setAttribute('data-branch', String(branchIdx));
     path.style.cursor = this.mode === 'editor' ? 'pointer' : 'default';
+    if (this.mode === 'editor') path.classList.add('arrow-path-interactive');
     if (this.mode === 'editor') {
       path.addEventListener('mousedown', (ev) => {
         if (ev.button !== 0) return;
@@ -537,7 +621,7 @@ export class ArrowLayer {
     if (!shape.text) return;
     const auto = pointAlong(vertices, 0.5, edge.routing);
     const anchor = shape.position ? shape.position : auto;
-    this._drawLabel(shape.text, anchor, auto, scale, opacity, {
+    this._drawLabel(shape, anchor, auto, scale, opacity, {
       kind: 'edge', edgeId: edge.id, branchIndex: null, autoAt: auto,
       free: !!shape.position,
     });
@@ -548,16 +632,20 @@ export class ArrowLayer {
     if (!shape.text) return;
     const auto = pointAlong(vertices, 0.5, null);
     const anchor = shape.position ? shape.position : auto;
-    this._drawLabel(shape.text, anchor, auto, scale, opacity, {
+    this._drawLabel(shape, anchor, auto, scale, opacity, {
       kind: 'branch', edgeId: ctx && ctx.edgeId, branchIndex: ctx && ctx.branchIndex,
       autoAt: auto, free: !!shape.position,
     });
   }
 
-  _drawLabel(text, anchor, autoAt, scale, opacity, refs) {
+  _drawLabel(shape, anchor, autoAt, scale, opacity, refs) {
+    const text = shape.text;
+    const customFontSize = Number.isFinite(shape.fontSize) ? shape.fontSize : 14;
+    const rotation = Number.isFinite(shape.rotation) ? shape.rotation : 0;
+    const customColor = typeof shape.color === 'string' && shape.color ? shape.color : 'auto';
     const padX = 5;
     const padY = 2;
-    const fontPx = 12 / scale;
+    const fontPx = customFontSize / scale;
     const approxW = text.length * fontPx * 0.55 + padX * 2;
     const approxH = fontPx + padY * 2;
     const labelOpacity = Number.isFinite(opacity) ? opacity : 1;
@@ -574,6 +662,10 @@ export class ArrowLayer {
       tether.setAttribute('opacity', String(Math.min(0.5, labelOpacity)));
       tether.setAttribute('pointer-events', 'none');
       this.edgesGroup.appendChild(tether);
+    }
+    const labelGroup = document.createElementNS(SVG_NS, 'g');
+    if (rotation) {
+      labelGroup.setAttribute('transform', `rotate(${rotation} ${anchor.x} ${anchor.y})`);
     }
     const bg = document.createElementNS(SVG_NS, 'rect');
     bg.setAttribute('x', String(anchor.x - approxW / 2));
@@ -597,20 +689,21 @@ export class ArrowLayer {
     } else {
       bg.setAttribute('pointer-events', 'none');
     }
-    this.edgesGroup.appendChild(bg);
+    labelGroup.appendChild(bg);
     const textEl = document.createElementNS(SVG_NS, 'text');
     textEl.setAttribute('x', String(anchor.x));
     textEl.setAttribute('y', String(anchor.y));
     textEl.setAttribute('font-size', String(fontPx));
     textEl.setAttribute('font-family', 'var(--font-mono)');
     textEl.setAttribute('class', 'arrow-label-text');
-    textEl.setAttribute('fill', 'var(--label-text)');
+    textEl.setAttribute('fill', customColor === 'auto' ? 'var(--label-text)' : customColor);
     textEl.setAttribute('text-anchor', 'middle');
     textEl.setAttribute('dominant-baseline', 'central');
     textEl.setAttribute('pointer-events', 'none');
     if (labelOpacity < 1) textEl.setAttribute('opacity', String(labelOpacity));
     textEl.textContent = text;
-    this.edgesGroup.appendChild(textEl);
+    labelGroup.appendChild(textEl);
+    this.edgesGroup.appendChild(labelGroup);
   }
 
   _beginLabelDrag(ev, refs) {
@@ -789,6 +882,7 @@ export class ArrowLayer {
 
   _onMouseDown(ev) {
     if (this.mode !== 'editor') return;
+    if (isSpaceHeld()) return;
     if (this.dragState && this.dragState.kind === 'draw-branch') {
       ev.preventDefault();
       ev.stopPropagation();

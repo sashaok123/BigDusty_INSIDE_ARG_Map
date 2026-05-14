@@ -598,3 +598,83 @@ async def test_presence_broadcast_via_ws_hello(client, admin_token):
             room = manager._rooms.get("main")
             if room is not None:
                 room.discard(sink)
+
+
+async def test_edge_label_rich_round_trip(client, admin_token):
+    headers = {"Authorization": f"Bearer {admin_token}", "X-Client-Id": "edge-label-rich"}
+    rev0 = (await client.get("/canvas/main")).json()["revision"]
+    body = {
+        "data": {
+            "nodes": [
+                {"id": "rich_a", "type": "file", "x": 0, "y": 0, "width": 100, "height": 100, "file": "a.webp", "kind": "block"},
+                {"id": "rich_b", "type": "file", "x": 200, "y": 0, "width": 100, "height": 100, "file": "b.webp", "kind": "block"},
+            ],
+            "edges": [
+                {
+                    "id": "edge_rich",
+                    "fromNode": "rich_a",
+                    "toNode": "rich_b",
+                    "routing": "orthogonal",
+                    "style": "solid",
+                    "label": {
+                        "text": "styled",
+                        "position": {"x": 150, "y": 250},
+                        "fontSize": 20,
+                        "color": "#e86b2e",
+                        "rotation": 45,
+                    },
+                }
+            ],
+        },
+        "expected_revision": rev0,
+    }
+    put_resp = await client.put("/canvas/main", json=body, headers=headers)
+    assert put_resp.status_code == 200, put_resp.text
+    snap = await client.get("/canvas/main")
+    edge = next(e for e in snap.json()["data"]["edges"] if e["id"] == "edge_rich")
+    assert edge["label"]["fontSize"] == 20
+    assert edge["label"]["color"] == "#e86b2e"
+    assert edge["label"]["rotation"] == 45
+
+    rev1 = snap.json()["revision"]
+    patch_resp = await client.patch(
+        "/canvas/main/edges/edge_rich",
+        json={"label": {"text": "styled", "position": None, "fontSize": 12, "color": "auto", "rotation": 0}},
+        headers=headers,
+    )
+    assert patch_resp.status_code == 200, patch_resp.text
+    snap2 = await client.get("/canvas/main")
+    edge2 = next(e for e in snap2.json()["data"]["edges"] if e["id"] == "edge_rich")
+    assert edge2["label"]["fontSize"] == 12
+    assert edge2["label"]["color"] == "auto"
+    assert edge2["label"]["rotation"] == 0
+    assert snap2.json()["revision"] == rev1 + 1
+
+
+async def test_edge_label_legacy_compat(client, admin_token):
+    headers = {"Authorization": f"Bearer {admin_token}", "X-Client-Id": "edge-label-legacy"}
+    rev0 = (await client.get("/canvas/main")).json()["revision"]
+    body = {
+        "data": {
+            "nodes": [
+                {"id": "legacy_a", "type": "file", "x": 0, "y": 0, "width": 50, "height": 50, "file": "a.webp", "kind": "block"},
+                {"id": "legacy_b", "type": "file", "x": 100, "y": 0, "width": 50, "height": 50, "file": "b.webp", "kind": "block"},
+            ],
+            "edges": [
+                {
+                    "id": "edge_legacy",
+                    "fromNode": "legacy_a",
+                    "toNode": "legacy_b",
+                    "routing": "orthogonal",
+                    "style": "solid",
+                    "label": "plain text label",
+                }
+            ],
+        },
+        "expected_revision": rev0,
+    }
+    put_resp = await client.put("/canvas/main", json=body, headers=headers)
+    assert put_resp.status_code == 200, put_resp.text
+    snap = await client.get("/canvas/main")
+    edge = next(e for e in snap.json()["data"]["edges"] if e["id"] == "edge_legacy")
+    assert edge["label"] == "plain text label"

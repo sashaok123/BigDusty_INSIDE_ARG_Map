@@ -187,6 +187,129 @@ function popoverLabelHasPosition(label) {
   return !!(label && typeof label === 'object' && label.position && Number.isFinite(label.position.x) && Number.isFinite(label.position.y));
 }
 
+function popoverLabelFontSize(label) {
+  if (label && typeof label === 'object' && Number.isFinite(label.fontSize)) return label.fontSize;
+  return 14;
+}
+
+function popoverLabelColor(label) {
+  if (label && typeof label === 'object' && typeof label.color === 'string' && label.color) return label.color;
+  return 'auto';
+}
+
+function popoverLabelRotation(label) {
+  if (label && typeof label === 'object' && Number.isFinite(label.rotation)) return label.rotation;
+  return 0;
+}
+
+const LABEL_COLOR_SWATCHES = [
+  '#16181c', '#ffffff', '#e86b2e', '#2e6fe8',
+  '#5fa854', '#d9c34a', '#c43d3d', '#9a6ce8',
+];
+
+const LABEL_FONT_SIZE_PRESETS = [
+  { key: 'S', value: 12 },
+  { key: 'M', value: 16 },
+  { key: 'L', value: 20 },
+];
+
+const LABEL_POSITION_PRESETS = [
+  { value: 'free',        labelKey: 'arrow_label_pos_free'        },
+  { value: 'midpoint',    labelKey: 'arrow_label_pos_midpoint'    },
+  { value: 'near_source', labelKey: 'arrow_label_pos_near_source' },
+  { value: 'near_target', labelKey: 'arrow_label_pos_near_target' },
+];
+
+function buildLabelStyleRow(currentLabel, onPatch) {
+  const wrap = document.createElement('div');
+  wrap.className = 'arrow-props-row arrow-props-row-block arrow-props-label-style';
+
+  const sizeRow = document.createElement('div');
+  sizeRow.className = 'arrow-props-label-style-row';
+  const sizeLab = document.createElement('span');
+  sizeLab.className = 'arrow-props-mini-label';
+  sizeLab.textContent = tr('arrow_label_font_size');
+  sizeRow.appendChild(sizeLab);
+  const currentFS = popoverLabelFontSize(currentLabel);
+  for (const preset of LABEL_FONT_SIZE_PRESETS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'arrow-props-mini-btn';
+    b.textContent = preset.key;
+    if (preset.value === currentFS) b.classList.add('active');
+    b.addEventListener('click', () => onPatch({ fontSize: preset.value }));
+    sizeRow.appendChild(b);
+  }
+  wrap.appendChild(sizeRow);
+
+  const colorRow = document.createElement('div');
+  colorRow.className = 'arrow-props-label-style-row';
+  const colorLab = document.createElement('span');
+  colorLab.className = 'arrow-props-mini-label';
+  colorLab.textContent = tr('arrow_label_color');
+  colorRow.appendChild(colorLab);
+  const currentColor = popoverLabelColor(currentLabel);
+  const autoBtn = document.createElement('button');
+  autoBtn.type = 'button';
+  autoBtn.className = 'arrow-props-mini-btn';
+  autoBtn.textContent = 'A';
+  autoBtn.title = tr('arrow_label_color_auto');
+  if (currentColor === 'auto') autoBtn.classList.add('active');
+  autoBtn.addEventListener('click', () => onPatch({ color: 'auto' }));
+  colorRow.appendChild(autoBtn);
+  for (const c of LABEL_COLOR_SWATCHES) {
+    const sw = document.createElement('button');
+    sw.type = 'button';
+    sw.className = 'arrow-props-color-swatch';
+    sw.style.background = c;
+    if (currentColor === c) sw.classList.add('active');
+    sw.addEventListener('click', () => onPatch({ color: c }));
+    colorRow.appendChild(sw);
+  }
+  wrap.appendChild(colorRow);
+
+  const posRow = document.createElement('div');
+  posRow.className = 'arrow-props-label-style-row';
+  const posLab = document.createElement('span');
+  posLab.className = 'arrow-props-mini-label';
+  posLab.textContent = tr('arrow_label_position');
+  posRow.appendChild(posLab);
+  const posSel = document.createElement('select');
+  posSel.className = 'arrow-props-mini-select';
+  for (const opt of LABEL_POSITION_PRESETS) {
+    const o = document.createElement('option');
+    o.value = opt.value;
+    o.textContent = tr(opt.labelKey);
+    posSel.appendChild(o);
+  }
+  posSel.value = popoverLabelHasPosition(currentLabel) ? 'free' : 'midpoint';
+  posSel.addEventListener('change', () => onPatch({ positionPreset: posSel.value }));
+  posRow.appendChild(posSel);
+  wrap.appendChild(posRow);
+
+  const rotRow = document.createElement('div');
+  rotRow.className = 'arrow-props-label-style-row';
+  const rotLab = document.createElement('span');
+  rotLab.className = 'arrow-props-mini-label';
+  rotLab.textContent = tr('arrow_label_rotation');
+  rotRow.appendChild(rotLab);
+  const rotIn = document.createElement('input');
+  rotIn.type = 'number';
+  rotIn.min = '-180';
+  rotIn.max = '180';
+  rotIn.step = '5';
+  rotIn.className = 'arrow-props-mini-input';
+  rotIn.value = String(popoverLabelRotation(currentLabel));
+  rotIn.addEventListener('change', () => {
+    const v = Number(rotIn.value);
+    onPatch({ rotation: Number.isFinite(v) ? v : 0 });
+  });
+  rotRow.appendChild(rotIn);
+  wrap.appendChild(rotRow);
+
+  return wrap;
+}
+
 export class EdgePropsPopover {
   constructor(opts) {
     this.layer = opts.layer;
@@ -253,19 +376,14 @@ export class EdgePropsPopover {
     labelRow.appendChild(input);
     popover.appendChild(labelRow);
 
-    if (popoverLabelHasPosition(edge.label)) {
-      const resetRow = document.createElement('div');
-      resetRow.className = 'arrow-props-row arrow-props-row-mini';
-      const resetBtn = document.createElement('button');
-      resetBtn.type = 'button';
-      resetBtn.className = 'arrow-props-mini-btn';
-      resetBtn.textContent = tr('arrow_label_reset_position');
-      resetBtn.addEventListener('click', () => {
-        this.layer.applyEdgePatch(edge.id, { labelPosition: null });
-      });
-      resetRow.appendChild(resetBtn);
-      popover.appendChild(resetRow);
-    }
+    popover.appendChild(buildLabelStyleRow(edge.label, (p) => {
+      const patch = {};
+      if (p.fontSize !== undefined) patch.labelFontSize = p.fontSize;
+      if (p.color !== undefined) patch.labelColor = p.color;
+      if (p.positionPreset !== undefined) patch.labelPositionPreset = p.positionPreset;
+      if (p.rotation !== undefined) patch.labelRotation = p.rotation;
+      this.layer.applyEdgePatch(edge.id, patch);
+    }));
 
     if (Array.isArray(edge.branches) && edge.branches.length) {
       for (let i = 0; i < edge.branches.length; i++) {
@@ -295,6 +413,14 @@ export class EdgePropsPopover {
         });
         row.appendChild(inp);
         popover.appendChild(row);
+        popover.appendChild(buildLabelStyleRow(b.label, (p) => {
+          const branchLabel = { index: branchIdx };
+          if (p.fontSize !== undefined) branchLabel.fontSize = p.fontSize;
+          if (p.color !== undefined) branchLabel.color = p.color;
+          if (p.positionPreset !== undefined) branchLabel.positionPreset = p.positionPreset;
+          if (p.rotation !== undefined) branchLabel.rotation = p.rotation;
+          this.layer.applyEdgePatch(edge.id, { branchLabel });
+        }));
       }
     }
 

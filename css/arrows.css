@@ -7,7 +7,15 @@
   z-index: 600;
   overflow: visible;
 }
-#viewport.editor #arrow-layer { pointer-events: auto; }
+#arrow-layer > * { pointer-events: none; }
+#viewport.editor #arrow-layer .arrow-path-interactive { pointer-events: stroke; }
+#viewport.editor #arrow-layer .arrow-anchor-handle,
+#viewport.editor #arrow-layer .arrow-endpoint-handle,
+#viewport.editor #arrow-layer .arrow-waypoint-handle,
+#viewport.editor #arrow-layer .arrow-junction-handle,
+#viewport.editor #arrow-layer .arrow-label-bg { pointer-events: auto; }
+body.space-held #viewport #arrow-layer,
+body.space-held #viewport #arrow-layer * { pointer-events: none !important; cursor: grab !important; }
 
 .arrow-props {
   position: fixed;
@@ -139,7 +147,6 @@
 
 .arrow-props-row-mini { margin-bottom: 4px; }
 .arrow-props-mini-btn {
-  width: 100%;
   background: transparent;
   border: 1px solid var(--panel-border);
   color: var(--text-dim);
@@ -147,8 +154,53 @@
   font-size: 10px;
   letter-spacing: 1px;
   text-transform: uppercase;
-  padding: 5px 8px;
+  padding: 4px 8px;
   cursor: pointer;
   border-radius: var(--radius);
 }
 .arrow-props-mini-btn:hover { border-color: var(--accent); color: var(--accent); }
+.arrow-props-mini-btn.active { background: var(--accent-soft-bg-strong); border-color: var(--accent); color: var(--accent); }
+
+.arrow-props-label-style { display: flex; flex-direction: column; gap: 4px; }
+.arrow-props-label-style-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.arrow-props-mini-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.5px;
+  min-width: 56px;
+}
+.arrow-props-color-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  border: 1px solid var(--panel-border);
+  cursor: pointer;
+  padding: 0;
+}
+.arrow-props-color-swatch:hover { border-color: var(--accent); }
+.arrow-props-color-swatch.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.arrow-props-mini-select {
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 6px;
+  border-radius: var(--radius);
+}
+.arrow-props-mini-input {
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 6px;
+  border-radius: var(--radius);
+  width: 72px;
+}
