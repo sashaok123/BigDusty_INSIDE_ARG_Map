@@ -119,7 +119,7 @@ const _I18N_DATA = {
   editor_delete_title: ['Delete hotspot?', 'Удалить точку?', 'Hotspot löschen?', 'Eliminare hotspot?', 'Slet hotspot?'],
   editor_delete_confirm: [
     'This removes the hotspot. The markdown content is kept under its slug so re-creating with the same slug reattaches it.',
-    'Точка будет удалена. Содержимое markdown остаётся в кэше по её slug — пересоздание с тем же slug подключит его обратно.',
+    'Точка будет удалена. Содержимое markdown остаётся в кэше по её slug, и пересоздание с тем же slug подключит его обратно.',
     'Der Hotspot wird entfernt. Der Markdown-Inhalt bleibt unter dem Slug erhalten; bei erneuter Erstellung mit demselben Slug wird er wieder verknüpft.',
     'Rimuove l\'hotspot. Il contenuto markdown resta sotto il suo slug; ricreandolo con lo stesso slug torna collegato.',
     'Fjerner hotspottet. Markdown-indholdet bevares under dets slug, så hvis du opretter et nyt med samme slug, kobles det på igen.',
@@ -225,7 +225,7 @@ const _I18N_DATA = {
   ],
   context_delete_confirm_msg: [
     'Remove "{title}"? Its markdown text stays cached so re-adding with the same slug restores it.',
-    'Удалить «{title}»? Markdown останется в кэше — добавление с тем же slug восстановит его.',
+    'Удалить «{title}»? Markdown останется в кэше, добавление с тем же slug восстановит его.',
     '„{title}" entfernen? Der Markdown-Text bleibt im Cache, sodass eine erneute Erstellung mit dem gleichen Slug ihn wiederherstellt.',
     'Rimuovere "{title}"? Il testo markdown resta in cache; ricreandolo con lo stesso slug viene ripristinato.',
     'Fjern "{title}"? Markdown-teksten bevares i cachen, så genoprettelse med samme slug genskaber den.',
