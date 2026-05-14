@@ -793,8 +793,12 @@ function setupSidePanel() {
   sidePanel = new SidePanel({
     panelEl: $('panel'),
     statusSelectEl: $('panel-status-select'),
-    titleEl: $('panel-title'),
-    tagsEl: $('panel-tags'),
+    titleInputEl: $('panel-title-input'),
+    tagsHostEl: $('panel-tags'),
+    tagsInputEl: $('panel-tags-input'),
+    branchesHostEl: $('panel-branches-host'),
+    lockBtnEl: $('panel-lock-btn'),
+    deleteBtnEl: $('panel-delete-btn'),
     bodyEl: $('panel-body'),
     closeEl: $('panel-close'),
     editBtnEl: $('btn-edit-md'),
@@ -806,6 +810,7 @@ function setupSidePanel() {
     overlaySaveEl: $('md-edit-save'),
     overlayCancelEl: $('md-edit-cancel'),
     getNode: (id) => findNode(state.nodes, id),
+    getBranches: () => (Array.isArray(state.branches) ? state.branches : []),
     onStatusChange: (id, status) => {
       if (!isLoggedIn()) {
         const n0 = findNode(state.nodes, id);
@@ -822,6 +827,74 @@ function setupSidePanel() {
       refreshPuzzleViewsInViewer();
       pushNodePatch(id, { status });
       scheduleSave();
+    },
+    onLabelChange: (id, label) => {
+      if (!isLoggedIn()) {
+        const n0 = findNode(state.nodes, id);
+        if (n0) sidePanel.setNodeMeta(toViewShape(n0));
+        if (authUI) authUI.openLogin();
+        return;
+      }
+      updatePuzzleNode(state.nodes, id, { label, title: label });
+      const n = findNode(state.nodes, id);
+      if (!n) return;
+      refreshPuzzleViewsInViewer();
+      pushNodePatch(id, { label });
+      scheduleSave();
+    },
+    onTagsChange: (id, tags) => {
+      if (!isLoggedIn()) {
+        const n0 = findNode(state.nodes, id);
+        if (n0) sidePanel.setNodeMeta(toViewShape(n0));
+        if (authUI) authUI.openLogin();
+        return;
+      }
+      updatePuzzleNode(state.nodes, id, { tags });
+      refreshPuzzleViewsInViewer();
+      pushNodePatch(id, { tags });
+      scheduleSave();
+    },
+    onBranchesChange: (id, branches) => {
+      if (!isLoggedIn()) {
+        const n0 = findNode(state.nodes, id);
+        if (n0) sidePanel.setNodeMeta(toViewShape(n0));
+        if (authUI) authUI.openLogin();
+        return;
+      }
+      updatePuzzleNode(state.nodes, id, { branches });
+      refreshPuzzleViewsInViewer();
+      pushNodePatch(id, { branches });
+      scheduleSave();
+    },
+    onLockToggle: (id, locked) => {
+      if (!isLoggedIn()) {
+        const n0 = findNode(state.nodes, id);
+        if (n0) sidePanel.setNodeMeta(toViewShape(n0));
+        if (authUI) authUI.openLogin();
+        return;
+      }
+      const n = findNode(state.nodes, id);
+      if (!n) return;
+      if (locked) n.locked = true;
+      else delete n.locked;
+      refreshPuzzleViewsInViewer();
+      pushNodePatch(id, { locked: !!locked });
+      scheduleSave();
+    },
+    onDeleteNode: (id) => {
+      if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+      editorModal.showConfirm({
+        title: tr('editor_delete_title'),
+        message: tr('edit_modal_delete_confirm'),
+        actions: [
+          { label: tr('editor_cancel_button'), kind: 'cancel', fn: () => editorModal.hideConfirm() },
+          { label: tr('editor_delete_button'), kind: 'danger', fn: () => {
+            editorModal.hideConfirm();
+            deletePuzzleNode(id);
+            sidePanel.requestClose();
+          } },
+        ],
+      });
     },
     onContentChange: (id, md, persist) => {
       const n = findNode(state.nodes, id);

@@ -122,14 +122,28 @@
       <span id="panel-status-dot" class="status-dot"></span>
       <select id="panel-status-select"></select>
     </div>
-    <div id="panel-title"></div>
-    <div id="panel-tags"></div>
+    <div class="panel-field">
+      <label data-i18n="edit_modal_title">Title</label>
+      <input id="panel-title-input" type="text" autocomplete="off" spellcheck="false" />
+    </div>
+    <div class="panel-field">
+      <label data-i18n="edit_modal_tags">Tags</label>
+      <div id="panel-tags" class="panel-chip-input">
+        <input id="panel-tags-input" type="text" autocomplete="off" spellcheck="false" />
+      </div>
+    </div>
+    <div class="panel-field">
+      <label data-i18n="branches_assign_label">Branches</label>
+      <div id="panel-branches-host" class="panel-branches-host"></div>
+    </div>
   </div>
   <div id="panel-body"></div>
   <div id="panel-footer">
     <button id="btn-edit-md" class="primary" type="button" data-i18n="side_panel_edit_md">Edit raw MD</button>
     <button id="btn-save-md" type="button" data-i18n="side_panel_save">Save</button>
     <button id="btn-export-md" type="button" data-i18n="side_panel_export_md">Export MD</button>
+    <button id="panel-lock-btn" type="button">Lock</button>
+    <button id="panel-delete-btn" type="button" class="danger">Delete</button>
   </div>
   <div id="md-edit-overlay">
     <h3 data-i18n="editor_md_overlay_title">Edit Markdown</h3>
