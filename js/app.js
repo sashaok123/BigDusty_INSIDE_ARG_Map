@@ -5,7 +5,8 @@
 import { Viewer } from './viewer.js';
 import { SidePanel } from './side-panel.js';
 import { SearchBar } from './search.js';
-import { EditorModal, ContextMenu } from './editor.js';
+import { EditorModal } from './editor.js';
+import { ContextMenu, statusSubmenu } from './context-menu.js';
 import { ArrowLayer } from './arrows.js';
 import { Minimap } from './minimap.js';
 import { OutlinePanel } from './outline.js';
@@ -54,6 +55,8 @@ import {
 } from './nodes.js';
 import { EditorToolbar } from './editor-toolbar.js';
 import { EditNodeModal } from './edit-node-modal.js';
+import { Uploader, validateImageFile, ALLOWED_MIMES as UPLOAD_ALLOWED_MIMES } from './uploader.js';
+import { openCropper } from './crop-tool.js';
 import { LANGS, initLang, getLang, setLang, tr } from './i18n.js';
 import { AuthUI } from './auth-ui.js';
 import { Realtime } from './realtime.js';
@@ -62,6 +65,7 @@ import {
   getCanvas as apiGetCanvas, putCanvas as apiPutCanvas,
   createNode as apiCreateNode, patchNode as apiPatchNode, deleteNode as apiDeleteNode,
   createEdge as apiCreateEdge, patchEdge as apiPatchEdge, deleteEdge as apiDeleteEdge,
+  uploadImage as apiUploadImage,
   getClientId,
 } from './api-client.js';
 import { isPlaceholderApiBase } from './config.js';
@@ -107,6 +111,8 @@ let statusFilter;
 let authUI;
 let realtime;
 let selectionStatusEl;
+let uploader;
+let replaceImagePicker;
 
 function $(id) { return document.getElementById(id); }
 
@@ -144,7 +150,9 @@ async function bootstrap() {
   setupArrowLayer();
   setupToolbar();
   setupMigrationBanner();
-  contextMenu = new ContextMenu(document.body);
+  contextMenu = new ContextMenu({ container: document.body });
+  setupGlobalContextMenu();
+  setupUploader();
 
   setupStatusFilter();
   setupMinimap();
@@ -236,46 +244,12 @@ function setupViewer() {
     },
     onHotspotDoubleClick: (id) => openRichEdit(id),
     onHotspotRightClick: (id, ev) => {
-      const n = findNode(state.nodes, id);
-      if (!n) return;
-      const view = toViewShape(n);
-      const items = [];
-      if (isEditableNode(n)) {
-        items.push({ label: tr('context_edit_hotspot'), fn: () => openRichEdit(id) });
-      }
-      if (isGroupNode(n)) {
-        items.push({ label: tr('group_ungroup'), fn: () => ungroupGroup(id) });
-        items.push({ label: tr('group_delete_with_children'), danger: true, fn: () => deleteGroupWithChildren(id) });
-        items.push({ label: tr('group_delete_keep_children'), fn: () => deleteGroupKeepChildren(id) });
-      } else {
-        if (outlinePanel && isPuzzleNode(n)) {
-          if (outlinePanel.hasNode(id)) {
-            items.push({ label: tr('outline_remove_from_outline'), fn: () => {
-              outlinePanel.removeByNodeId(id);
-              scheduleSave();
-            } });
-          } else {
-            items.push({ label: tr('outline_add_to_outline'), fn: () => {
-              outlinePanel.addNodeAtEnd(id, 0);
-              scheduleSave();
-            } });
-          }
-        }
-        items.push({ label: tr('context_delete_hotspot'), danger: true, fn: () => {
-          editorModal.showConfirm({
-            title: tr('editor_delete_title'),
-            message: tr('context_delete_confirm_msg', { title: view.title }),
-            actions: [
-              { label: tr('editor_cancel_button'), kind: 'cancel', fn: () => editorModal.hideConfirm() },
-              { label: tr('editor_delete_button'), kind: 'danger', fn: () => {
-                editorModal.hideConfirm();
-                deletePuzzleNode(view.id);
-              } },
-            ],
-          });
-        } });
-      }
-      contextMenu.open(ev.clientX, ev.clientY, items);
+      const items = buildContextMenuItemsForNode(id);
+      if (items.length) contextMenu.open(ev.clientX, ev.clientY, items);
+    },
+    onCanvasRightClick: (ev) => {
+      const items = buildContextMenuItemsForEmpty();
+      if (items.length) contextMenu.open(ev.clientX, ev.clientY, items);
     },
     onCanvasDrawRect: (rect) => {
       handleDrawRect(rect);
@@ -514,9 +488,11 @@ function setupEditorModal() {
 
 function deletePuzzleNode(id) {
   const n = findNode(state.nodes, id);
-  if (!n || !isPuzzleNode(n)) return;
+  if (!n) return;
   const slug = n.slug;
+  const wasFile = n.type === 'file';
   removeNode(state.nodes, id);
+  if (viewer && wasFile) viewer.removeBlock(id);
   if (arrowLayer) arrowLayer.notifyNodeDeleted(id);
   if (outlinePanel) outlinePanel.removeByNodeId(id);
   refreshPuzzleViewsInViewer();
@@ -547,6 +523,7 @@ function setupEditorToolbar() {
       onDeleteSelection: () => deleteCurrentSelection(),
       onUndo: () => doUndo(),
       onRedo: () => doRedo(),
+      onUploadImage: () => uploader && uploader.openFilePicker(),
     },
   });
   if (viewer) viewer.setCreateMode(editorToolbar.getCreateMode());
@@ -560,6 +537,8 @@ function setupEditNodeModal() {
     onDelete: (id) => deletePuzzleNode(id),
     onCancel: () => {},
     onUnauthedSubmit: () => { if (authUI) authUI.openLogin(); },
+    onCropImage: (id, currentUrl) => doCropImage(id, currentUrl),
+    onReplaceImage: (id) => doReplaceImage(id),
   });
 }
 
@@ -588,6 +567,285 @@ function openRichEdit(id) {
   const view = toViewShape(n);
   const md = nodeMarkdown(n);
   if (editNodeModal) editNodeModal.open(view, md);
+}
+
+const IMAGE_EXT_RE_APP = /\.(png|jpe?g|webp|gif|bmp)(\?.*)?$/i;
+function nodeIsImageFile(n) {
+  if (!n) return false;
+  if (n.type !== 'file') return false;
+  const f = typeof n.file === 'string' ? n.file : '';
+  if (!f) return false;
+  if (IMAGE_EXT_RE_APP.test(f)) return true;
+  if (/\/canvas\/[^/]+\/images\//i.test(f)) return true;
+  return false;
+}
+
+function setupGlobalContextMenu() {
+  document.addEventListener('contextmenu', (ev) => {
+    const tgt = ev.target;
+    if (!tgt) return;
+    if (tgt.closest && tgt.closest('input, textarea, select, [contenteditable="true"]')) return;
+    const onCanvas = !!(tgt.closest && tgt.closest('#viewport'));
+    const onPanel = !!(tgt.closest && tgt.closest('#panel'));
+    const onToolbar = !!(tgt.closest && (tgt.closest('#toolbar') || tgt.closest('#editor-toolbar')));
+    if (!onCanvas && !onPanel && !onToolbar) return;
+    if (onCanvas) return;
+    ev.preventDefault();
+  }, true);
+}
+
+function buildContextMenuItemsForNode(id) {
+  const n = findNode(state.nodes, id);
+  if (!n) return [];
+  const view = toViewShape(n);
+  const items = [];
+  const selSize = state.selection.size;
+  const selHasId = state.selection.has(id);
+
+  if (selSize > 1 && selHasId) {
+    items.push({ label: tr('ctx_group_selection'), fn: () => groupCurrentSelection() });
+    items.push({ label: tr('ctx_delete_selected'), danger: true, fn: () => deleteCurrentSelection() });
+    return items;
+  }
+
+  if (isGroupNode(n)) {
+    items.push({ label: tr('ctx_edit'), fn: () => openRichEdit(id) });
+    items.push({ label: tr('ctx_group_rename'), fn: () => renameGroupPrompt(id) });
+    items.push({ label: tr('ctx_group_set_background'), fn: () => setGroupBackgroundPrompt(id) });
+    items.push({ label: tr('ctx_group_set_color'), fn: () => setGroupColorPrompt(id) });
+    items.push({ kind: 'separator' });
+    items.push({ label: tr('ctx_group_ungroup'), fn: () => ungroupGroup(id) });
+    items.push({ label: tr('ctx_group_delete_keep_children'), fn: () => deleteGroupKeepChildren(id) });
+    items.push({ label: tr('ctx_group_delete_with_children'), danger: true, fn: () => deleteGroupWithChildren(id) });
+    return items;
+  }
+
+  if (isEditableNode(n) || isPuzzleNode(n) || isStickyNode(n)) {
+    items.push({ label: tr('ctx_edit'), fn: () => openRichEdit(id) });
+  }
+  items.push({
+    label: tr('ctx_set_status'),
+    submenu: statusSubmenu(view.status, (status) => setStatusForNode(id, status)),
+  });
+  if (selSize > 0 && selHasId && selSize > 1) {
+    items.push({ label: tr('ctx_group'), fn: () => groupCurrentSelection() });
+  } else {
+    items.push({ label: tr('ctx_group'), fn: () => {
+      state.selection = new Set([id]);
+      if (viewer) viewer.setSelection(state.selection);
+      groupCurrentSelection();
+    } });
+  }
+  if (n.parent) {
+    items.push({ label: tr('ctx_ungroup'), fn: () => {
+      const parentId = n.parent;
+      ungroupGroup(parentId);
+    } });
+  }
+  if (nodeIsImageFile(n)) {
+    items.push({ kind: 'separator' });
+    items.push({ label: tr('ctx_crop'), fn: () => doCropImage(id, n.file) });
+    items.push({ label: tr('ctx_replace_image'), fn: () => doReplaceImage(id) });
+  }
+  items.push({ kind: 'separator' });
+  items.push({ label: tr('ctx_delete'), danger: true, fn: () => deletePuzzleNode(id) });
+  return items;
+}
+
+function buildContextMenuItemsForEmpty() {
+  const items = [];
+  if (state.selection.size === 0) return items;
+  if (state.selection.size > 1) {
+    items.push({ label: tr('ctx_group_selection'), fn: () => groupCurrentSelection() });
+    items.push({ label: tr('ctx_delete_selected'), danger: true, fn: () => deleteCurrentSelection() });
+  } else {
+    items.push({ label: tr('ctx_delete'), danger: true, fn: () => deleteCurrentSelection() });
+  }
+  return items;
+}
+
+function setStatusForNode(id, status) {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  const n = findNode(state.nodes, id);
+  if (!n) return;
+  updatePuzzleNode(state.nodes, id, { status });
+  refreshPuzzleViewsInViewer();
+  pushNodePatch(id, { status });
+  scheduleSave();
+  toast(tr('node_status_changed', { status: statusLabel(status) }));
+}
+
+function renameGroupPrompt(id) {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  const n = findNode(state.nodes, id);
+  if (!n || !isGroupNode(n)) return;
+  const next = window.prompt(tr('group_rename_prompt'), n.label || '');
+  if (next === null) return;
+  updatePuzzleNode(state.nodes, id, { label: next, title: next });
+  refreshPuzzleViewsInViewer();
+  pushNodePatch(id, { label: next });
+  scheduleSave();
+}
+
+function setGroupColorPrompt(id) {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  const n = findNode(state.nodes, id);
+  if (!n || !isGroupNode(n)) return;
+  const next = window.prompt(tr('group_set_color_prompt'), n.color || '');
+  if (next === null) return;
+  updatePuzzleNode(state.nodes, id, { color: next || '' });
+  refreshPuzzleViewsInViewer();
+  pushNodePatch(id, { color: next || '' });
+  scheduleSave();
+}
+
+function setGroupBackgroundPrompt(id) {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  const n = findNode(state.nodes, id);
+  if (!n || !isGroupNode(n)) return;
+  const next = window.prompt(tr('group_set_background_prompt'), n.background || '');
+  if (next === null) return;
+  updatePuzzleNode(state.nodes, id, { background: next || '' });
+  refreshPuzzleViewsInViewer();
+  pushNodePatch(id, { background: next || '' });
+  scheduleSave();
+}
+
+function setupUploader() {
+  uploader = new Uploader({
+    viewport: $('viewport'),
+    canvasEl: $('map-canvas'),
+    isEnabled: () => isLoggedIn() && state.backendOnline,
+    toClientToImage: (cx, cy) => viewer ? viewer.imagePointFromClient(cx, cy) : null,
+    onUpload: async (file) => {
+      if (!isLoggedIn()) {
+        if (authUI) authUI.openLogin();
+        throw Object.assign(new Error('auth_required'), { kind: 'auth_expired' });
+      }
+      return apiUploadImage(file, file.name);
+    },
+    onPlaceNode: async (placement) => placeUploadedImageNode(placement),
+    onToast: (msg, kind) => toast(msg, kind),
+  });
+}
+
+async function placeUploadedImageNode(placement) {
+  if (!placement || !placement.file) return null;
+  const baseId = placement.name || 'image';
+  const id = uniqueId(state.nodes, `img-${baseId}`);
+  const parent = nodeAtParentLookup(state.nodes, placement.rect);
+  const rect = placement.rect;
+  const node = {
+    id,
+    type: 'file',
+    x: rect.x,
+    y: rect.y,
+    width: rect.w,
+    height: rect.h,
+    file: placement.file,
+    kind: 'block',
+    status: 'no-data',
+    tags: [],
+    slug: id,
+  };
+  if (parent) node.parent = parent;
+  state.nodes.set(id, node);
+  if (viewer) await viewer.addBlock({ id, rect, file: placement.file });
+  refreshPuzzleViewsInViewer();
+  if (viewer) viewer.notifyNodesChanged();
+  if (state.backendOnline && isLoggedIn()) {
+    trackSelfMutation('node_created', id);
+    try {
+      const res = await apiCreateNode({ ...node });
+      if (res && typeof res.revision === 'number') state.revision = res.revision;
+    } catch (e) {
+      if (e && e.kind !== 'auth_expired') console.warn('[app] image node create', e);
+    }
+  }
+  scheduleSave();
+  return id;
+}
+
+async function doCropImage(nodeId, currentUrl) {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return null; }
+  if (!currentUrl) return null;
+  const blob = await openCropper(currentUrl);
+  if (!blob) return null;
+  try {
+    const uploaded = await apiUploadImage(blob, 'crop.png');
+    if (!uploaded || !uploaded.url) return null;
+    await replaceImageForNode(nodeId, uploaded.url);
+    return uploaded.url;
+  } catch (e) {
+    if (e && e.kind === 'auth_expired') {
+      if (authUI) authUI.openLogin();
+    } else {
+      toast(tr('upload_image_failed'), 'error');
+      console.warn('[app] crop upload failed', e);
+    }
+    return null;
+  }
+}
+
+function doReplaceImage(nodeId) {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return Promise.resolve(null); }
+  return new Promise((resolve) => {
+    if (!replaceImagePicker) {
+      replaceImagePicker = document.createElement('input');
+      replaceImagePicker.type = 'file';
+      replaceImagePicker.accept = 'image/png,image/jpeg,image/webp';
+      replaceImagePicker.style.display = 'none';
+      document.body.appendChild(replaceImagePicker);
+    }
+    const input = replaceImagePicker;
+    const cleanup = () => { input.onchange = null; };
+    input.value = '';
+    input.onchange = async () => {
+      const file = input.files && input.files[0];
+      cleanup();
+      if (!file) { resolve(null); return; }
+      const invalid = validateImageFile(file);
+      if (invalid === 'invalid_type') { toast(tr('upload_image_invalid_type'), 'error'); resolve(null); return; }
+      if (invalid === 'too_large')   { toast(tr('upload_image_too_large'),  'error'); resolve(null); return; }
+      try {
+        const uploaded = await apiUploadImage(file, file.name);
+        if (!uploaded || !uploaded.url) { resolve(null); return; }
+        await replaceImageForNode(nodeId, uploaded.url);
+        resolve(uploaded.url);
+      } catch (e) {
+        if (e && e.kind === 'auth_expired') {
+          if (authUI) authUI.openLogin();
+        } else {
+          toast(tr('upload_image_failed'), 'error');
+          console.warn('[app] replace upload failed', e);
+        }
+        resolve(null);
+      }
+    };
+    input.click();
+  });
+}
+
+async function replaceImageForNode(nodeId, newUrl) {
+  const n = findNode(state.nodes, nodeId);
+  if (!n) return;
+  n.file = newUrl;
+  if (viewer) {
+    await viewer.refreshBlock({ id: nodeId, rect: { x: n.x, y: n.y, w: n.width, h: n.height }, file: newUrl });
+  }
+  refreshPuzzleViewsInViewer();
+  if (viewer) viewer.notifyNodesChanged();
+  if (state.backendOnline && isLoggedIn()) {
+    trackSelfMutation('node_updated', nodeId);
+    try {
+      const res = await apiPatchNode(nodeId, { file: newUrl });
+      if (res && typeof res.revision === 'number') state.revision = res.revision;
+    } catch (e) {
+      if (e && e.kind !== 'auth_expired') console.warn('[app] replace patch failed', e);
+    }
+  }
+  scheduleSave();
+  toast(tr('toast_hotspot_updated'));
 }
 
 function handleDrawRect(rect) {
@@ -1109,17 +1367,30 @@ function applyRealtimeChange(ev) {
   if (k === 'node_created' && ev.data && ev.id) {
     const nn = normaliseNode(ev.data);
     state.nodes.set(nn.id, nn);
+    if (viewer && nn.kind === 'block' && nn.type === 'file' && nn.file) {
+      viewer.addBlock({ id: nn.id, rect: { x: nn.x, y: nn.y, w: nn.width, h: nn.height }, file: nn.file })
+        .catch((e) => console.warn('[app] addBlock from ws', e));
+    }
     refreshAllAfterChange();
     return;
   }
   if (k === 'node_updated' && ev.data && ev.id) {
+    const prev = state.nodes.get(ev.id);
     const nn = normaliseNode(ev.data);
     state.nodes.set(nn.id, nn);
+    if (viewer && nn.kind === 'block' && nn.type === 'file' && nn.file) {
+      const prevFile = prev && typeof prev.file === 'string' ? prev.file : null;
+      if (prevFile !== nn.file) {
+        viewer.refreshBlock({ id: nn.id, rect: { x: nn.x, y: nn.y, w: nn.width, h: nn.height }, file: nn.file })
+          .catch((e) => console.warn('[app] refreshBlock from ws', e));
+      }
+    }
     refreshAllAfterChange();
     return;
   }
   if (k === 'node_deleted' && ev.id) {
     state.nodes.delete(ev.id);
+    if (viewer) viewer.removeBlock(ev.id);
     if (arrowLayer) arrowLayer.notifyNodeDeleted(ev.id);
     refreshAllAfterChange();
     return;

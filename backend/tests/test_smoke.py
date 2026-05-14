@@ -176,3 +176,57 @@ async def test_invitation_list_and_revoke(client, admin_token):
 async def test_invitation_invalid_token(client):
     check = await client.get("/auth/invitation/does-not-exist-token")
     assert check.status_code == 404
+
+
+_TINY_PNG = (
+    b"\x89PNG\r\n\x1a\n"
+    b"\x00\x00\x00\rIHDR"
+    b"\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00"
+    b"\x1f\x15\xc4\x89"
+    b"\x00\x00\x00\rIDATx\x9cc\xf8\xcf\xc0\xf0\x1f\x00\x00\x06\x00\x03"
+    b"\xfd\xd9\xa6\x9d"
+    b"\x00\x00\x00\x00IEND\xaeB`\x82"
+)
+
+
+async def test_image_upload_and_fetch(client, admin_token):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    files = {"file": ("tiny.png", _TINY_PNG, "image/png")}
+    resp = await client.post("/canvas/main/images", files=files, headers=headers)
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert body["id"]
+    assert body["sha256"]
+    assert body["mime"] == "image/png"
+    assert body["size"] == len(_TINY_PNG)
+    assert body["url"].endswith(body["id"])
+    assert "/canvas/main/images/" in body["url"]
+
+    fetched = await client.get(body["url"])
+    assert fetched.status_code == 200
+    assert fetched.content == _TINY_PNG
+    assert fetched.headers["content-type"].startswith("image/png")
+    cache_ctrl = fetched.headers.get("cache-control", "")
+    assert "immutable" in cache_ctrl
+    assert "max-age" in cache_ctrl
+
+
+async def test_image_upload_dedupe(client, admin_token):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    files1 = {"file": ("a.png", _TINY_PNG, "image/png")}
+    first = await client.post("/canvas/main/images", files=files1, headers=headers)
+    assert first.status_code == 201, first.text
+    first_body = first.json()
+
+    files2 = {"file": ("b.png", _TINY_PNG, "image/png")}
+    second = await client.post("/canvas/main/images", files=files2, headers=headers)
+    assert second.status_code == 201, second.text
+    second_body = second.json()
+    assert second_body["id"] == first_body["id"]
+    assert second_body["sha256"] == first_body["sha256"]
+
+
+async def test_image_upload_requires_auth(client):
+    files = {"file": ("anon.png", _TINY_PNG, "image/png")}
+    resp = await client.post("/canvas/main/images", files=files)
+    assert resp.status_code == 401

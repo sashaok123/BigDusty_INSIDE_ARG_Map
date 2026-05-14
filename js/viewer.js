@@ -95,6 +95,7 @@ export class Viewer {
     this.onHotspotDoubleClick = options.onHotspotDoubleClick || (() => {});
     this.onHotspotRightClick = options.onHotspotRightClick || (() => {});
     this.onCanvasDrawRect = options.onCanvasDrawRect || (() => {});
+    this.onCanvasRightClick = options.onCanvasRightClick || (() => {});
     this.onTransformChange = options.onTransformChange || (() => {});
     this.onSelectionChange = options.onSelectionChange || (() => {});
     this.onMarqueeSelect = options.onMarqueeSelect || (() => {});
@@ -136,6 +137,37 @@ export class Viewer {
     this.fitToScreen();
     this.requestDraw();
     return { w: this.imageW, h: this.imageH };
+  }
+
+  async addBlock(block) {
+    if (!block || !block.id) return;
+    const existing = this.blocks.findIndex((b) => b.id === block.id);
+    const entry = { id: block.id, rect: { ...block.rect }, file: block.file };
+    if (existing >= 0) this.blocks[existing] = entry;
+    else this.blocks.push(entry);
+    this._computeBounds();
+    await this._loadBlockImage(entry);
+    this.requestDraw();
+  }
+
+  removeBlock(id) {
+    const i = this.blocks.findIndex((b) => b.id === id);
+    if (i >= 0) {
+      this.blocks.splice(i, 1);
+      this.blockImages.delete(id);
+      this._computeBounds();
+      this.requestDraw();
+    }
+  }
+
+  async refreshBlock(block) {
+    if (!block || !block.id) return;
+    const i = this.blocks.findIndex((b) => b.id === block.id);
+    if (i < 0) { return this.addBlock(block); }
+    this.blocks[i] = { id: block.id, rect: { ...block.rect }, file: block.file };
+    this.blockImages.delete(block.id);
+    await this._loadBlockImage(this.blocks[i]);
+    this.requestDraw();
   }
 
   _loadBlockImage(b) {
@@ -898,13 +930,20 @@ export class Viewer {
   }
 
   _onContextMenu(ev) {
+    ev.preventDefault();
     if (this.mode !== 'editor') return;
     const img = this.imagePointFromClient(ev.clientX, ev.clientY);
     const hover = this.hotspotAtImagePoint(img);
     if (hover) {
-      ev.preventDefault();
       this.onHotspotRightClick(hover.id, ev);
+      return;
     }
+    const grp = this.groupAtImagePoint(img);
+    if (grp) {
+      this.onHotspotRightClick(grp.id, ev);
+      return;
+    }
+    this.onCanvasRightClick(ev, { img });
   }
 
   getScale() { return this.scale; }

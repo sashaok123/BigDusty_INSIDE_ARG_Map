@@ -321,3 +321,77 @@ export async function setupAccount(token, password) {
   _notify('login');
   return data.user;
 }
+
+export function absoluteImageUrl(url) {
+  if (!url) return url;
+  if (/^https?:\/\//i.test(url) || /^data:/i.test(url) || /^blob:/i.test(url)) return url;
+  if (url.startsWith('/')) return `${API_BASE}${url}`;
+  return url;
+}
+
+export async function uploadImage(blob, filename) {
+  if (!isLoggedIn()) {
+    const err = new Error('auth_required');
+    err.kind = 'auth_expired';
+    err.status = 401;
+    throw err;
+  }
+  const form = new FormData();
+  const name = filename || (blob && blob.name) || 'upload';
+  if (blob instanceof Blob && !(blob instanceof File)) {
+    form.append('file', blob, name);
+  } else {
+    form.append('file', blob, name);
+  }
+  const headers = { 'X-Client-Id': getClientId() };
+  const token = getAccessToken();
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const url = `${API_BASE}/canvas/${CANVAS_ID}/images`;
+  let res;
+  try {
+    res = await fetch(url, { method: 'POST', headers, body: form });
+  } catch (e) {
+    const err = new Error('network');
+    err.kind = 'network';
+    err.cause = e;
+    throw err;
+  }
+  if (res.status === 401) {
+    const ok = await _tryRefresh();
+    if (ok) {
+      const retryHeaders = { 'X-Client-Id': getClientId() };
+      const t2 = getAccessToken();
+      if (t2) retryHeaders['Authorization'] = `Bearer ${t2}`;
+      try {
+        res = await fetch(url, { method: 'POST', headers: retryHeaders, body: form });
+      } catch (e) {
+        const err = new Error('network');
+        err.kind = 'network';
+        err.cause = e;
+        throw err;
+      }
+    } else {
+      _persist(null);
+      _notify('expired');
+      try { document.dispatchEvent(new CustomEvent('auth:expired')); } catch (e) { void e; }
+      const err = new Error('auth_expired');
+      err.kind = 'auth_expired';
+      err.status = 401;
+      throw err;
+    }
+  }
+  if (!res.ok) {
+    let body = null;
+    try { body = await res.json(); } catch (e) { void e; }
+    const err = new Error(`http_${res.status}`);
+    err.kind = 'http';
+    err.status = res.status;
+    err.body = body;
+    throw err;
+  }
+  const data = await res.json();
+  if (data && typeof data.url === 'string') {
+    data.url = absoluteImageUrl(data.url);
+  }
+  return data;
+}

@@ -23,6 +23,7 @@ const SVG_PATHS = {
   trash:      '<path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1 -13"/>',
   undo:       '<path d="M9 6L4 11l5 5"/><path d="M4 11h11a4 4 0 0 1 0 8H10"/>',
   redo:       '<path d="M15 6l5 5l-5 5"/><path d="M20 11H9a4 4 0 0 0 0 8h5"/>',
+  image_add:  '<rect x="3.5" y="4.5" width="13" height="13" rx="1.5"/><path d="M3.5 14L7 11l3 3l3-3l3 3"/><circle cx="13" cy="8.5" r="1.4"/><path d="M18 17v4M16 19h4"/>',
 };
 
 function svgIcon(name) {
@@ -74,6 +75,10 @@ export class EditorToolbar {
       { value: 'group',  icon: 'group',  i18n: 'editor_tools_group'  },
     ], (v) => this._setCreate(v));
 
+    const imageGroup = this._makeActionGroup([
+      { id: 'upload-image', icon: 'image_add', i18n: 'upload_image_button', handler: 'onUploadImage' },
+    ]);
+
     const arrowGroup = this._makeGroup('routing', [
       { value: 'straight',   icon: 'straight',   i18n: 'editor_tools_arrow_straight'   },
       { value: 'orthogonal', icon: 'orthogonal', i18n: 'editor_tools_arrow_orthogonal' },
@@ -93,6 +98,7 @@ export class EditorToolbar {
     ]);
 
     bar.appendChild(createGroup);
+    bar.appendChild(imageGroup);
     bar.appendChild(arrowGroup);
     bar.appendChild(selGroup);
     bar.appendChild(histGroup);
