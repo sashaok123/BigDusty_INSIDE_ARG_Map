@@ -99,6 +99,13 @@
   stroke-linejoin: round;
 }
 
+#left-rail .rail-separator {
+  width: 28px;
+  height: 1px;
+  background: var(--rail-border);
+  margin: 4px 0;
+}
+
 #left-rail .rail-submenu-wrap {
   position: relative;
 }
@@ -144,21 +151,23 @@
 #left-rail .rail-tools { display: none; }
 body.authed.editor-mode #left-rail .rail-tools { display: flex; }
 
-#left-rail.authed .rail-signin-btn { display: none; }
-body.authed #left-rail .rail-signin-btn { display: none; }
+/* Whole rail hidden when not authed or not in editor mode */
+#left-rail { display: none; }
+body.authed.editor-mode #left-rail { display: flex; }
 
-/* Push the main viewport over by the rail width */
-body { padding-left: var(--rail-w); }
-#toolbar { left: var(--rail-w); }
-#viewport { left: var(--rail-w); }
-#zoom-controls { left: calc(var(--rail-w) + 14px); }
-#offline-banner { left: calc(var(--rail-w) + 8px); }
-#selection-status { left: calc(var(--rail-w) + 14px); }
+/* Push the main viewport over by the rail width when rail is visible */
+body { padding-left: 0; }
+body.authed.editor-mode { padding-left: var(--rail-w); }
+body.authed.editor-mode #toolbar { left: var(--rail-w); }
+body.authed.editor-mode #viewport { left: var(--rail-w); }
+body.authed.editor-mode #zoom-controls { left: calc(var(--rail-w) + 14px); }
+body.authed.editor-mode #offline-banner { left: calc(var(--rail-w) + 8px); }
+body.authed.editor-mode #selection-status { left: calc(var(--rail-w) + 14px); }
 
 /* Mobile: collapse rail to bottom strip on narrow screens */
 @media (max-width: 720px) {
-  body { padding-left: 0; padding-bottom: 56px; }
-  #left-rail {
+  body.authed.editor-mode { padding-left: 0; padding-bottom: 56px; }
+  body.authed.editor-mode #left-rail {
     top: auto;
     bottom: 0;
     left: 0;
@@ -188,9 +197,9 @@ body { padding-left: var(--rail-w); }
     bottom: calc(100% + 6px);
     flex-direction: row;
   }
-  #toolbar { left: 0; }
-  #viewport { left: 0; bottom: 56px; }
-  #zoom-controls { bottom: 72px; left: 14px; }
-  #offline-banner { left: 8px; bottom: 64px; }
-  #selection-status { left: 14px; bottom: 64px; }
+  body.authed.editor-mode #toolbar { left: 0; }
+  body.authed.editor-mode #viewport { left: 0; bottom: 56px; }
+  body.authed.editor-mode #zoom-controls { bottom: 72px; left: 14px; }
+  body.authed.editor-mode #offline-banner { left: 8px; bottom: 64px; }
+  body.authed.editor-mode #selection-status { left: 14px; bottom: 64px; }
 }

@@ -112,5 +112,22 @@
 }
 
 .arrow-selected-glow {
-  filter: drop-shadow(0 0 4px var(--accent));
+  stroke: var(--accent);
+  paint-order: stroke fill;
 }
+
+.arrow-props-row-mini { margin-bottom: 4px; }
+.arrow-props-mini-btn {
+  width: 100%;
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 5px 8px;
+  cursor: pointer;
+  border-radius: var(--radius);
+}
+.arrow-props-mini-btn:hover { border-color: var(--accent); color: var(--accent); }

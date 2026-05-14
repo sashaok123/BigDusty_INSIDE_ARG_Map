@@ -4,7 +4,7 @@
 import { legacyToCanvas, serializeCanvas } from './data-loader.js';
 
 const STORAGE_KEY = 'arg_map_state';
-const DEBOUNCE_MS = 500;
+const DEBOUNCE_MS = 1500;
 const STATE_VERSION = 3;
 
 let saveTimer = null;

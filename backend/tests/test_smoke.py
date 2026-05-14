@@ -268,6 +268,85 @@ async def test_audit_log_records_canvas_replace(client, admin_token):
     assert "canvas_replaced" in actions
 
 
+async def test_node_mutation_broadcasts_client_id(client, admin_token):
+    from app.ws import manager
+
+    received: list[dict] = []
+
+    class _Sink:
+        async def send_json(self, msg: dict) -> None:
+            received.append(msg)
+
+    sink = _Sink()
+    async with manager._lock:
+        manager._rooms.setdefault("main", set()).add(sink)
+
+    try:
+        headers = {"Authorization": f"Bearer {admin_token}", "X-Client-Id": "echo-test-client"}
+        create = await client.post(
+            "/canvas/main/nodes",
+            json={"id": "node_echo", "type": "text", "x": 0, "y": 0, "width": 10, "height": 10, "text": "echo"},
+            headers=headers,
+        )
+        assert create.status_code == 201, create.text
+    finally:
+        async with manager._lock:
+            room = manager._rooms.get("main")
+            if room is not None:
+                room.discard(sink)
+
+    assert received, "expected at least one broadcast"
+    matching = [m for m in received if m.get("change", {}).get("id") == "node_echo"]
+    assert matching, f"expected a broadcast for node_echo, got {received}"
+    assert matching[-1]["change"].get("clientId") == "echo-test-client"
+
+
+async def test_edge_label_object_round_trip(client, admin_token):
+    headers = {"Authorization": f"Bearer {admin_token}", "X-Client-Id": "edge-label-test"}
+    rev0 = (await client.get("/canvas/main")).json()["revision"]
+    body = {
+        "data": {
+            "nodes": [
+                {"id": "blk_a", "type": "file", "x": 0, "y": 0, "width": 100, "height": 100, "file": "a.webp", "kind": "block"},
+                {"id": "blk_b", "type": "file", "x": 200, "y": 0, "width": 100, "height": 100, "file": "b.webp", "kind": "block"},
+            ],
+            "edges": [
+                {
+                    "id": "edge_label_obj",
+                    "fromNode": "blk_a",
+                    "toNode": "blk_b",
+                    "routing": "orthogonal",
+                    "style": "solid",
+                    "label": {"text": "free label", "position": {"x": 150, "y": 250}},
+                }
+            ],
+        },
+        "expected_revision": rev0,
+    }
+    put_resp = await client.put("/canvas/main", json=body, headers=headers)
+    assert put_resp.status_code == 200, put_resp.text
+    snap = await client.get("/canvas/main")
+    edge = next(e for e in snap.json()["data"]["edges"] if e["id"] == "edge_label_obj")
+    assert isinstance(edge["label"], dict)
+    assert edge["label"]["text"] == "free label"
+    assert edge["label"]["position"]["x"] == 150
+    assert edge["label"]["position"]["y"] == 250
+
+    rev1 = snap.json()["revision"]
+    patch_resp = await client.patch(
+        "/canvas/main/edges/edge_label_obj",
+        json={"label": {"text": "moved", "position": None}},
+        headers=headers,
+    )
+    assert patch_resp.status_code == 200, patch_resp.text
+    snap2 = await client.get("/canvas/main")
+    edge2 = next(e for e in snap2.json()["data"]["edges"] if e["id"] == "edge_label_obj")
+    assert isinstance(edge2["label"], dict)
+    assert edge2["label"]["text"] == "moved"
+    assert edge2["label"]["position"] is None
+    assert snap2.json()["revision"] == rev1 + 1
+
+
 async def test_node_translations_persist(client, admin_token):
     headers = {"Authorization": f"Bearer {admin_token}"}
     create = await client.post(

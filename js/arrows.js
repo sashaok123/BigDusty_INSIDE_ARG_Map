@@ -25,6 +25,24 @@ export { isValidRouting, isValidStyle, ROUTINGS, STYLES };
 
 export function isValidColour(c) { return COLOURS.includes(c); }
 
+function ensureLabelShape(label) {
+  if (label && typeof label === 'object' && typeof label.text === 'string') {
+    const pos = label.position;
+    const safePos = (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y))
+      ? { x: pos.x, y: pos.y } : null;
+    return { text: label.text, position: safePos };
+  }
+  if (typeof label === 'string') return { text: label, position: null };
+  return { text: '', position: null };
+}
+
+function normaliseLabelValue(value, current) {
+  if (typeof value === 'string') return { text: value, position: ensureLabelShape(current).position };
+  if (value && typeof value === 'object') return ensureLabelShape(value);
+  return ensureLabelShape(current);
+}
+
+
 export class ArrowLayer {
   constructor(opts) {
     this.svg = opts.svg;
@@ -46,6 +64,7 @@ export class ArrowLayer {
     this.popover = new EdgePropsPopover({ layer: this });
     this.statusFilter = null;
     this.fadeNonMatching = false;
+    this._pathCache = new Map();
 
     this._installRoot();
     this._installEvents();
@@ -90,12 +109,20 @@ export class ArrowLayer {
     window.addEventListener('mouseup',   (e) => this._onMouseUp(e));
     this.svg.addEventListener('dblclick', (e) => this._onDoubleClick(e));
     this.svg.addEventListener('contextmenu', (e) => this._onContextMenu(e));
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this.dragState && this.dragState.kind === 'draw-branch') {
+        this.dragState = null;
+        this._hideBranchHint();
+        this.requestDraw();
+      }
+    });
   }
 
   setEdges(edges) {
     this.edges = edges instanceof Map ? edges : new Map();
     for (const e of this.edges.values()) ensureBindings(e);
     this._rebuildBoundIndex();
+    this._pathCache.clear();
     this.requestDraw();
   }
 
@@ -172,9 +199,20 @@ export class ArrowLayer {
       if (Array.isArray(e.branches)) {
         e.branches = e.branches.filter((b) => b.toNode !== nodeId);
       }
+      this._pathCache.delete(eid);
     }
     this.boundEdges.delete(nodeId);
     this.requestDraw();
+  }
+
+  invalidateEdge(id) {
+    if (id) this._pathCache.delete(id);
+  }
+
+  invalidateNode(nodeId) {
+    const ids = this.boundEdges.get(nodeId);
+    if (!ids) return;
+    for (const eid of ids) this._pathCache.delete(eid);
   }
 
   applyEdgePatch(id, patch, opts) {
@@ -183,7 +221,25 @@ export class ArrowLayer {
     if (patch.routing !== undefined) e.routing = isValidRouting(patch.routing) ? patch.routing : e.routing;
     if (patch.style   !== undefined) e.style   = isValidStyle(patch.style)   ? patch.style   : e.style;
     if (patch.color   !== undefined) e.color   = isValidColour(patch.color)  ? patch.color   : 'accent';
-    if (patch.label   !== undefined) e.label   = String(patch.label);
+    if (patch.routing !== undefined) this._pathCache.delete(id);
+    if (patch.label   !== undefined) e.label   = normaliseLabelValue(patch.label, e.label);
+    if (patch.labelText !== undefined) {
+      const cur = ensureLabelShape(e.label);
+      e.label = { text: String(patch.labelText), position: cur.position };
+    }
+    if (patch.labelPosition !== undefined) {
+      const cur = ensureLabelShape(e.label);
+      e.label = { text: cur.text, position: patch.labelPosition || null };
+    }
+    if (patch.branchLabel && typeof patch.branchLabel === 'object') {
+      const { index, text, position } = patch.branchLabel;
+      if (Array.isArray(e.branches) && Number.isInteger(index) && e.branches[index]) {
+        const cur = ensureLabelShape(e.branches[index].label);
+        const nextText = text !== undefined ? String(text) : cur.text;
+        const nextPos = position !== undefined ? (position || null) : cur.position;
+        e.branches[index].label = { text: nextText, position: nextPos };
+      }
+    }
     this.requestDraw();
     if (!opts || !opts.silent) {
       this.onEdgesChange();
@@ -200,6 +256,7 @@ export class ArrowLayer {
   deleteEdge(id) {
     if (!this.edges.has(id)) return;
     this.edges.delete(id);
+    this._pathCache.delete(id);
     if (this.selectedId === id) this._deselect();
     this._rebuildBoundIndex();
     this.onEdgesChange();
@@ -215,14 +272,41 @@ export class ArrowLayer {
     const from = resolveAnchor(e, 'from', nodes, null).point;
     const to   = resolveAnchor(e, 'to',   nodes, null).point;
     if (!e.junction) e.junction = defaultJunction(from, [to]);
+    const excludeIds = new Set();
+    if (e.fromNode) excludeIds.add(e.fromNode);
+    if (e.toNode) excludeIds.add(e.toNode);
+    if (Array.isArray(e.branches)) for (const b of e.branches) if (b.toNode) excludeIds.add(b.toNode);
     this.dragState = {
       kind: 'draw-branch',
       edgeId: id,
-      cursorImg: { ...e.junction },
+      cursorImg: { x: to.x, y: to.y },
+      anchorImg: { x: to.x, y: to.y },
+      excludeIds,
       snapped: null,
     };
     this.popover.hide();
+    this._showBranchHint();
     this.requestDraw();
+  }
+
+  _showBranchHint() {
+    if (this._branchHintEl) {
+      try { document.body.removeChild(this._branchHintEl); } catch (e) { void e; }
+      this._branchHintEl = null;
+    }
+    const hint = document.createElement('div');
+    hint.className = 'arrow-branch-hint';
+    hint.textContent = tr('arrow_drag_to_target');
+    hint.style.cssText = 'position:fixed;left:50%;top:60px;transform:translateX(-50%);background:var(--panel-bg);border:1px solid var(--accent);color:var(--accent);padding:6px 14px;border-radius:var(--radius);font-family:var(--font-mono);font-size:11px;letter-spacing:1px;text-transform:uppercase;z-index:1700;box-shadow:var(--shadow-soft);pointer-events:none;';
+    document.body.appendChild(hint);
+    this._branchHintEl = hint;
+  }
+
+  _hideBranchHint() {
+    if (this._branchHintEl) {
+      try { document.body.removeChild(this._branchHintEl); } catch (e) { void e; }
+      this._branchHintEl = null;
+    }
   }
 
   _draw() {
@@ -282,17 +366,34 @@ export class ArrowLayer {
       return;
     }
 
-    const vertices = routeEdge(edge.routing, fromInfo.point, toInfo.point, {
-      fromSide: fromInfo.side,
-      toSide:   toInfo.side,
-      obstacles: this._obstaclesExcluding(obstacles, [fromInfo.rect, toInfo.rect]),
-      waypoints: edge.waypoints,
-    });
-    const d = vertexPathD(vertices, edge.routing);
+    const cacheKey = this._edgeRouteKey(edge, fromInfo, toInfo);
+    const cached = this._pathCache.get(edge.id);
+    let vertices;
+    let d;
+    if (cached && cached.key === cacheKey) {
+      vertices = cached.vertices;
+      d = cached.d;
+    } else {
+      vertices = routeEdge(edge.routing, fromInfo.point, toInfo.point, {
+        fromSide: fromInfo.side,
+        toSide:   toInfo.side,
+        obstacles: this._obstaclesExcluding(obstacles, [fromInfo.rect, toInfo.rect]),
+        waypoints: edge.waypoints,
+      });
+      d = vertexPathD(vertices, edge.routing);
+      this._pathCache.set(edge.id, { key: cacheKey, vertices, d });
+    }
     this._appendEdgePath(edge, d, colour, scale, vertices, { opacity });
     if (lod && lod.edgeLabelsVisible) {
       this._appendEdgeLabel(edge, vertices, scale, opacity);
     }
+  }
+
+  _edgeRouteKey(edge, fromInfo, toInfo) {
+    const wp = Array.isArray(edge.waypoints)
+      ? edge.waypoints.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(';')
+      : '';
+    return `${edge.routing}|${fromInfo.point.x.toFixed(2)},${fromInfo.point.y.toFixed(2)}|${toInfo.point.x.toFixed(2)},${toInfo.point.y.toFixed(2)}|${fromInfo.side || ''}|${toInfo.side || ''}|${wp}`;
   }
 
   _edgeOpacity(edge, nodes) {
@@ -341,7 +442,9 @@ export class ArrowLayer {
       });
       const d = vertexPathD(verts, edge.routing);
       this._appendBranchPath(edge, i, d, b.color || colour, scale, verts, opacity);
-      if (b.label && lod && lod.edgeLabelsVisible) this._appendBranchLabel(b.label, verts, scale, opacity);
+      if (lod && lod.edgeLabelsVisible) {
+        this._appendBranchLabel(b.label, verts, scale, opacity, { edgeId: edge.id, branchIndex: i });
+      }
     }
 
     if (this.mode === 'editor' && (!lod || lod.handlesVisible)) {
@@ -430,27 +533,51 @@ export class ArrowLayer {
   }
 
   _appendEdgeLabel(edge, vertices, scale, opacity) {
-    if (!edge.label) return;
-    const mid = pointAlong(vertices, 0.5, edge.routing);
-    this._drawLabel(edge.label, mid, scale, opacity);
+    const shape = ensureLabelShape(edge.label);
+    if (!shape.text) return;
+    const auto = pointAlong(vertices, 0.5, edge.routing);
+    const anchor = shape.position ? shape.position : auto;
+    this._drawLabel(shape.text, anchor, auto, scale, opacity, {
+      kind: 'edge', edgeId: edge.id, branchIndex: null, autoAt: auto,
+      free: !!shape.position,
+    });
   }
 
-  _appendBranchLabel(label, vertices, scale, opacity) {
-    if (!label) return;
-    const mid = pointAlong(vertices, 0.5, null);
-    this._drawLabel(label, mid, scale, opacity);
+  _appendBranchLabel(label, vertices, scale, opacity, ctx) {
+    const shape = ensureLabelShape(label);
+    if (!shape.text) return;
+    const auto = pointAlong(vertices, 0.5, null);
+    const anchor = shape.position ? shape.position : auto;
+    this._drawLabel(shape.text, anchor, auto, scale, opacity, {
+      kind: 'branch', edgeId: ctx && ctx.edgeId, branchIndex: ctx && ctx.branchIndex,
+      autoAt: auto, free: !!shape.position,
+    });
   }
 
-  _drawLabel(label, mid, scale, opacity) {
+  _drawLabel(text, anchor, autoAt, scale, opacity, refs) {
     const padX = 5;
     const padY = 2;
     const fontPx = 12 / scale;
-    const approxW = label.length * fontPx * 0.55 + padX * 2;
+    const approxW = text.length * fontPx * 0.55 + padX * 2;
     const approxH = fontPx + padY * 2;
     const labelOpacity = Number.isFinite(opacity) ? opacity : 1;
+    const isFree = refs && refs.free;
+    if (isFree && autoAt && (autoAt.x !== anchor.x || autoAt.y !== anchor.y)) {
+      const tether = document.createElementNS(SVG_NS, 'line');
+      tether.setAttribute('x1', String(autoAt.x));
+      tether.setAttribute('y1', String(autoAt.y));
+      tether.setAttribute('x2', String(anchor.x));
+      tether.setAttribute('y2', String(anchor.y));
+      tether.setAttribute('stroke', 'var(--label-stroke)');
+      tether.setAttribute('stroke-width', String(1 / scale));
+      tether.setAttribute('stroke-dasharray', `${4 / scale} ${3 / scale}`);
+      tether.setAttribute('opacity', String(Math.min(0.5, labelOpacity)));
+      tether.setAttribute('pointer-events', 'none');
+      this.edgesGroup.appendChild(tether);
+    }
     const bg = document.createElementNS(SVG_NS, 'rect');
-    bg.setAttribute('x', String(mid.x - approxW / 2));
-    bg.setAttribute('y', String(mid.y - approxH / 2));
+    bg.setAttribute('x', String(anchor.x - approxW / 2));
+    bg.setAttribute('y', String(anchor.y - approxH / 2));
     bg.setAttribute('width',  String(approxW));
     bg.setAttribute('height', String(approxH));
     bg.setAttribute('rx', String(3 / scale));
@@ -458,22 +585,76 @@ export class ArrowLayer {
     bg.setAttribute('fill',   'var(--label-bg)');
     bg.setAttribute('stroke', 'var(--label-stroke)');
     bg.setAttribute('stroke-width', String(1 / scale));
-    bg.setAttribute('pointer-events', 'none');
     if (labelOpacity < 1) bg.setAttribute('opacity', String(labelOpacity));
+    if (this.mode === 'editor' && refs) {
+      bg.setAttribute('data-label-edge', refs.edgeId || '');
+      if (refs.branchIndex !== null && refs.branchIndex !== undefined) {
+        bg.setAttribute('data-label-branch', String(refs.branchIndex));
+      }
+      bg.style.cursor = 'move';
+      bg.addEventListener('mousedown', (ev) => this._beginLabelDrag(ev, refs));
+      bg.addEventListener('contextmenu', (ev) => this._onLabelContext(ev, refs));
+    } else {
+      bg.setAttribute('pointer-events', 'none');
+    }
     this.edgesGroup.appendChild(bg);
-    const text = document.createElementNS(SVG_NS, 'text');
-    text.setAttribute('x', String(mid.x));
-    text.setAttribute('y', String(mid.y));
-    text.setAttribute('font-size', String(fontPx));
-    text.setAttribute('font-family', 'var(--font-mono)');
-    text.setAttribute('class', 'arrow-label-text');
-    text.setAttribute('fill', 'var(--label-text)');
-    text.setAttribute('text-anchor', 'middle');
-    text.setAttribute('dominant-baseline', 'central');
-    text.setAttribute('pointer-events', 'none');
-    if (labelOpacity < 1) text.setAttribute('opacity', String(labelOpacity));
-    text.textContent = label;
-    this.edgesGroup.appendChild(text);
+    const textEl = document.createElementNS(SVG_NS, 'text');
+    textEl.setAttribute('x', String(anchor.x));
+    textEl.setAttribute('y', String(anchor.y));
+    textEl.setAttribute('font-size', String(fontPx));
+    textEl.setAttribute('font-family', 'var(--font-mono)');
+    textEl.setAttribute('class', 'arrow-label-text');
+    textEl.setAttribute('fill', 'var(--label-text)');
+    textEl.setAttribute('text-anchor', 'middle');
+    textEl.setAttribute('dominant-baseline', 'central');
+    textEl.setAttribute('pointer-events', 'none');
+    if (labelOpacity < 1) textEl.setAttribute('opacity', String(labelOpacity));
+    textEl.textContent = text;
+    this.edgesGroup.appendChild(textEl);
+  }
+
+  _beginLabelDrag(ev, refs) {
+    if (this.mode !== 'editor') return;
+    if (ev.button !== 0) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    const e = this.edges.get(refs.edgeId);
+    if (!e) return;
+    let startPos;
+    if (refs.kind === 'branch' && Number.isInteger(refs.branchIndex) && e.branches && e.branches[refs.branchIndex]) {
+      startPos = ensureLabelShape(e.branches[refs.branchIndex].label).position || refs.autoAt || { x: 0, y: 0 };
+    } else {
+      startPos = ensureLabelShape(e.label).position || refs.autoAt || { x: 0, y: 0 };
+    }
+    this.dragState = {
+      kind: 'drag-label',
+      edgeId: refs.edgeId,
+      branchIndex: refs.kind === 'branch' ? refs.branchIndex : null,
+      start: { x: startPos.x, y: startPos.y },
+      startCursor: this._imgPointFromClient(ev.clientX, ev.clientY),
+    };
+  }
+
+  _onLabelContext(ev, refs) {
+    if (this.mode !== 'editor') return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    const isBranch = refs.kind === 'branch' && Number.isInteger(refs.branchIndex);
+    const e = this.edges.get(refs.edgeId);
+    if (!e) return;
+    const items = [
+      {
+        label: tr('arrow_label_reset_position'),
+        fn: () => {
+          if (isBranch) {
+            this.applyEdgePatch(refs.edgeId, { branchLabel: { index: refs.branchIndex, position: null } });
+          } else {
+            this.applyEdgePatch(refs.edgeId, { labelPosition: null });
+          }
+        },
+      },
+    ];
+    this.contextMenu.open(ev.clientX, ev.clientY, items);
   }
 
   _renderEditorOverlay(nodes, scale) {
@@ -513,9 +694,9 @@ export class ArrowLayer {
     } else if (d.kind === 'draw-branch') {
       const e = this.edges.get(d.edgeId);
       if (!e) return;
-      const junction = e.junction || resolveAnchor(e, 'from', nodes, null).point;
+      const anchor = d.anchorImg || e.junction || resolveAnchor(e, 'from', nodes, null).point;
       const toPt = d.snapped ? d.snapped.point : d.cursorImg;
-      this._renderPreviewLine(junction, toPt, scale, d.snapped);
+      this._renderPreviewLine(anchor, toPt, scale, d.snapped);
     }
   }
 
@@ -608,6 +789,21 @@ export class ArrowLayer {
 
   _onMouseDown(ev) {
     if (this.mode !== 'editor') return;
+    if (this.dragState && this.dragState.kind === 'draw-branch') {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const d = this.dragState;
+      this.dragState = null;
+      this._hideBranchHint();
+      if (d.snapped) {
+        this._addBranchFromDrag(d);
+      } else {
+        const e = this.edges.get(d.edgeId);
+        if (e && !e.branches) delete e.junction;
+      }
+      this.requestDraw();
+      return;
+    }
     if (this.dragState) return;
     const tgt = ev.target;
     if (tgt && tgt.getAttribute) {
@@ -647,9 +843,33 @@ export class ArrowLayer {
         }
         return;
       }
+      if (this.dragState.kind === 'drag-label') {
+        const e = this.edges.get(this.dragState.edgeId);
+        if (e) {
+          const sc = this.dragState.startCursor;
+          const nextPos = {
+            x: this.dragState.start.x + (img.x - sc.x),
+            y: this.dragState.start.y + (img.y - sc.y),
+          };
+          const bIdx = this.dragState.branchIndex;
+          if (Number.isInteger(bIdx) && Array.isArray(e.branches) && e.branches[bIdx]) {
+            const cur = ensureLabelShape(e.branches[bIdx].label);
+            e.branches[bIdx].label = { text: cur.text, position: nextPos };
+          } else {
+            const cur = ensureLabelShape(e.label);
+            e.label = { text: cur.text, position: nextPos };
+          }
+          this.requestDraw();
+        }
+        return;
+      }
       this.dragState.cursorImg = img;
-      const ownerNodeId = this.dragState.kind === 'draw-edge' ? this.dragState.fromNode : null;
-      this.dragState.snapped = this._findSnap(img, ownerNodeId);
+      if (this.dragState.kind === 'draw-branch') {
+        this.dragState.snapped = this._findSnapExcluding(img, this.dragState.excludeIds);
+      } else {
+        const ownerNodeId = this.dragState.kind === 'draw-edge' ? this.dragState.fromNode : null;
+        this.dragState.snapped = this._findSnap(img, ownerNodeId);
+      }
       this.requestDraw();
       return;
     }
@@ -683,12 +903,13 @@ export class ArrowLayer {
         this.onScheduleSave();
         this.onEdgeMutation('update', d.edgeId, e);
       }
-    } else if (d.kind === 'drag-waypoint' || d.kind === 'drag-junction') {
+    } else if (d.kind === 'drag-waypoint' || d.kind === 'drag-junction' || d.kind === 'drag-label') {
       this.onEdgesChange();
       this.onScheduleSave();
       const e = this.edges.get(d.edgeId);
       if (e) this.onEdgeMutation('update', d.edgeId, e);
     } else if (d.kind === 'draw-branch') {
+      this._hideBranchHint();
       if (d.snapped) {
         this._addBranchFromDrag(d);
       } else {
@@ -775,11 +996,35 @@ export class ArrowLayer {
     ev.preventDefault();
     ev.stopPropagation();
     const img = this._imgPointFromClient(ev.clientX, ev.clientY);
-    this.contextMenu.open(ev.clientX, ev.clientY, [
+    const branchAttr = tgt && tgt.getAttribute ? tgt.getAttribute('data-branch') : null;
+    const items = [
       { label: tr('waypoint_add'),  fn: () => this._addWaypoint(id, img) },
       { label: tr('edge_add_branch'), fn: () => this.beginAddBranch(id) },
-      { label: tr('edge_delete'), danger: true, fn: () => this.deleteEdge(id) },
-    ]);
+    ];
+    if (branchAttr !== null && branchAttr !== '') {
+      const branchIdx = parseInt(branchAttr, 10);
+      if (Number.isInteger(branchIdx)) {
+        items.push({ label: tr('edge_branch_remove'), danger: true, fn: () => this._removeBranch(id, branchIdx) });
+      }
+    }
+    items.push({ label: tr('edge_delete'), danger: true, fn: () => this.deleteEdge(id) });
+    this.contextMenu.open(ev.clientX, ev.clientY, items);
+  }
+
+  _removeBranch(edgeId, branchIdx) {
+    const e = this.edges.get(edgeId);
+    if (!e || !Array.isArray(e.branches)) return;
+    if (branchIdx < 0 || branchIdx >= e.branches.length) return;
+    e.branches.splice(branchIdx, 1);
+    if (e.branches.length === 0) {
+      delete e.branches;
+      delete e.junction;
+    }
+    this._rebuildBoundIndex();
+    this.onEdgesChange();
+    this.onScheduleSave();
+    this.onEdgeMutation('update', edgeId, e);
+    this.requestDraw();
   }
 
   _findSnap(imgPt, ignoreNodeId) {
@@ -787,6 +1032,14 @@ export class ArrowLayer {
     const t = this.getTransform();
     const result = findSnapTarget(nodes, imgPt, t.scale);
     if (result && result.nodeId === ignoreNodeId) return null;
+    return result;
+  }
+
+  _findSnapExcluding(imgPt, excludeIds) {
+    const nodes = this.getNodes();
+    const t = this.getTransform();
+    const result = findSnapTarget(nodes, imgPt, t.scale);
+    if (result && excludeIds && excludeIds.has(result.nodeId)) return null;
     return result;
   }
 

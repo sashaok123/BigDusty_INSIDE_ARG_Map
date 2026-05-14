@@ -133,6 +133,14 @@ export class LeftRail {
       onClick: () => this.handlers.onUngroup && this.handlers.onUngroup(),
     }));
     tools.appendChild(this._makeIconBtn({
+      id: 'rail-tool-delete', icon: 'trash', i18n: 'editor_tools_delete',
+      danger: true,
+      onClick: () => this.handlers.onDeleteSelection && this.handlers.onDeleteSelection(),
+    }));
+    const sep = document.createElement('div');
+    sep.className = 'rail-separator';
+    tools.appendChild(sep);
+    tools.appendChild(this._makeIconBtn({
       id: 'rail-tool-undo', icon: 'undo', i18n: 'editor_tools_undo',
       onClick: () => this.handlers.onUndo && this.handlers.onUndo(),
     }));
@@ -140,39 +148,8 @@ export class LeftRail {
       id: 'rail-tool-redo', icon: 'redo', i18n: 'editor_tools_redo',
       onClick: () => this.handlers.onRedo && this.handlers.onRedo(),
     }));
-    tools.appendChild(this._makeIconBtn({
-      id: 'rail-tool-delete', icon: 'trash', i18n: 'editor_tools_delete',
-      danger: true,
-      onClick: () => this.handlers.onDeleteSelection && this.handlers.onDeleteSelection(),
-    }));
     rail.appendChild(tools);
     this.toolsEl = tools;
-
-    const view = this._makeSection('rail-view');
-    view.appendChild(this._makeIconBtn({
-      id: 'rail-view-search', icon: 'search', i18n: 'rail_view_search',
-      onClick: () => this.handlers.onFocusSearch && this.handlers.onFocusSearch(),
-    }));
-    view.appendChild(this._makeIconBtn({
-      id: 'rail-view-outline', icon: 'outline', i18n: 'outline_toggle',
-      onClick: () => this.handlers.onToggleOutline && this.handlers.onToggleOutline(),
-    }));
-    view.appendChild(this._makeIconBtn({
-      id: 'rail-view-minimap', icon: 'minimap', i18n: 'minimap_toggle',
-      onClick: () => this.handlers.onToggleMinimap && this.handlers.onToggleMinimap(),
-    }));
-    view.appendChild(this._makeThemeSubmenu());
-    view.appendChild(this._makeLangSubmenu());
-    rail.appendChild(view);
-
-    const bottom = this._makeSection('rail-bottom');
-    const signinBtn = this._makeIconBtn({
-      id: 'rail-signin', icon: 'signin', i18n: 'sign_in_button',
-      onClick: () => this.handlers.onOpenLogin && this.handlers.onOpenLogin(),
-    });
-    signinBtn.classList.add('rail-signin-btn');
-    bottom.appendChild(signinBtn);
-    rail.appendChild(bottom);
 
     document.body.appendChild(rail);
     this.railEl = rail;
@@ -240,94 +217,6 @@ export class LeftRail {
     return wrap;
   }
 
-  _makeThemeSubmenu() {
-    const wrap = document.createElement('div');
-    wrap.className = 'rail-submenu-wrap';
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'rail-btn rail-theme-btn';
-    btn.dataset.i18n = 'theme_toggle_aria';
-    btn.title = tr('theme_toggle_aria');
-    btn.setAttribute('aria-label', tr('theme_toggle_aria'));
-    btn.appendChild(svgIcon('theme_sun'));
-    this._buttons['rail-theme'] = btn;
-    const flyout = document.createElement('div');
-    flyout.className = 'rail-flyout';
-    const themes = [
-      { value: 'white',    icon: 'theme_sun',      key: 'theme_white' },
-      { value: 'dark',     icon: 'theme_moon',     key: 'theme_dark' },
-      { value: 'graphite', icon: 'theme_graphite', key: 'theme_graphite' },
-      { value: 'auto',     icon: 'theme_auto',     key: 'theme_auto' },
-    ];
-    for (const t of themes) {
-      const ob = document.createElement('button');
-      ob.type = 'button';
-      ob.className = 'rail-btn';
-      ob.dataset.themeValue = t.value;
-      ob.dataset.i18n = t.key;
-      ob.title = tr(t.key);
-      ob.appendChild(svgIcon(t.icon));
-      ob.addEventListener('click', (e) => {
-        e.preventDefault();
-        if (this.handlers.onThemeChange) this.handlers.onThemeChange(t.value);
-        flyout.classList.remove('open');
-      });
-      flyout.appendChild(ob);
-    }
-    btn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      flyout.classList.toggle('open');
-    });
-    document.addEventListener('mousedown', (e) => {
-      if (!wrap.contains(e.target)) flyout.classList.remove('open');
-    });
-    wrap.appendChild(btn);
-    wrap.appendChild(flyout);
-    this.themeFlyoutEl = flyout;
-    return wrap;
-  }
-
-  _makeLangSubmenu() {
-    const wrap = document.createElement('div');
-    wrap.className = 'rail-submenu-wrap';
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'rail-btn rail-lang-btn';
-    btn.dataset.i18n = 'lang_label';
-    btn.title = tr('lang_label');
-    btn.setAttribute('aria-label', tr('lang_label'));
-    btn.appendChild(svgIcon('lang'));
-    this._buttons['rail-lang'] = btn;
-    const flyout = document.createElement('div');
-    flyout.className = 'rail-flyout rail-flyout-lang';
-    for (const l of ['en', 'ru', 'de', 'it', 'da']) {
-      const ob = document.createElement('button');
-      ob.type = 'button';
-      ob.className = 'rail-btn rail-lang-pick';
-      ob.dataset.lang = l;
-      ob.textContent = l.toUpperCase();
-      ob.addEventListener('click', (e) => {
-        e.preventDefault();
-        if (this.handlers.onLangChange) this.handlers.onLangChange(l);
-        flyout.classList.remove('open');
-      });
-      flyout.appendChild(ob);
-    }
-    btn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      flyout.classList.toggle('open');
-    });
-    document.addEventListener('mousedown', (e) => {
-      if (!wrap.contains(e.target)) flyout.classList.remove('open');
-    });
-    wrap.appendChild(btn);
-    wrap.appendChild(flyout);
-    this.langFlyoutEl = flyout;
-    return wrap;
-  }
-
   _setCreate(v) {
     if (!CREATE_MODES.includes(v)) return;
     this.state.create = v;
@@ -368,36 +257,15 @@ export class LeftRail {
     if (e) e.classList.toggle('active', mode === 'editor');
   }
 
-  setThemeChoice(choice) {
-    if (!this.themeFlyoutEl) return;
-    this.themeFlyoutEl.querySelectorAll('button[data-theme-value]').forEach((b) => {
-      b.classList.toggle('active', b.dataset.themeValue === choice);
-    });
-    const icon = {
-      'white': 'theme_sun', 'dark': 'theme_moon',
-      'graphite': 'theme_graphite', 'auto': 'theme_auto',
-    }[choice] || 'theme_sun';
-    const trigger = this._buttons['rail-theme'];
-    if (trigger) {
-      while (trigger.firstChild) trigger.removeChild(trigger.firstChild);
-      trigger.appendChild(svgIcon(icon));
-    }
-  }
+  setThemeChoice(choice) { void choice; }
 
-  setLang(lang) {
-    if (!this.langFlyoutEl) return;
-    this.langFlyoutEl.querySelectorAll('button[data-lang]').forEach((b) => {
-      b.classList.toggle('active', b.dataset.lang === lang);
-    });
-  }
+  setLang(lang) { void lang; }
 
   setAuthState(authed, isAdmin) {
     if (this.railEl) {
       this.railEl.classList.toggle('authed', !!authed);
       this.railEl.classList.toggle('admin', !!isAdmin);
     }
-    const signin = this._buttons['rail-signin'];
-    if (signin) signin.style.display = authed ? 'none' : '';
   }
 
   getCreateMode() { return this.state.create; }

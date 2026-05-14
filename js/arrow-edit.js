@@ -176,6 +176,16 @@ export function defaultJunction(fromPt, branchPts) {
   };
 }
 
+function popoverLabelText(label) {
+  if (label && typeof label === 'object' && typeof label.text === 'string') return label.text;
+  if (typeof label === 'string') return label;
+  return '';
+}
+
+function popoverLabelHasPosition(label) {
+  return !!(label && typeof label === 'object' && label.position && Number.isFinite(label.position.x) && Number.isFinite(label.position.y));
+}
+
 export class EdgePropsPopover {
   constructor(opts) {
     this.layer = opts.layer;
@@ -207,16 +217,77 @@ export class EdgePropsPopover {
     labelRow.appendChild(labelLab);
     const input = document.createElement('input');
     input.type = 'text';
-    input.value = edge.label || '';
+    input.value = popoverLabelText(edge.label);
     input.placeholder = tr('arrow_label_placeholder');
+    let labelDebounceTimer = null;
+    const commitLabelText = () => {
+      this.layer.applyEdgePatch(edge.id, { labelText: input.value });
+    };
     input.addEventListener('input', () => {
-      this.layer.applyEdgePatch(edge.id, { label: input.value }, { silent: true });
+      if (labelDebounceTimer) clearTimeout(labelDebounceTimer);
+      labelDebounceTimer = setTimeout(() => {
+        labelDebounceTimer = null;
+        commitLabelText();
+      }, 500);
     });
-    input.addEventListener('change', () => {
-      this.layer.commitEdge(edge.id);
+    input.addEventListener('blur', () => {
+      if (labelDebounceTimer) { clearTimeout(labelDebounceTimer); labelDebounceTimer = null; }
+      commitLabelText();
     });
+    input.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') {
+        ev.preventDefault();
+        if (labelDebounceTimer) { clearTimeout(labelDebounceTimer); labelDebounceTimer = null; }
+        commitLabelText();
+        input.blur();
+      }
+    });
+    this._labelDebounceCancel = () => {
+      if (labelDebounceTimer) { clearTimeout(labelDebounceTimer); labelDebounceTimer = null; commitLabelText(); }
+    };
     labelRow.appendChild(input);
     popover.appendChild(labelRow);
+
+    if (popoverLabelHasPosition(edge.label)) {
+      const resetRow = document.createElement('div');
+      resetRow.className = 'arrow-props-row arrow-props-row-mini';
+      const resetBtn = document.createElement('button');
+      resetBtn.type = 'button';
+      resetBtn.className = 'arrow-props-mini-btn';
+      resetBtn.textContent = tr('arrow_label_reset_position');
+      resetBtn.addEventListener('click', () => {
+        this.layer.applyEdgePatch(edge.id, { labelPosition: null });
+      });
+      resetRow.appendChild(resetBtn);
+      popover.appendChild(resetRow);
+    }
+
+    if (Array.isArray(edge.branches) && edge.branches.length) {
+      for (let i = 0; i < edge.branches.length; i++) {
+        const branchIdx = i;
+        const b = edge.branches[i];
+        const row = document.createElement('div');
+        row.className = 'arrow-props-row';
+        const lab = document.createElement('label');
+        lab.textContent = `${tr('edge_branch_label')} ${i + 1}`;
+        row.appendChild(lab);
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.value = popoverLabelText(b.label);
+        inp.placeholder = tr('arrow_label_placeholder');
+        let bTimer = null;
+        const commit = () => this.layer.applyEdgePatch(edge.id, { branchLabel: { index: branchIdx, text: inp.value } });
+        inp.addEventListener('input', () => {
+          if (bTimer) clearTimeout(bTimer);
+          bTimer = setTimeout(() => { bTimer = null; commit(); }, 500);
+        });
+        inp.addEventListener('blur', () => {
+          if (bTimer) { clearTimeout(bTimer); bTimer = null; commit(); }
+        });
+        row.appendChild(inp);
+        popover.appendChild(row);
+      }
+    }
 
     const actions = document.createElement('div');
     actions.className = 'arrow-props-actions';
@@ -240,6 +311,10 @@ export class EdgePropsPopover {
   }
 
   hide() {
+    if (this._labelDebounceCancel) {
+      try { this._labelDebounceCancel(); } catch (e) { void e; }
+      this._labelDebounceCancel = null;
+    }
     if (this.el && this.el.parentNode) this.el.parentNode.removeChild(this.el);
     this.el = null;
   }

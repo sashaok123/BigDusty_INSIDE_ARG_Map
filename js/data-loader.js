@@ -132,7 +132,7 @@ export function normaliseEdge(raw) {
   if (typeof raw.fromEnd  === 'string') edge.fromEnd  = raw.fromEnd;
   if (typeof raw.toEnd    === 'string') edge.toEnd    = raw.toEnd;
   if (typeof raw.color    === 'string') edge.color    = raw.color;
-  if (typeof raw.label    === 'string') edge.label    = raw.label;
+  edge.label = normaliseEdgeLabel(raw.label);
   const routing = typeof raw.routing === 'string' ? raw.routing : 'orthogonal';
   edge.routing = ['straight', 'orthogonal', 'manhattan', 'smooth'].includes(routing) ? routing : 'orthogonal';
   const style = typeof raw.style === 'string' ? raw.style : 'solid';
@@ -142,7 +142,11 @@ export function normaliseEdge(raw) {
       .filter((p) => p && typeof p.x === 'number' && typeof p.y === 'number')
       .map((p) => ({ x: p.x, y: p.y }));
   }
-  if (Array.isArray(raw.branches)) edge.branches = raw.branches.map((b) => ({ ...b }));
+  if (Array.isArray(raw.branches)) edge.branches = raw.branches.map((b) => {
+    const out = { ...b };
+    out.label = normaliseEdgeLabel(b && b.label);
+    return out;
+  });
   if (raw.junction && typeof raw.junction === 'object') edge.junction = { x: raw.junction.x, y: raw.junction.y };
   if (raw.fromPoint && typeof raw.fromPoint === 'object'
       && typeof raw.fromPoint.x === 'number' && typeof raw.fromPoint.y === 'number') {
@@ -154,6 +158,21 @@ export function normaliseEdge(raw) {
   }
   edge.bindings = normaliseBindings(raw.bindings);
   return edge;
+}
+
+export function normaliseEdgeLabel(raw) {
+  if (raw == null) return { text: '', position: null };
+  if (typeof raw === 'string') return { text: raw, position: null };
+  if (typeof raw === 'object') {
+    const text = typeof raw.text === 'string' ? raw.text : '';
+    let position = null;
+    if (raw.position && typeof raw.position === 'object'
+        && Number.isFinite(raw.position.x) && Number.isFinite(raw.position.y)) {
+      position = { x: raw.position.x, y: raw.position.y };
+    }
+    return { text, position };
+  }
+  return { text: '', position: null };
 }
 
 function normaliseBindings(b) {
@@ -262,7 +281,7 @@ export function legacyToCanvas(legacy) {
     };
     if (['left', 'right', 'top', 'bottom'].includes(src.side)) edge.fromSide = src.side;
     if (['left', 'right', 'top', 'bottom'].includes(dst.side)) edge.toSide   = dst.side;
-    if (typeof a.label === 'string' && a.label) edge.label = a.label;
+    edge.label = normaliseEdgeLabel(a.label);
     edges.push(edge);
   }
   return { nodes, edges };

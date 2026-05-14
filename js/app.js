@@ -180,6 +180,8 @@ async function bootstrap() {
 
   setupRealtime();
 
+  setupDebugPanel();
+
   document.addEventListener('i18n:changed', () => {
     applyStaticTranslations();
     refreshPuzzleViewsInViewer();
@@ -199,6 +201,79 @@ async function bootstrap() {
     refreshOfflineBanner();
     refreshSelectionStatus();
   });
+}
+
+function setupDebugPanel() {
+  let enabled = false;
+  try { enabled = localStorage.getItem('argDebug') === '1'; } catch (e) { void e; }
+  if (!enabled) return;
+  const panel = document.createElement('div');
+  panel.id = 'arg-debug-panel';
+  panel.style.cssText = 'position:fixed;right:10px;bottom:60px;z-index:9999;background:rgba(0,0,0,0.72);color:#7eea7e;font:11px/1.4 Consolas,monospace;padding:6px 10px;border-radius:4px;pointer-events:none;max-width:260px;white-space:pre';
+  document.body.appendChild(panel);
+  const dbg = { lastFrame: 0, lastEvent: 'none', lastStorage: 0, frameTime: 0 };
+  let frameAt = 0;
+  const origRAF = window.requestAnimationFrame.bind(window);
+  window.requestAnimationFrame = (cb) => origRAF((t) => {
+    if (frameAt) dbg.frameTime = t - frameAt;
+    frameAt = t;
+    return cb(t);
+  });
+  document.addEventListener('realtime:change', (ev) => {
+    dbg.lastEvent = `${ev.detail && ev.detail.kind || '?'} ${(ev.detail && ev.detail.id) || ''}`;
+  });
+  const origSetItem = localStorage.setItem.bind(localStorage);
+  try {
+    localStorage.setItem = (k, v) => {
+      if (k === 'arg_map_state' && typeof v === 'string') dbg.lastStorage = v.length;
+      return origSetItem(k, v);
+    };
+  } catch (e) { void e; }
+  setInterval(() => {
+    panel.textContent = `[arg debug]
+frame ${dbg.frameTime.toFixed(1)} ms
+ws ${dbg.lastEvent}
+local ${(dbg.lastStorage / 1024).toFixed(1)} KB
+nodes ${state.nodes.size}  edges ${state.edges.size}`;
+  }, 250);
+}
+
+function setupToolbarOverflow() {
+  const btn = $('tb-overflow-btn');
+  const menu = $('tb-overflow-menu');
+  if (!btn || !menu) return;
+  const searchSlot  = $('tb-overflow-search-slot');
+  const filtersSlot = $('tb-overflow-filters-slot');
+  const searchGroup = document.getElementById('tb-group-search');
+  if (!searchSlot || !filtersSlot || !searchGroup) return;
+  const searchWrap = searchGroup.querySelector('#search-wrap');
+  const chipsWrap  = searchGroup.querySelector('.tb-filter-chips');
+  let inOverflow = false;
+  const applyLayout = () => {
+    const narrow = window.innerWidth <= 900;
+    if (narrow && !inOverflow) {
+      if (searchWrap) searchSlot.appendChild(searchWrap);
+      if (chipsWrap)  filtersSlot.appendChild(chipsWrap);
+      inOverflow = true;
+    } else if (!narrow && inOverflow) {
+      if (searchWrap) searchGroup.appendChild(searchWrap);
+      if (chipsWrap)  searchGroup.appendChild(chipsWrap);
+      menu.classList.remove('open');
+      inOverflow = false;
+    }
+  };
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    menu.classList.toggle('open');
+  });
+  document.addEventListener('mousedown', (e) => {
+    if (!menu.contains(e.target) && e.target !== btn) {
+      menu.classList.remove('open');
+    }
+  });
+  window.addEventListener('resize', applyLayout);
+  applyLayout();
 }
 
 function setupBeforeUnload() {
@@ -288,6 +363,7 @@ function setupViewer() {
     },
     onHotspotResize: (id, rect) => {
       updatePuzzleNode(state.nodes, id, { rect });
+      if (arrowLayer) arrowLayer.invalidateNode(id);
     },
     onHotspotResizeEnd: (id) => {
       const n = findNode(state.nodes, id);
@@ -1024,6 +1100,7 @@ function applyDragSelection(ids, dx, dy, commit) {
     const o = orig.get(id);
     n.x = o.x + dx;
     n.y = o.y + dy;
+    if (arrowLayer) arrowLayer.invalidateNode(id);
   }
   refreshPuzzleViewsInViewer();
   if (commit) {
@@ -1229,6 +1306,8 @@ function persistRichEditSave(payload) {
 }
 
 function setupToolbar() {
+  setupToolbarOverflow();
+
   const zin = $('btn-zoom-in');
   const zout = $('btn-zoom-out');
   const zfit = $('btn-zoom-fit');
@@ -1521,7 +1600,7 @@ function applyRealtimeChange(ev) {
       viewer.addBlock({ id: nn.id, rect: { x: nn.x, y: nn.y, w: nn.width, h: nn.height }, file: nn.file })
         .catch((e) => console.warn('[app] addBlock from ws', e));
     }
-    refreshAllAfterChange();
+    incrementalAfterNodeChange(nn, 'created');
     return;
   }
   if (k === 'node_updated' && ev.data && ev.id) {
@@ -1535,14 +1614,17 @@ function applyRealtimeChange(ev) {
           .catch((e) => console.warn('[app] refreshBlock from ws', e));
       }
     }
-    refreshAllAfterChange();
+    incrementalAfterNodeChange(nn, 'updated');
     return;
   }
   if (k === 'node_deleted' && ev.id) {
     state.nodes.delete(ev.id);
-    if (viewer) viewer.removeBlock(ev.id);
+    if (viewer) {
+      viewer.removeBlock(ev.id);
+      viewer.removeHotspot(ev.id);
+      viewer.removeGroup(ev.id);
+    }
     if (arrowLayer) arrowLayer.notifyNodeDeleted(ev.id);
-    refreshAllAfterChange();
     return;
   }
   if (k === 'edge_created' && ev.data && ev.id) {
@@ -1567,6 +1649,24 @@ function applyRealtimeChange(ev) {
 function refreshAllAfterChange() {
   refreshPuzzleViewsInViewer();
   if (viewer) viewer.notifyNodesChanged();
+}
+
+function incrementalAfterNodeChange(node, change) {
+  if (!viewer || !node) return;
+  const lang = getLang();
+  const baseView = toViewShape(node);
+  if (!baseView) return;
+  const view = viewWithLang(baseView, lang);
+  if (isGroupNode(node)) {
+    viewer.updateGroup(view);
+  } else if (node.type !== 'group') {
+    viewer.updateHotspot(view);
+  }
+  if (arrowLayer) {
+    arrowLayer.invalidateNode(node.id);
+    arrowLayer.requestDraw();
+  }
+  void change;
 }
 
 function setRealtimeStatus(s) {
@@ -1928,6 +2028,8 @@ function setupMinimap() {
     viewer,
     container: document.body,
   });
+  const mmBtn = $('btn-minimap-toggle');
+  if (mmBtn) mmBtn.addEventListener('click', () => minimap && minimap.toggle());
 }
 
 function setupOutline() {
@@ -1944,6 +2046,8 @@ function setupOutline() {
     },
     onScheduleSave: () => scheduleSave(),
   });
+  const outBtn = $('btn-outline-toggle');
+  if (outBtn) outBtn.addEventListener('click', () => outlinePanel && outlinePanel.toggle());
 }
 
 function setupKeyboard() {
@@ -2152,11 +2256,37 @@ function applyTheme(choice) {
     minimap.refreshPalette();
   }
   if (leftRail) leftRail.setThemeChoice(choice);
+  syncThemeButtons(choice);
+}
+
+function syncThemeButtons(choice) {
+  const buttons = document.querySelectorAll('#theme-switch .theme-btn');
+  buttons.forEach((b) => {
+    b.classList.toggle('active', b.dataset.themeValue === choice);
+  });
 }
 
 function setupThemeSwitch() {
   const choice = readStoredThemeChoice();
   applyTheme(choice);
+  const buttons = document.querySelectorAll('#theme-switch .theme-btn');
+  buttons.forEach((b) => {
+    b.addEventListener('click', (e) => {
+      e.preventDefault();
+      const v = b.dataset.themeValue;
+      if (!THEME_CHOICES.includes(v)) return;
+      try { localStorage.setItem(THEME_KEY, v); } catch (er) { void er; }
+      applyTheme(v);
+    });
+  });
+  const langSel = $('lang-select');
+  if (langSel) {
+    langSel.value = getLang();
+    langSel.addEventListener('change', () => {
+      const v = langSel.value;
+      if (LANGS.includes(v)) setLang(v);
+    });
+  }
   try {
     const mq = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
     if (mq && typeof mq.addEventListener === 'function') {

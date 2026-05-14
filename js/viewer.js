@@ -235,9 +235,48 @@ export class Viewer {
     this.requestDraw();
   }
 
+  updateHotspot(view) {
+    if (!view || !view.id) return false;
+    const i = this.hotspots.findIndex((h) => h.id === view.id);
+    if (i < 0) { this.hotspots.push(view); this.requestDraw(); return true; }
+    this.hotspots[i] = view;
+    this.requestDraw();
+    return true;
+  }
+
+  removeHotspot(id) {
+    const i = this.hotspots.findIndex((h) => h.id === id);
+    if (i < 0) return false;
+    this.hotspots.splice(i, 1);
+    this.requestDraw();
+    return true;
+  }
+
   setGroups(groups) {
     this.groups = groups;
     this.requestDraw();
+  }
+
+  updateGroup(view) {
+    if (!view || !view.id) return false;
+    const i = this.groups.findIndex((g) => g.id === view.id);
+    if (i < 0) { this.groups.push(view); this.requestDraw(); return true; }
+    this.groups[i] = view;
+    this.requestDraw();
+    return true;
+  }
+
+  removeGroup(id) {
+    const i = this.groups.findIndex((g) => g.id === id);
+    if (i < 0) return false;
+    this.groups.splice(i, 1);
+    this.requestDraw();
+    return true;
+  }
+
+  invalidateNode(id) {
+    this.requestDraw();
+    void id;
   }
 
   setSelection(ids) {

@@ -4,7 +4,7 @@ import uuid
 from copy import deepcopy
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -66,18 +66,22 @@ async def _bump_and_broadcast(
     kind: str,
     item_id: str | None,
     item_data: dict | None,
+    client_id: str | None = None,
 ) -> int:
     canvas.revision = (canvas.revision or 0) + 1
     canvas.updated_by_user_id = user.id
     _mark_dirty(canvas)
     await db.commit()
     await db.refresh(canvas)
+    change: dict[str, object] = {"kind": kind, "id": item_id, "data": item_data}
+    if client_id:
+        change["clientId"] = client_id
     await manager.broadcast(
         canvas.id,
         {
             "type": "revision",
             "revision": canvas.revision,
-            "change": {"kind": kind, "id": item_id, "data": item_data},
+            "change": change,
             "by": user.username_display,
         },
     )
@@ -102,6 +106,7 @@ async def replace_canvas(
     payload: CanvasReplaceRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
+    x_client_id: Annotated[str | None, Header(alias="X-Client-Id")] = None,
 ) -> CanvasOut:
     canvas = await _load_canvas(db, canvas_id)
     if payload.expected_revision != canvas.revision:
@@ -112,7 +117,7 @@ async def replace_canvas(
     node_count = len(payload.data.get("nodes", [])) if isinstance(payload.data, dict) else 0
     canvas.data = _ensure_lists(deepcopy(payload.data))
     await log_action(db, user.id, "canvas_replaced", {"node_count": node_count, "revision": canvas.revision})
-    await _bump_and_broadcast(db, canvas, user, "canvas_replaced", None, None)
+    await _bump_and_broadcast(db, canvas, user, "canvas_replaced", None, None, x_client_id)
     return CanvasOut(revision=canvas.revision, data=_ensure_lists(deepcopy(canvas.data or {})))
 
 
@@ -122,6 +127,7 @@ async def create_node(
     payload: NodeCreateRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
+    x_client_id: Annotated[str | None, Header(alias="X-Client-Id")] = None,
 ) -> CanvasRevisionOut:
     canvas = await _load_canvas(db, canvas_id)
     data = _ensure_lists(canvas.data or {})
@@ -130,7 +136,7 @@ async def create_node(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Node id already exists")
     data["nodes"].append(node)
     canvas.data = data
-    rev = await _bump_and_broadcast(db, canvas, user, "node_created", node["id"], node)
+    rev = await _bump_and_broadcast(db, canvas, user, "node_created", node["id"], node, x_client_id)
     return CanvasRevisionOut(revision=rev)
 
 
@@ -141,6 +147,7 @@ async def patch_node(
     payload: NodePatchRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
+    x_client_id: Annotated[str | None, Header(alias="X-Client-Id")] = None,
 ) -> CanvasRevisionOut:
     canvas = await _load_canvas(db, canvas_id)
     data = _ensure_lists(canvas.data or {})
@@ -152,7 +159,7 @@ async def patch_node(
     merged = {**data["nodes"][idx], **patch}
     data["nodes"][idx] = merged
     canvas.data = data
-    rev = await _bump_and_broadcast(db, canvas, user, "node_updated", node_id, merged)
+    rev = await _bump_and_broadcast(db, canvas, user, "node_updated", node_id, merged, x_client_id)
     return CanvasRevisionOut(revision=rev)
 
 
@@ -162,6 +169,7 @@ async def delete_node(
     node_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
+    x_client_id: Annotated[str | None, Header(alias="X-Client-Id")] = None,
 ) -> CanvasRevisionOut:
     canvas = await _load_canvas(db, canvas_id)
     data = _ensure_lists(canvas.data or {})
@@ -171,7 +179,7 @@ async def delete_node(
     del data["nodes"][idx]
     data["edges"] = [e for e in data["edges"] if not (isinstance(e, dict) and (e.get("fromNode") == node_id or e.get("toNode") == node_id or e.get("source") == node_id or e.get("target") == node_id))]
     canvas.data = data
-    rev = await _bump_and_broadcast(db, canvas, user, "node_deleted", node_id, None)
+    rev = await _bump_and_broadcast(db, canvas, user, "node_deleted", node_id, None, x_client_id)
     return CanvasRevisionOut(revision=rev)
 
 
@@ -181,6 +189,7 @@ async def create_edge(
     payload: EdgeCreateRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
+    x_client_id: Annotated[str | None, Header(alias="X-Client-Id")] = None,
 ) -> CanvasRevisionOut:
     canvas = await _load_canvas(db, canvas_id)
     data = _ensure_lists(canvas.data or {})
@@ -189,7 +198,7 @@ async def create_edge(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Edge id already exists")
     data["edges"].append(edge)
     canvas.data = data
-    rev = await _bump_and_broadcast(db, canvas, user, "edge_created", edge["id"], edge)
+    rev = await _bump_and_broadcast(db, canvas, user, "edge_created", edge["id"], edge, x_client_id)
     return CanvasRevisionOut(revision=rev)
 
 
@@ -200,6 +209,7 @@ async def patch_edge(
     payload: EdgePatchRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
+    x_client_id: Annotated[str | None, Header(alias="X-Client-Id")] = None,
 ) -> CanvasRevisionOut:
     canvas = await _load_canvas(db, canvas_id)
     data = _ensure_lists(canvas.data or {})
@@ -211,7 +221,7 @@ async def patch_edge(
     merged = {**data["edges"][idx], **patch}
     data["edges"][idx] = merged
     canvas.data = data
-    rev = await _bump_and_broadcast(db, canvas, user, "edge_updated", edge_id, merged)
+    rev = await _bump_and_broadcast(db, canvas, user, "edge_updated", edge_id, merged, x_client_id)
     return CanvasRevisionOut(revision=rev)
 
 
@@ -221,6 +231,7 @@ async def delete_edge(
     edge_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
+    x_client_id: Annotated[str | None, Header(alias="X-Client-Id")] = None,
 ) -> CanvasRevisionOut:
     canvas = await _load_canvas(db, canvas_id)
     data = _ensure_lists(canvas.data or {})
@@ -229,7 +240,7 @@ async def delete_edge(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Edge not found")
     del data["edges"][idx]
     canvas.data = data
-    rev = await _bump_and_broadcast(db, canvas, user, "edge_deleted", edge_id, None)
+    rev = await _bump_and_broadcast(db, canvas, user, "edge_deleted", edge_id, None, x_client_id)
     return CanvasRevisionOut(revision=rev)
 
 
