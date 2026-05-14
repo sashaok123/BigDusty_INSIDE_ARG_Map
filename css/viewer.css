@@ -1,0 +1,62 @@
+#viewport {
+  position: fixed;
+  top: var(--toolbar-h);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  cursor: grab;
+  background: #050507;
+}
+#viewport.grabbing { cursor: grabbing; }
+#viewport.editor   { cursor: crosshair; }
+
+#map-canvas {
+  display: block;
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+#zoom-controls {
+  position: fixed;
+  bottom: 24px;
+  left: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 800;
+}
+.zoom-btn {
+  width: 36px;
+  height: 36px;
+  background: rgba(15, 15, 20, 0.94);
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color .15s, color .15s;
+  border-radius: var(--radius);
+}
+.zoom-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+#zoom-label {
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-dim);
+  padding: 3px 0;
+}
+
+#draw-preview {
+  position: fixed;
+  pointer-events: none;
+  border: 2px dashed var(--accent);
+  background: rgba(232, 107, 46, 0.12);
+  display: none;
+  z-index: 700;
+}

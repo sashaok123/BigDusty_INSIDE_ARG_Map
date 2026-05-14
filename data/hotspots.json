@@ -1,0 +1,61 @@
+{
+  "version": 2,
+  "image_w": 6008,
+  "image_h": 5384,
+  "hotspots": [
+    {
+      "id": "stickers",
+      "slug": "stickers",
+      "title": "108-cell sticker puzzle (iam8bit CE)",
+      "status": "partial",
+      "tags": ["stickers", "iam8bit", "collectors-edition", "108", "mod108"],
+      "rect": { "x": 30, "y": 4640, "w": 900, "h": 720 },
+      "block_id": "block_091"
+    },
+    {
+      "id": "printer",
+      "slug": "printer",
+      "title": "Printer Easter Egg (5 platforms)",
+      "status": "partial",
+      "tags": ["printer", "passcode", "iOS", "Switch", "macOS", "PS4", "PC"],
+      "rect": { "x": 1770, "y": 30, "w": 1100, "h": 820 },
+      "block_id": "block_003"
+    },
+    {
+      "id": "terminal41",
+      "slug": "terminal41",
+      "title": "terminal41.link (kill-switched 2020-04-21)",
+      "status": "unsolved",
+      "tags": ["terminal41", "wayback", "viewgate", "playdead"],
+      "rect": { "x": 1830, "y": 1830, "w": 1300, "h": 840 },
+      "block_id": "block_062"
+    },
+    {
+      "id": "transmission",
+      "slug": "transmission",
+      "title": "Transmission PNG / Chip JPEG",
+      "status": "unsolved",
+      "tags": ["transmission", "image", "chip", "mojibake"],
+      "rect": { "x": 4790, "y": 70, "w": 1140, "h": 760 },
+      "block_id": "block_025"
+    },
+    {
+      "id": "breach-hashes",
+      "slug": "breach-hashes",
+      "title": "Breach SHA-256 hashes (5 unsolved)",
+      "status": "unsolved",
+      "tags": ["sha256", "breach", "cipher", "terminal41"],
+      "rect": { "x": 4730, "y": 2270, "w": 1180, "h": 760 },
+      "block_id": "block_053"
+    },
+    {
+      "id": "viewgate-22char",
+      "slug": "viewgate-22char",
+      "title": "22-char token (saf_dat_col blob_1)",
+      "status": "unsolved",
+      "tags": ["viewgate", "saf_dat_col", "22char", "blob_1"],
+      "rect": { "x": 3360, "y": 4310, "w": 1280, "h": 800 },
+      "block_id": "block_071"
+    }
+  ]
+}

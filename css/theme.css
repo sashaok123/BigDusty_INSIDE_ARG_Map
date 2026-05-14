@@ -1,0 +1,78 @@
+:root {
+  --bg:           #0a0a0c;
+  --panel-bg:     #0f0f14;
+  --panel-2:      #14141e;
+  --panel-border: #1e2030;
+  --hover:        #1a1a28;
+  --accent:       #e86b2e;
+  --accent2:      #3de8c8;
+  --solved:       #3de88a;
+  --partial:      #e8c83d;
+  --unsolved:     #e83d3d;
+  --nodata:       #8888aa;
+  --text:         #d4d4e8;
+  --text-dim:     #8889a8;
+  --text-muted:   #6666aa;
+  --font-mono:    'Consolas', 'Courier New', monospace;
+  --font-ui:      'Segoe UI', 'Georgia', system-ui, sans-serif;
+  --toolbar-h:    52px;
+  --panel-w:      460px;
+  --radius:       4px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+  color: inherit;
+}
+
+::-webkit-scrollbar           { width: 6px; height: 6px; }
+::-webkit-scrollbar-track     { background: transparent; }
+::-webkit-scrollbar-thumb     { background: #2a2a40; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #3a3a55; }
+
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.dot-solved   { background: var(--solved); }
+.dot-partial  { background: var(--partial); }
+.dot-unsolved { background: var(--unsolved); }
+.dot-nodata   { background: var(--nodata); }
+
+.hidden { display: none !important; }
+
+#toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--panel-bg);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 10px 16px;
+  z-index: 9999;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity .22s, transform .22s;
+  pointer-events: none;
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+}
+#toast.show { opacity: 1; transform: translateY(0); }
+#toast.error { border-color: var(--unsolved); }

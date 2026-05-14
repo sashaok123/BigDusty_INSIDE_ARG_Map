@@ -1,0 +1,15 @@
+node_modules/
+.vscode/
+.idea/
+*.log
+.DS_Store
+Thumbs.db
+.env
+.env.local
+
+# Local working files, never published
+_legacy/
+_scratch/
+_local/
+*.bak
+*.tmp

@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "arrows": [
+    {
+      "id": "arr_001",
+      "from": { "block_id": "block_001", "side": "right" },
+      "to":   { "block_id": "block_003", "side": "left" },
+      "kind": "orthogonal",
+      "label": "feeds into",
+      "style": "solid",
+      "colour": "accent"
+    },
+    {
+      "id": "arr_002",
+      "from": { "block_id": "block_003", "side": "bottom" },
+      "to":   { "block_id": "block_071", "side": "top" },
+      "kind": "manhattan",
+      "label": "spans across",
+      "style": "dashed",
+      "colour": "muted"
+    },
+    {
+      "id": "arr_003",
+      "from": { "block_id": "block_053", "side": "left" },
+      "to":   { "block_id": "block_025", "side": "right" },
+      "kind": "bezier",
+      "label": "",
+      "style": "solid",
+      "colour": "unsolved"
+    }
+  ]
+}

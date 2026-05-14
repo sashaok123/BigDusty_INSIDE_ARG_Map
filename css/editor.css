@@ -1,0 +1,194 @@
+#editor-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  z-index: 2000;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+#editor-modal.open { display: flex; }
+
+#editor-modal-box {
+  background: #0f0f18;
+  border: 1px solid var(--panel-border);
+  width: 580px;
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+  border-radius: var(--radius);
+}
+
+#editor-modal-header {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--panel-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+#editor-modal-header h2 {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+#editor-modal-close {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 22px;
+  cursor: pointer;
+  padding: 0 4px;
+  border-radius: var(--radius);
+}
+#editor-modal-close:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+#editor-modal-body {
+  overflow-y: auto;
+  flex: 1;
+  padding: 18px 22px;
+}
+
+.field-group { margin-bottom: 14px; }
+.field-group label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 5px;
+}
+.field-group input,
+.field-group textarea,
+.field-group select {
+  width: 100%;
+  background: #07070d;
+  border: 1px solid #2a2a40;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 8px 10px;
+  outline: none;
+  resize: vertical;
+  transition: border-color .2s;
+  border-radius: var(--radius);
+}
+.field-group input:focus,
+.field-group textarea:focus,
+.field-group select:focus { border-color: var(--accent); }
+.field-group textarea { min-height: 90px; }
+.field-group .field-hint {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.field-row { display: flex; gap: 10px; }
+.field-row > .field-group { flex: 1; }
+
+#editor-modal-footer {
+  border-top: 1px solid var(--panel-border);
+  padding: 12px 20px;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+.modal-btn {
+  padding: 8px 16px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  border: 1px solid;
+  cursor: pointer;
+  background: transparent;
+  transition: all .2s;
+  border-radius: var(--radius);
+}
+.modal-btn.primary { border-color: var(--accent); color: var(--accent); }
+.modal-btn.primary:hover { background: rgba(232, 107, 46, 0.14); }
+.modal-btn.cancel { border-color: #2a2a40; color: var(--text-dim); }
+.modal-btn.cancel:hover { border-color: var(--text); color: var(--text); }
+.modal-btn.danger { border-color: var(--unsolved); color: var(--unsolved); }
+.modal-btn.danger:hover { background: rgba(232, 61, 61, 0.14); }
+
+#confirm-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.78);
+  z-index: 2100;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+#confirm-modal.open { display: flex; }
+#confirm-box {
+  background: #0f0f18;
+  border: 1px solid var(--panel-border);
+  width: 420px;
+  padding: 22px 24px;
+  border-radius: var(--radius);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+}
+#confirm-box h3 {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: var(--accent);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+#confirm-box p {
+  color: var(--text);
+  margin-bottom: 16px;
+  line-height: 1.55;
+  font-size: 13px;
+}
+#confirm-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.context-menu {
+  position: fixed;
+  background: #0f0f18;
+  border: 1px solid var(--panel-border);
+  min-width: 160px;
+  z-index: 1500;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  border-radius: var(--radius);
+  padding: 4px 0;
+}
+.context-menu button {
+  display: block;
+  width: 100%;
+  background: none;
+  border: none;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text);
+  padding: 8px 14px;
+  cursor: pointer;
+  letter-spacing: 1px;
+}
+.context-menu button:hover {
+  background: var(--hover);
+  color: var(--accent);
+}
+.context-menu button.danger { color: var(--unsolved); }
+.context-menu button.danger:hover { background: rgba(232, 61, 61, 0.12); }

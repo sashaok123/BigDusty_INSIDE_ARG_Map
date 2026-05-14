@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title data-i18n="app_title">INSIDE ARG // Investigation Map</title>
+  <link rel="stylesheet" href="css/theme.css">
+  <link rel="stylesheet" href="css/toolbar.css">
+  <link rel="stylesheet" href="css/viewer.css">
+  <link rel="stylesheet" href="css/arrows.css">
+  <link rel="stylesheet" href="css/side-panel.css">
+  <link rel="stylesheet" href="css/editor.css">
+  <link rel="stylesheet" href="css/markdown.css">
+</head>
+<body>
+
+<div id="toolbar">
+  <div class="logo" data-i18n="app_logo">ARG//MAP</div>
+
+  <div id="search-wrap">
+    <input type="text" id="search" data-i18n-placeholder="toolbar_search_placeholder" placeholder="search hotspots..." autocomplete="off" spellcheck="false">
+    <div id="search-results"></div>
+  </div>
+
+  <div class="sep"></div>
+
+  <button class="filter-btn active" data-filter="all"><span data-i18n="filter_all">All</span></button>
+  <button class="filter-btn" data-filter="solved"><span class="status-dot dot-solved"></span><span data-i18n="filter_solved">Solved</span></button>
+  <button class="filter-btn" data-filter="partial"><span class="status-dot dot-partial"></span><span data-i18n="filter_partial">Partial</span></button>
+  <button class="filter-btn" data-filter="unsolved"><span class="status-dot dot-unsolved"></span><span data-i18n="filter_unsolved">Unsolved</span></button>
+  <button class="filter-btn" data-filter="nodata"><span class="status-dot dot-nodata"></span><span data-i18n="filter_no_data">No Data</span></button>
+
+  <div class="sep"></div>
+
+  <div class="mode-switch">
+    <button data-mode="viewer" class="active" data-i18n="mode_viewer">Viewer</button>
+    <button data-mode="editor" data-i18n="mode_editor">Editor</button>
+  </div>
+
+  <div class="spacer"></div>
+
+  <label id="lang-select-wrap" title="Language">
+    <span class="lang-label" data-i18n="lang_label">Language</span>
+    <select id="lang-select">
+      <option value="en">EN</option>
+      <option value="ru">RU</option>
+      <option value="de">DE</option>
+      <option value="it">IT</option>
+      <option value="da">DA</option>
+    </select>
+  </label>
+
+  <button class="tb-btn" id="btn-export" data-i18n="export_button">Export</button>
+  <button class="tb-btn" id="btn-import" data-i18n="import_button">Import</button>
+  <input type="file" id="file-import" accept=".json" style="display:none">
+  <button class="tb-btn" id="btn-reset" data-i18n="reset_defaults_button">Reset</button>
+</div>
+
+<div id="viewport">
+  <canvas id="map-canvas"></canvas>
+  <svg id="arrow-layer" xmlns="http://www.w3.org/2000/svg"></svg>
+</div>
+
+<div id="hotspot-tooltip" style="position:fixed;background:rgba(10,10,14,0.94);color:var(--text);font-family:var(--font-mono);font-size:11px;padding:3px 8px;border:1px solid var(--panel-border);border-radius:3px;pointer-events:none;display:none;z-index:850;white-space:nowrap"></div>
+
+<div id="zoom-controls">
+  <button class="zoom-btn" id="btn-zoom-in" data-i18n-title="zoom_in" title="Zoom in">+</button>
+  <div id="zoom-label">100%</div>
+  <button class="zoom-btn" id="btn-zoom-out" data-i18n-title="zoom_out" title="Zoom out">&#8722;</button>
+  <button class="zoom-btn" id="btn-zoom-fit" data-i18n-title="zoom_fit" title="Fit to screen">&#8862;</button>
+</div>
+
+<div id="panel">
+  <button id="panel-close" type="button" data-i18n-aria="side_panel_close" aria-label="Close">&times;</button>
+  <div id="panel-header">
+    <div id="panel-status-row">
+      <span id="panel-status-dot" class="status-dot"></span>
+      <select id="panel-status-select"></select>
+    </div>
+    <div id="panel-title"></div>
+    <div id="panel-tags"></div>
+  </div>
+  <div id="panel-body"></div>
+  <div id="panel-footer">
+    <button id="btn-edit-md" class="primary" type="button" data-i18n="side_panel_edit_md">Edit raw MD</button>
+    <button id="btn-save-md" type="button" data-i18n="side_panel_save">Save</button>
+    <button id="btn-export-md" type="button" data-i18n="side_panel_export_md">Export MD</button>
+  </div>
+  <div id="md-edit-overlay">
+    <h3 data-i18n="editor_md_overlay_title">Edit Markdown</h3>
+    <textarea id="md-edit-textarea" spellcheck="false"></textarea>
+    <div id="md-edit-actions">
+      <button id="md-edit-cancel" type="button" data-i18n="editor_cancel_button">Cancel</button>
+      <button id="md-edit-save" class="primary" type="button" data-i18n="editor_md_apply">Apply</button>
+    </div>
+  </div>
+</div>
+
+<div id="editor-modal">
+  <div id="editor-modal-box">
+    <div id="editor-modal-header">
+      <h2 id="editor-modal-header-title" data-i18n="editor_new_hotspot">Add hotspot</h2>
+      <button id="editor-modal-close" type="button" data-i18n-aria="side_panel_close" aria-label="Close">&times;</button>
+    </div>
+    <div id="editor-modal-body">
+      <div class="field-row">
+        <div class="field-group">
+          <label data-i18n="editor_title_label">Title *</label>
+          <input type="text" id="field-title" data-i18n-placeholder="editor_title_placeholder" placeholder="e.g. Printer Easter Egg">
+        </div>
+        <div class="field-group">
+          <label data-i18n="editor_slug_label">Slug</label>
+          <input type="text" id="field-slug" data-i18n-placeholder="editor_slug_placeholder" placeholder="auto-from-title">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field-group">
+          <label data-i18n="editor_status_label">Status</label>
+          <select id="field-status"></select>
+        </div>
+        <div class="field-group">
+          <label data-i18n="editor_tags_label">Tags (comma-separated)</label>
+          <input type="text" id="field-tags" data-i18n-placeholder="editor_tags_placeholder" placeholder="e.g. stickers, iam8bit">
+        </div>
+      </div>
+      <div class="field-group">
+        <label data-i18n="editor_content_label">Initial markdown content</label>
+        <textarea id="field-md" placeholder="# Title&#10;&#10;## Status&#10;..." style="min-height:200px"></textarea>
+        <div class="field-hint" data-i18n="editor_content_hint">Will be cached under the slug. Use the side panel's "Edit raw MD" later to refine.</div>
+      </div>
+    </div>
+    <div id="editor-modal-footer">
+      <button class="modal-btn danger" id="editor-delete" data-i18n="editor_delete_button" style="display:none">Delete</button>
+      <div class="spacer" style="flex:1"></div>
+      <button class="modal-btn cancel" id="editor-cancel" data-i18n="editor_cancel_button">Cancel</button>
+      <button class="modal-btn primary" id="editor-save" data-i18n="editor_save_button">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="confirm-modal">
+  <div id="confirm-box">
+    <h3 id="confirm-title">Confirm</h3>
+    <p id="confirm-message"></p>
+    <div id="confirm-actions"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
