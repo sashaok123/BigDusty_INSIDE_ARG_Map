@@ -8,7 +8,7 @@
       "rect": {
         "x": 2188,
         "y": 0,
-        "w": 676,
+        "w": 440,
         "h": 308
       },
       "file": "data/blocks/block_001.webp"
@@ -66,10 +66,10 @@
     {
       "id": "block_007",
       "rect": {
-        "x": 4948,
+        "x": 4968,
         "y": 20,
-        "w": 172,
-        "h": 84
+        "w": 152,
+        "h": 80
       },
       "file": "data/blocks/block_007.webp"
     },
@@ -78,7 +78,7 @@
       "rect": {
         "x": 5116,
         "y": 4,
-        "w": 376,
+        "w": 372,
         "h": 116
       },
       "file": "data/blocks/block_008.webp"
@@ -88,8 +88,8 @@
       "rect": {
         "x": 4972,
         "y": 152,
-        "w": 128,
-        "h": 76
+        "w": 124,
+        "h": 68
       },
       "file": "data/blocks/block_009.webp"
     },
@@ -116,882 +116,1252 @@
     {
       "id": "block_012",
       "rect": {
-        "x": 3204,
-        "y": 280,
-        "w": 44,
-        "h": 172
+        "x": 2780,
+        "y": 332,
+        "w": 156,
+        "h": 56
       },
       "file": "data/blocks/block_012.webp"
     },
     {
       "id": "block_013",
       "rect": {
-        "x": 3236,
-        "y": 308,
-        "w": 316,
-        "h": 120
+        "x": 3204,
+        "y": 280,
+        "w": 44,
+        "h": 172
       },
       "file": "data/blocks/block_013.webp"
     },
     {
       "id": "block_014",
       "rect": {
-        "x": 3560,
-        "y": 280,
-        "w": 44,
-        "h": 172
+        "x": 3236,
+        "y": 308,
+        "w": 240,
+        "h": 112
       },
       "file": "data/blocks/block_014.webp"
     },
     {
       "id": "block_015",
       "rect": {
-        "x": 4944,
-        "y": 324,
-        "w": 344,
-        "h": 164
+        "x": 3560,
+        "y": 280,
+        "w": 44,
+        "h": 172
       },
       "file": "data/blocks/block_015.webp"
     },
     {
       "id": "block_016",
       "rect": {
-        "x": 2716,
-        "y": 468,
-        "w": 264,
-        "h": 52
+        "x": 5108,
+        "y": 324,
+        "w": 180,
+        "h": 164
       },
       "file": "data/blocks/block_016.webp"
     },
     {
       "id": "block_017",
       "rect": {
-        "x": 3160,
-        "y": 468,
-        "w": 260,
-        "h": 48
+        "x": 3648,
+        "y": 440,
+        "w": 1280,
+        "h": 172
       },
       "file": "data/blocks/block_017.webp"
     },
     {
       "id": "block_018",
       "rect": {
-        "x": 3648,
-        "y": 440,
-        "w": 1280,
-        "h": 172
+        "x": 4944,
+        "y": 348,
+        "w": 156,
+        "h": 76
       },
       "file": "data/blocks/block_018.webp"
     },
     {
       "id": "block_019",
       "rect": {
-        "x": 4976,
-        "y": 528,
-        "w": 128,
-        "h": 76
+        "x": 2716,
+        "y": 468,
+        "w": 216,
+        "h": 52
       },
       "file": "data/blocks/block_019.webp"
     },
     {
       "id": "block_020",
       "rect": {
-        "x": 5088,
-        "y": 484,
-        "w": 252,
-        "h": 208
+        "x": 4976,
+        "y": 528,
+        "w": 120,
+        "h": 68
       },
       "file": "data/blocks/block_020.webp"
     },
     {
       "id": "block_021",
       "rect": {
-        "x": 1628,
-        "y": 608,
-        "w": 200,
-        "h": 392
+        "x": 5088,
+        "y": 484,
+        "w": 252,
+        "h": 208
       },
       "file": "data/blocks/block_021.webp"
     },
     {
       "id": "block_022",
       "rect": {
-        "x": 1832,
-        "y": 660,
-        "w": 252,
-        "h": 108
+        "x": 1628,
+        "y": 608,
+        "w": 200,
+        "h": 392
       },
       "file": "data/blocks/block_022.webp"
     },
     {
       "id": "block_023",
       "rect": {
-        "x": 2080,
-        "y": 600,
+        "x": 1880,
+        "y": 660,
         "w": 200,
-        "h": 228
+        "h": 100
       },
       "file": "data/blocks/block_023.webp"
     },
     {
       "id": "block_024",
       "rect": {
-        "x": 2268,
-        "y": 660,
-        "w": 372,
-        "h": 292
+        "x": 2080,
+        "y": 600,
+        "w": 200,
+        "h": 228
       },
       "file": "data/blocks/block_024.webp"
     },
     {
       "id": "block_025",
       "rect": {
-        "x": 4392,
-        "y": 628,
-        "w": 1576,
-        "h": 956
+        "x": 2280,
+        "y": 660,
+        "w": 344,
+        "h": 72
       },
       "file": "data/blocks/block_025.webp"
     },
     {
       "id": "block_026",
       "rect": {
-        "x": 1824,
-        "y": 792,
-        "w": 212,
-        "h": 180
+        "x": 4496,
+        "y": 628,
+        "w": 688,
+        "h": 508
       },
       "file": "data/blocks/block_026.webp"
     },
     {
       "id": "block_027",
       "rect": {
-        "x": 2024,
-        "y": 836,
-        "w": 240,
-        "h": 264
+        "x": 1824,
+        "y": 792,
+        "w": 212,
+        "h": 180
       },
       "file": "data/blocks/block_027.webp"
     },
     {
       "id": "block_028",
       "rect": {
-        "x": 3308,
-        "y": 744,
-        "w": 196,
-        "h": 56
+        "x": 2024,
+        "y": 836,
+        "w": 240,
+        "h": 264
       },
       "file": "data/blocks/block_028.webp"
     },
     {
       "id": "block_029",
       "rect": {
-        "x": 3508,
-        "y": 760,
-        "w": 860,
-        "h": 176
+        "x": 2388,
+        "y": 780,
+        "w": 252,
+        "h": 172
       },
       "file": "data/blocks/block_029.webp"
     },
     {
       "id": "block_030",
       "rect": {
-        "x": 1128,
-        "y": 860,
-        "w": 496,
-        "h": 660
+        "x": 3308,
+        "y": 744,
+        "w": 196,
+        "h": 56
       },
       "file": "data/blocks/block_030.webp"
     },
     {
       "id": "block_031",
       "rect": {
-        "x": 3308,
-        "y": 948,
-        "w": 196,
-        "h": 60
+        "x": 3508,
+        "y": 760,
+        "w": 860,
+        "h": 176
       },
       "file": "data/blocks/block_031.webp"
     },
     {
       "id": "block_032",
       "rect": {
-        "x": 3644,
-        "y": 880,
-        "w": 608,
-        "h": 56
+        "x": 1128,
+        "y": 860,
+        "w": 496,
+        "h": 660
       },
       "file": "data/blocks/block_032.webp"
     },
     {
       "id": "block_033",
       "rect": {
-        "x": 440,
-        "y": 1048,
-        "w": 488,
-        "h": 424
+        "x": 3308,
+        "y": 948,
+        "w": 196,
+        "h": 56
       },
       "file": "data/blocks/block_033.webp"
     },
     {
       "id": "block_034",
       "rect": {
-        "x": 1816,
-        "y": 1092,
-        "w": 1176,
-        "h": 260
+        "x": 3644,
+        "y": 880,
+        "w": 268,
+        "h": 56
       },
       "file": "data/blocks/block_034.webp"
     },
     {
       "id": "block_035",
       "rect": {
-        "x": 3200,
-        "y": 1036,
-        "w": 332,
-        "h": 124
+        "x": 3916,
+        "y": 880,
+        "w": 336,
+        "h": 56
       },
       "file": "data/blocks/block_035.webp"
     },
     {
       "id": "block_036",
       "rect": {
-        "x": 3340,
-        "y": 1000,
+        "x": 5172,
+        "y": 868,
         "w": 128,
-        "h": 52
+        "h": 124
       },
       "file": "data/blocks/block_036.webp"
     },
     {
       "id": "block_037",
       "rect": {
-        "x": 3684,
-        "y": 996,
-        "w": 396,
-        "h": 136
+        "x": 440,
+        "y": 1048,
+        "w": 488,
+        "h": 424
       },
       "file": "data/blocks/block_037.webp"
     },
     {
       "id": "block_038",
       "rect": {
-        "x": 4052,
-        "y": 1020,
-        "w": 296,
-        "h": 64
+        "x": 3200,
+        "y": 1036,
+        "w": 332,
+        "h": 124
       },
       "file": "data/blocks/block_038.webp"
     },
     {
       "id": "block_039",
       "rect": {
-        "x": 1628,
-        "y": 1148,
-        "w": 404,
-        "h": 444
+        "x": 3340,
+        "y": 1000,
+        "w": 128,
+        "h": 52
       },
       "file": "data/blocks/block_039.webp"
     },
     {
       "id": "block_040",
       "rect": {
-        "x": 3308,
-        "y": 1116,
-        "w": 196,
-        "h": 64
+        "x": 3684,
+        "y": 996,
+        "w": 396,
+        "h": 136
       },
       "file": "data/blocks/block_040.webp"
     },
     {
       "id": "block_041",
       "rect": {
-        "x": 3496,
-        "y": 1144,
-        "w": 784,
-        "h": 192
+        "x": 4056,
+        "y": 1020,
+        "w": 292,
+        "h": 56
       },
       "file": "data/blocks/block_041.webp"
     },
     {
       "id": "block_042",
       "rect": {
-        "x": 1192,
-        "y": 1316,
-        "w": 424,
-        "h": 264
+        "x": 1628,
+        "y": 1148,
+        "w": 404,
+        "h": 444
       },
       "file": "data/blocks/block_042.webp"
     },
     {
       "id": "block_043",
       "rect": {
-        "x": 2748,
-        "y": 1224,
-        "w": 212,
-        "h": 204
+        "x": 1864,
+        "y": 1192,
+        "w": 136,
+        "h": 92
       },
       "file": "data/blocks/block_043.webp"
     },
     {
       "id": "block_044",
       "rect": {
-        "x": 3308,
-        "y": 1316,
-        "w": 196,
-        "h": 64
+        "x": 1992,
+        "y": 1112,
+        "w": 768,
+        "h": 240
       },
       "file": "data/blocks/block_044.webp"
     },
     {
       "id": "block_045",
       "rect": {
-        "x": 3772,
-        "y": 1224,
-        "w": 304,
-        "h": 56
+        "x": 2748,
+        "y": 1116,
+        "w": 228,
+        "h": 52
       },
       "file": "data/blocks/block_045.webp"
     },
     {
       "id": "block_046",
       "rect": {
-        "x": 484,
-        "y": 1440,
-        "w": 180,
-        "h": 292
+        "x": 3308,
+        "y": 1116,
+        "w": 196,
+        "h": 64
       },
       "file": "data/blocks/block_046.webp"
     },
     {
       "id": "block_047",
       "rect": {
-        "x": 2024,
-        "y": 1392,
-        "w": 368,
-        "h": 324
+        "x": 3528,
+        "y": 1156,
+        "w": 752,
+        "h": 180
       },
       "file": "data/blocks/block_047.webp"
     },
     {
       "id": "block_048",
       "rect": {
-        "x": 3340,
-        "y": 1372,
-        "w": 128,
-        "h": 52
+        "x": 4392,
+        "y": 1132,
+        "w": 1576,
+        "h": 424
       },
       "file": "data/blocks/block_048.webp"
     },
     {
       "id": "block_049",
       "rect": {
-        "x": 3348,
-        "y": 1364,
-        "w": 1032,
-        "h": 1284
+        "x": 5048,
+        "y": 1156,
+        "w": 528,
+        "h": 232
       },
       "file": "data/blocks/block_049.webp"
     },
     {
       "id": "block_050",
       "rect": {
-        "x": 3400,
-        "y": 1428,
-        "w": 128,
-        "h": 56
+        "x": 1192,
+        "y": 1316,
+        "w": 424,
+        "h": 264
       },
       "file": "data/blocks/block_050.webp"
     },
     {
       "id": "block_051",
       "rect": {
-        "x": 952,
-        "y": 1492,
-        "w": 984,
-        "h": 540
+        "x": 2748,
+        "y": 1224,
+        "w": 212,
+        "h": 204
       },
       "file": "data/blocks/block_051.webp"
     },
     {
       "id": "block_052",
       "rect": {
-        "x": 3284,
-        "y": 1476,
-        "w": 232,
-        "h": 460
+        "x": 3308,
+        "y": 1316,
+        "w": 196,
+        "h": 60
       },
       "file": "data/blocks/block_052.webp"
     },
     {
       "id": "block_053",
       "rect": {
-        "x": 4280,
-        "y": 1552,
-        "w": 1720,
-        "h": 1192
+        "x": 3772,
+        "y": 1224,
+        "w": 304,
+        "h": 56
       },
       "file": "data/blocks/block_053.webp"
     },
     {
       "id": "block_054",
       "rect": {
-        "x": 28,
-        "y": 1692,
-        "w": 488,
-        "h": 300
+        "x": 5600,
+        "y": 1288,
+        "w": 336,
+        "h": 92
       },
       "file": "data/blocks/block_054.webp"
     },
     {
       "id": "block_055",
       "rect": {
-        "x": 504,
-        "y": 1632,
-        "w": 452,
-        "h": 212
+        "x": 484,
+        "y": 1440,
+        "w": 180,
+        "h": 292
       },
       "file": "data/blocks/block_055.webp"
     },
     {
       "id": "block_056",
       "rect": {
-        "x": 1072,
-        "y": 1748,
-        "w": 804,
-        "h": 892
+        "x": 2024,
+        "y": 1392,
+        "w": 368,
+        "h": 324
       },
       "file": "data/blocks/block_056.webp"
     },
     {
       "id": "block_057",
       "rect": {
-        "x": 1140,
-        "y": 1740,
-        "w": 1252,
-        "h": 496
+        "x": 3340,
+        "y": 1372,
+        "w": 128,
+        "h": 52
       },
       "file": "data/blocks/block_057.webp"
     },
     {
       "id": "block_058",
       "rect": {
-        "x": 1936,
-        "y": 1832,
-        "w": 788,
-        "h": 136
+        "x": 3400,
+        "y": 1428,
+        "w": 128,
+        "h": 52
       },
       "file": "data/blocks/block_058.webp"
     },
     {
       "id": "block_059",
       "rect": {
-        "x": 156,
-        "y": 1996,
-        "w": 56,
-        "h": 452
+        "x": 3632,
+        "y": 1364,
+        "w": 104,
+        "h": 640
       },
       "file": "data/blocks/block_059.webp"
     },
     {
       "id": "block_060",
       "rect": {
-        "x": 276,
-        "y": 1988,
-        "w": 1452,
-        "h": 1168
+        "x": 3724,
+        "y": 1440,
+        "w": 632,
+        "h": 436
       },
       "file": "data/blocks/block_060.webp"
     },
     {
       "id": "block_061",
       "rect": {
-        "x": 496,
-        "y": 1988,
-        "w": 628,
-        "h": 440
+        "x": 952,
+        "y": 1492,
+        "w": 916,
+        "h": 540
       },
       "file": "data/blocks/block_061.webp"
     },
     {
       "id": "block_062",
       "rect": {
-        "x": 1580,
-        "y": 2172,
-        "w": 1640,
-        "h": 344
+        "x": 3284,
+        "y": 1476,
+        "w": 232,
+        "h": 460
       },
       "file": "data/blocks/block_062.webp"
     },
     {
       "id": "block_063",
       "rect": {
-        "x": 3392,
-        "y": 2228,
-        "w": 124,
-        "h": 180
+        "x": 4680,
+        "y": 1560,
+        "w": 116,
+        "h": 56
       },
       "file": "data/blocks/block_063.webp"
     },
     {
       "id": "block_064",
       "rect": {
-        "x": 132,
-        "y": 2484,
-        "w": 64,
-        "h": 452
+        "x": 5092,
+        "y": 1512,
+        "w": 308,
+        "h": 56
       },
       "file": "data/blocks/block_064.webp"
     },
     {
       "id": "block_065",
       "rect": {
-        "x": 2096,
-        "y": 2432,
-        "w": 376,
-        "h": 528
+        "x": 28,
+        "y": 1692,
+        "w": 488,
+        "h": 300
       },
       "file": "data/blocks/block_065.webp"
     },
     {
       "id": "block_066",
       "rect": {
-        "x": 3212,
-        "y": 2476,
-        "w": 272,
-        "h": 56
+        "x": 504,
+        "y": 1632,
+        "w": 452,
+        "h": 212
       },
       "file": "data/blocks/block_066.webp"
     },
     {
       "id": "block_067",
       "rect": {
-        "x": 420,
-        "y": 2632,
-        "w": 168,
-        "h": 52
+        "x": 3504,
+        "y": 1592,
+        "w": 140,
+        "h": 100
       },
       "file": "data/blocks/block_067.webp"
     },
     {
       "id": "block_068",
       "rect": {
-        "x": 1724,
-        "y": 2556,
-        "w": 380,
-        "h": 336
+        "x": 4280,
+        "y": 1600,
+        "w": 1720,
+        "h": 1144
       },
       "file": "data/blocks/block_068.webp"
     },
     {
       "id": "block_069",
       "rect": {
-        "x": 2460,
-        "y": 2624,
-        "w": 548,
-        "h": 140
+        "x": 1072,
+        "y": 1748,
+        "w": 544,
+        "h": 824
       },
       "file": "data/blocks/block_069.webp"
     },
     {
       "id": "block_070",
       "rect": {
-        "x": 3424,
-        "y": 2628,
-        "w": 1008,
-        "h": 784
+        "x": 1140,
+        "y": 1740,
+        "w": 1252,
+        "h": 420
       },
       "file": "data/blocks/block_070.webp"
     },
     {
       "id": "block_071",
       "rect": {
-        "x": 1076,
-        "y": 2752,
-        "w": 4928,
-        "h": 2340
+        "x": 1936,
+        "y": 1844,
+        "w": 268,
+        "h": 72
       },
       "file": "data/blocks/block_071.webp"
     },
     {
       "id": "block_072",
       "rect": {
-        "x": 5480,
-        "y": 2720,
-        "w": 212,
-        "h": 56
+        "x": 2276,
+        "y": 1852,
+        "w": 448,
+        "h": 96
       },
       "file": "data/blocks/block_072.webp"
     },
     {
       "id": "block_073",
       "rect": {
-        "x": 136,
-        "y": 2972,
-        "w": 44,
-        "h": 264
+        "x": 3656,
+        "y": 1876,
+        "w": 724,
+        "h": 592
       },
       "file": "data/blocks/block_073.webp"
     },
     {
       "id": "block_074",
       "rect": {
-        "x": 1364,
-        "y": 3016,
-        "w": 136,
-        "h": 52
+        "x": 276,
+        "y": 1988,
+        "w": 1452,
+        "h": 1168
       },
       "file": "data/blocks/block_074.webp"
     },
     {
       "id": "block_075",
       "rect": {
-        "x": 1984,
-        "y": 3008,
-        "w": 1564,
-        "h": 760
+        "x": 496,
+        "y": 1988,
+        "w": 628,
+        "h": 440
       },
       "file": "data/blocks/block_075.webp"
     },
     {
       "id": "block_076",
       "rect": {
-        "x": 128,
-        "y": 3228,
-        "w": 1256,
-        "h": 616
+        "x": 3348,
+        "y": 2012,
+        "w": 488,
+        "h": 140
       },
       "file": "data/blocks/block_076.webp"
     },
     {
       "id": "block_077",
       "rect": {
-        "x": 2012,
-        "y": 3400,
-        "w": 472,
-        "h": 160
+        "x": 3872,
+        "y": 2036,
+        "w": 132,
+        "h": 68
       },
       "file": "data/blocks/block_077.webp"
     },
     {
       "id": "block_078",
       "rect": {
-        "x": 5528,
-        "y": 3440,
-        "w": 476,
-        "h": 140
+        "x": 1792,
+        "y": 2212,
+        "w": 192,
+        "h": 84
       },
       "file": "data/blocks/block_078.webp"
     },
     {
       "id": "block_079",
       "rect": {
-        "x": 5568,
-        "y": 3396,
-        "w": 248,
-        "h": 52
+        "x": 1964,
+        "y": 2172,
+        "w": 1060,
+        "h": 316
       },
       "file": "data/blocks/block_079.webp"
     },
     {
       "id": "block_080",
       "rect": {
-        "x": 5716,
-        "y": 3440,
-        "w": 160,
-        "h": 52
+        "x": 1980,
+        "y": 2156,
+        "w": 108,
+        "h": 80
       },
       "file": "data/blocks/block_080.webp"
     },
     {
       "id": "block_081",
       "rect": {
-        "x": 2128,
-        "y": 3548,
-        "w": 400,
-        "h": 60
+        "x": 3180,
+        "y": 2228,
+        "w": 196,
+        "h": 180
       },
       "file": "data/blocks/block_081.webp"
     },
     {
       "id": "block_082",
       "rect": {
-        "x": 5592,
-        "y": 3568,
-        "w": 216,
-        "h": 52
+        "x": 3392,
+        "y": 2228,
+        "w": 124,
+        "h": 180
       },
       "file": "data/blocks/block_082.webp"
     },
     {
       "id": "block_083",
       "rect": {
-        "x": 1372,
-        "y": 3684,
-        "w": 580,
-        "h": 260
+        "x": 2096,
+        "y": 2432,
+        "w": 376,
+        "h": 528
       },
       "file": "data/blocks/block_083.webp"
     },
     {
       "id": "block_084",
       "rect": {
-        "x": 1940,
-        "y": 3668,
-        "w": 964,
-        "h": 508
+        "x": 420,
+        "y": 2632,
+        "w": 168,
+        "h": 52
       },
       "file": "data/blocks/block_084.webp"
     },
     {
       "id": "block_085",
       "rect": {
-        "x": 2900,
-        "y": 3864,
-        "w": 544,
-        "h": 284
+        "x": 1656,
+        "y": 2584,
+        "w": 140,
+        "h": 56
       },
       "file": "data/blocks/block_085.webp"
     },
     {
       "id": "block_086",
       "rect": {
-        "x": 2980,
-        "y": 3812,
-        "w": 268,
-        "h": 72
+        "x": 1724,
+        "y": 2556,
+        "w": 380,
+        "h": 336
       },
       "file": "data/blocks/block_086.webp"
     },
     {
       "id": "block_087",
       "rect": {
-        "x": 1080,
-        "y": 4020,
-        "w": 644,
-        "h": 280
+        "x": 2516,
+        "y": 2624,
+        "w": 492,
+        "h": 140
       },
       "file": "data/blocks/block_087.webp"
     },
     {
       "id": "block_088",
       "rect": {
-        "x": 1524,
-        "y": 4036,
-        "w": 308,
-        "h": 56
+        "x": 3424,
+        "y": 2628,
+        "w": 856,
+        "h": 784
       },
       "file": "data/blocks/block_088.webp"
     },
     {
       "id": "block_089",
       "rect": {
-        "x": 2900,
-        "y": 4136,
-        "w": 388,
-        "h": 72
+        "x": 4236,
+        "y": 2752,
+        "w": 1612,
+        "h": 568
       },
       "file": "data/blocks/block_089.webp"
     },
     {
       "id": "block_090",
       "rect": {
-        "x": 3056,
-        "y": 4204,
-        "w": 240,
-        "h": 52
+        "x": 5340,
+        "y": 2760,
+        "w": 456,
+        "h": 80
       },
       "file": "data/blocks/block_090.webp"
     },
     {
       "id": "block_091",
       "rect": {
-        "x": 28,
-        "y": 4304,
-        "w": 900,
-        "h": 796
+        "x": 5480,
+        "y": 2720,
+        "w": 212,
+        "h": 56
       },
       "file": "data/blocks/block_091.webp"
     },
     {
       "id": "block_092",
       "rect": {
-        "x": 928,
-        "y": 4424,
-        "w": 176,
-        "h": 64
+        "x": 5876,
+        "y": 2760,
+        "w": 128,
+        "h": 52
       },
       "file": "data/blocks/block_092.webp"
     },
     {
       "id": "block_093",
       "rect": {
-        "x": 4640,
-        "y": 4504,
-        "w": 196,
-        "h": 52
+        "x": 5624,
+        "y": 2840,
+        "w": 116,
+        "h": 136
       },
       "file": "data/blocks/block_093.webp"
     },
     {
       "id": "block_094",
       "rect": {
-        "x": 624,
-        "y": 4700,
-        "w": 268,
-        "h": 336
+        "x": 1364,
+        "y": 3016,
+        "w": 136,
+        "h": 52
       },
       "file": "data/blocks/block_094.webp"
     },
     {
       "id": "block_095",
       "rect": {
-        "x": 3580,
-        "y": 4608,
-        "w": 1156,
-        "h": 772
+        "x": 1984,
+        "y": 3028,
+        "w": 844,
+        "h": 552
       },
       "file": "data/blocks/block_095.webp"
     },
     {
       "id": "block_096",
       "rect": {
-        "x": 2000,
-        "y": 4760,
-        "w": 680,
-        "h": 608
+        "x": 2752,
+        "y": 3008,
+        "w": 796,
+        "h": 760
       },
       "file": "data/blocks/block_096.webp"
     },
     {
       "id": "block_097",
       "rect": {
-        "x": 3196,
-        "y": 4836,
-        "w": 384,
-        "h": 236
+        "x": 336,
+        "y": 3280,
+        "w": 1048,
+        "h": 564
       },
       "file": "data/blocks/block_097.webp"
     },
     {
       "id": "block_098",
       "rect": {
-        "x": 3240,
-        "y": 4788,
-        "w": 296,
-        "h": 68
+        "x": 2988,
+        "y": 3336,
+        "w": 2532,
+        "h": 1228
       },
       "file": "data/blocks/block_098.webp"
     },
     {
       "id": "block_099",
       "rect": {
+        "x": 4608,
+        "y": 3380,
+        "w": 1076,
+        "h": 504
+      },
+      "file": "data/blocks/block_099.webp"
+    },
+    {
+      "id": "block_100",
+      "rect": {
+        "x": 5104,
+        "y": 3316,
+        "w": 104,
+        "h": 76
+      },
+      "file": "data/blocks/block_100.webp"
+    },
+    {
+      "id": "block_101",
+      "rect": {
+        "x": 2012,
+        "y": 3400,
+        "w": 468,
+        "h": 160
+      },
+      "file": "data/blocks/block_101.webp"
+    },
+    {
+      "id": "block_102",
+      "rect": {
+        "x": 5528,
+        "y": 3440,
+        "w": 476,
+        "h": 136
+      },
+      "file": "data/blocks/block_102.webp"
+    },
+    {
+      "id": "block_103",
+      "rect": {
+        "x": 5568,
+        "y": 3396,
+        "w": 248,
+        "h": 52
+      },
+      "file": "data/blocks/block_103.webp"
+    },
+    {
+      "id": "block_104",
+      "rect": {
+        "x": 5716,
+        "y": 3440,
+        "w": 160,
+        "h": 52
+      },
+      "file": "data/blocks/block_104.webp"
+    },
+    {
+      "id": "block_105",
+      "rect": {
+        "x": 2128,
+        "y": 3548,
+        "w": 400,
+        "h": 60
+      },
+      "file": "data/blocks/block_105.webp"
+    },
+    {
+      "id": "block_106",
+      "rect": {
+        "x": 5592,
+        "y": 3568,
+        "w": 216,
+        "h": 52
+      },
+      "file": "data/blocks/block_106.webp"
+    },
+    {
+      "id": "block_107",
+      "rect": {
+        "x": 1372,
+        "y": 3684,
+        "w": 580,
+        "h": 260
+      },
+      "file": "data/blocks/block_107.webp"
+    },
+    {
+      "id": "block_108",
+      "rect": {
+        "x": 1940,
+        "y": 3668,
+        "w": 948,
+        "h": 508
+      },
+      "file": "data/blocks/block_108.webp"
+    },
+    {
+      "id": "block_109",
+      "rect": {
+        "x": 2900,
+        "y": 3864,
+        "w": 544,
+        "h": 284
+      },
+      "file": "data/blocks/block_109.webp"
+    },
+    {
+      "id": "block_110",
+      "rect": {
+        "x": 2980,
+        "y": 3812,
+        "w": 268,
+        "h": 72
+      },
+      "file": "data/blocks/block_110.webp"
+    },
+    {
+      "id": "block_111",
+      "rect": {
+        "x": 1080,
+        "y": 4020,
+        "w": 640,
+        "h": 280
+      },
+      "file": "data/blocks/block_111.webp"
+    },
+    {
+      "id": "block_112",
+      "rect": {
+        "x": 1564,
+        "y": 4036,
+        "w": 268,
+        "h": 56
+      },
+      "file": "data/blocks/block_112.webp"
+    },
+    {
+      "id": "block_113",
+      "rect": {
+        "x": 4460,
+        "y": 3972,
+        "w": 320,
+        "h": 44
+      },
+      "file": "data/blocks/block_113.webp"
+    },
+    {
+      "id": "block_114",
+      "rect": {
+        "x": 2900,
+        "y": 4136,
+        "w": 388,
+        "h": 72
+      },
+      "file": "data/blocks/block_114.webp"
+    },
+    {
+      "id": "block_115",
+      "rect": {
+        "x": 3056,
+        "y": 4204,
+        "w": 240,
+        "h": 52
+      },
+      "file": "data/blocks/block_115.webp"
+    },
+    {
+      "id": "block_116",
+      "rect": {
+        "x": 3700,
+        "y": 4236,
+        "w": 632,
+        "h": 188
+      },
+      "file": "data/blocks/block_116.webp"
+    },
+    {
+      "id": "block_117",
+      "rect": {
+        "x": 28,
+        "y": 4304,
+        "w": 900,
+        "h": 796
+      },
+      "file": "data/blocks/block_117.webp"
+    },
+    {
+      "id": "block_118",
+      "rect": {
+        "x": 1076,
+        "y": 4268,
+        "w": 1220,
+        "h": 596
+      },
+      "file": "data/blocks/block_118.webp"
+    },
+    {
+      "id": "block_119",
+      "rect": {
+        "x": 2232,
+        "y": 4256,
+        "w": 388,
+        "h": 264
+      },
+      "file": "data/blocks/block_119.webp"
+    },
+    {
+      "id": "block_120",
+      "rect": {
+        "x": 3412,
+        "y": 4464,
+        "w": 460,
+        "h": 144
+      },
+      "file": "data/blocks/block_120.webp"
+    },
+    {
+      "id": "block_121",
+      "rect": {
+        "x": 3924,
+        "y": 4384,
+        "w": 172,
+        "h": 72
+      },
+      "file": "data/blocks/block_121.webp"
+    },
+    {
+      "id": "block_122",
+      "rect": {
+        "x": 4308,
+        "y": 4368,
+        "w": 60,
+        "h": 124
+      },
+      "file": "data/blocks/block_122.webp"
+    },
+    {
+      "id": "block_123",
+      "rect": {
+        "x": 3888,
+        "y": 4488,
+        "w": 352,
+        "h": 76
+      },
+      "file": "data/blocks/block_123.webp"
+    },
+    {
+      "id": "block_124",
+      "rect": {
+        "x": 4640,
+        "y": 4504,
+        "w": 172,
+        "h": 48
+      },
+      "file": "data/blocks/block_124.webp"
+    },
+    {
+      "id": "block_125",
+      "rect": {
+        "x": 624,
+        "y": 4700,
+        "w": 268,
+        "h": 336
+      },
+      "file": "data/blocks/block_125.webp"
+    },
+    {
+      "id": "block_126",
+      "rect": {
+        "x": 3580,
+        "y": 4676,
+        "w": 596,
+        "h": 584
+      },
+      "file": "data/blocks/block_126.webp"
+    },
+    {
+      "id": "block_127",
+      "rect": {
+        "x": 4192,
+        "y": 4608,
+        "w": 544,
+        "h": 772
+      },
+      "file": "data/blocks/block_127.webp"
+    },
+    {
+      "id": "block_128",
+      "rect": {
+        "x": 1168,
+        "y": 4764,
+        "w": 352,
+        "h": 328
+      },
+      "file": "data/blocks/block_128.webp"
+    },
+    {
+      "id": "block_129",
+      "rect": {
+        "x": 2284,
+        "y": 4760,
+        "w": 204,
+        "h": 120
+      },
+      "file": "data/blocks/block_129.webp"
+    },
+    {
+      "id": "block_130",
+      "rect": {
+        "x": 2476,
+        "y": 4760,
+        "w": 144,
+        "h": 56
+      },
+      "file": "data/blocks/block_130.webp"
+    },
+    {
+      "id": "block_131",
+      "rect": {
+        "x": 3196,
+        "y": 4836,
+        "w": 384,
+        "h": 236
+      },
+      "file": "data/blocks/block_131.webp"
+    },
+    {
+      "id": "block_132",
+      "rect": {
+        "x": 3240,
+        "y": 4788,
+        "w": 296,
+        "h": 60
+      },
+      "file": "data/blocks/block_132.webp"
+    },
+    {
+      "id": "block_133",
+      "rect": {
+        "x": 2000,
+        "y": 4940,
+        "w": 680,
+        "h": 428
+      },
+      "file": "data/blocks/block_133.webp"
+    },
+    {
+      "id": "block_134",
+      "rect": {
         "x": 2032,
         "y": 4940,
         "w": 200,
         "h": 56
       },
-      "file": "data/blocks/block_099.webp"
+      "file": "data/blocks/block_134.webp"
+    },
+    {
+      "id": "block_135",
+      "rect": {
+        "x": 2108,
+        "y": 4876,
+        "w": 224,
+        "h": 72
+      },
+      "file": "data/blocks/block_135.webp"
+    },
+    {
+      "id": "block_136",
+      "rect": {
+        "x": 2332,
+        "y": 4872,
+        "w": 240,
+        "h": 56
+      },
+      "file": "data/blocks/block_136.webp"
     }
   ]
 }

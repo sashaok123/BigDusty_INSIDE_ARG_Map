@@ -6,6 +6,7 @@ flood-fill -> filter -> pad -> reading-order sort."""
 
 from __future__ import annotations
 
+import argparse
 import json
 import time
 from collections import deque
@@ -14,7 +15,7 @@ from pathlib import Path
 from PIL import Image, ImageFilter
 
 ROOT = Path(__file__).resolve().parent.parent
-SRC_IMAGE = ROOT / "arg_graph.png"
+DEFAULT_SRC_IMAGE = ROOT / "arg_graph.png"
 BLOCKS_DIR = ROOT / "data" / "blocks"
 MANIFEST_PATH = ROOT / "data" / "blocks_raw.json"
 
@@ -167,14 +168,24 @@ def reading_order_sort(
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--input",
+        type=Path,
+        default=DEFAULT_SRC_IMAGE,
+        help="path to source poster (default: arg_graph.png)",
+    )
+    args = parser.parse_args()
+    src_image: Path = args.input
+
     t0 = time.perf_counter()
-    if not SRC_IMAGE.exists():
-        raise SystemExit(f"missing source: {SRC_IMAGE}")
+    if not src_image.exists():
+        raise SystemExit(f"missing source: {src_image}")
     BLOCKS_DIR.mkdir(parents=True, exist_ok=True)
     for existing in BLOCKS_DIR.glob("block_*.webp"):
         existing.unlink()
 
-    gray = load_grayscale(SRC_IMAGE)
+    gray = load_grayscale(src_image)
     width, height = gray.size
     mask = build_mask(gray, BG_THRESHOLD)
     dilated = dilate_via_downsample(mask, DILATE_RADIUS, DOWNSAMPLE)
@@ -198,7 +209,7 @@ def main() -> None:
     padded = [pad_box(b, width, height, PAD) for b in filtered]
     ordered = reading_order_sort(padded, ROW_TOLERANCE)
 
-    source = Image.open(SRC_IMAGE)
+    source = Image.open(src_image)
     blocks_records: list[dict[str, object]] = []
     smallest = None
     largest = None
