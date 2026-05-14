@@ -13,13 +13,26 @@
   flex-direction: column;
   align-items: stretch;
   padding: 8px 0;
-  gap: 4px;
+  gap: 0;
   z-index: 1100;
   font-family: var(--font-mono);
   transition: width .15s ease-out;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 #left-rail.collapsed { width: 60px; }
+
+#left-rail .rail-section-head {
+  font-size: 9px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 10px 14px 4px;
+  user-select: none;
+}
+
+#left-rail.collapsed .rail-section-head { display: none; }
 
 #left-rail .rail-section {
   display: flex;
@@ -27,18 +40,12 @@
   align-items: stretch;
   gap: 2px;
   width: 100%;
-  padding: 4px 8px;
+  padding: 2px 8px 4px;
 }
 
 #left-rail.collapsed .rail-section {
-  padding: 4px 6px;
+  padding: 2px 6px 4px;
   align-items: center;
-}
-
-#left-rail .rail-section + .rail-section {
-  border-top: 1px solid var(--rail-border);
-  padding-top: 8px;
-  margin-top: 4px;
 }
 
 #left-rail .rail-footer {
@@ -174,10 +181,30 @@
   flex-shrink: 0;
 }
 
-/* Tools visibility: only shown in editor mode. Modes section is always
-   visible when authed. */
-#left-rail .rail-tools { display: none; }
-body.authed.editor-mode #left-rail .rail-tools { display: flex; }
+/* Tools / Selection / History visibility: only shown in editor mode.
+   Modes section is always visible to authed users. */
+#left-rail .rail-tools,
+#left-rail .rail-selection,
+#left-rail .rail-history,
+#left-rail .rail-section-tools-head,
+#left-rail .rail-section-selection-head,
+#left-rail .rail-section-history-head {
+  display: none;
+}
+body.authed.editor-mode #left-rail .rail-tools,
+body.authed.editor-mode #left-rail .rail-selection,
+body.authed.editor-mode #left-rail .rail-history {
+  display: flex;
+  flex-direction: column;
+}
+body.authed.editor-mode #left-rail .rail-section-tools-head,
+body.authed.editor-mode #left-rail .rail-section-selection-head,
+body.authed.editor-mode #left-rail .rail-section-history-head {
+  display: block;
+}
+
+/* Selection section hides when no selection in editor mode. */
+#left-rail .rail-section-hidden { display: none !important; }
 
 /* Rail itself: hidden when anonymous. */
 #left-rail { display: none; }
@@ -213,19 +240,18 @@ body.authed.rail-collapsed #selection-status { left: calc(60px + 14px); }
     border-right: none;
     border-top: 1px solid var(--rail-border);
     overflow-x: auto;
+    overflow-y: hidden;
     padding: 4px 8px;
     z-index: 1200;
   }
   #left-rail .rail-section {
     flex-direction: row;
-    border-top: none !important;
-    border-left: 1px solid var(--rail-border);
     padding: 0 8px !important;
     margin: 0 !important;
     height: 100%;
     align-items: center;
   }
-  #left-rail .rail-section:first-child { border-left: none; }
+  #left-rail .rail-section-head { display: none; }
   #left-rail .rail-btn { width: auto; }
   #left-rail .rail-btn-label { display: none; }
   #left-rail .rail-btn-shortcut { display: none; }

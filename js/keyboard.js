@@ -148,6 +148,11 @@ export class KeyboardShortcuts {
         setActiveTool('group');
         return;
       }
+      if (k === 'l' || k === 'L') {
+        ev.preventDefault();
+        this._call('onToggleLock', ev);
+        return;
+      }
     }
     if (k === 'm' || k === 'M') {
       if (meta) return;

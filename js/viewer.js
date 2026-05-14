@@ -390,7 +390,11 @@ export class Viewer {
       this.canvas.style.cursor = 'crosshair';
       return;
     }
-    if (this.hoverId) { this.canvas.style.cursor = 'move'; return; }
+    if (this.hoverId) {
+      const locked = this._isLocked(this.hoverId);
+      this.canvas.style.cursor = locked ? 'pointer' : 'move';
+      return;
+    }
     this.canvas.style.cursor = 'default';
   }
 
@@ -703,6 +707,9 @@ export class Viewer {
       const shown = text.length > maxChars ? text.slice(0, maxChars - 1) + '…' : text;
       ctx.fillText(shown, x + padding, y + padding);
     }
+    if (h.locked && this.scale > 0.2) {
+      this._drawLockBadge(ctx, x + w, y);
+    }
     ctx.restore();
   }
 
@@ -770,7 +777,7 @@ export class Viewer {
       ctx.setLineDash([6 / this.scale, 4 / this.scale]);
       ctx.strokeRect(x, y, w, hh);
       ctx.setLineDash([]);
-      if (lod && lod.handlesVisible) {
+      if (lod && lod.handlesVisible && !h.locked) {
         ctx.fillStyle = this.accentColour;
         ctx.strokeStyle = this.handleStrokeColour;
         ctx.lineWidth = 1.4 / this.scale;
@@ -781,6 +788,9 @@ export class Viewer {
           ctx.strokeRect(hx - hs / 2, hy - hs / 2, hs, hs);
         }
       }
+    }
+    if (h.locked && this.scale > 0.2) {
+      this._drawLockBadge(ctx, x + w, y);
     }
     ctx.restore();
   }
@@ -844,7 +854,7 @@ export class Viewer {
       ctx.restore();
     }
 
-    if (this.mode === 'editor' && lod && lod.handlesVisible && (isHover || this.activeId === h.id)) {
+    if (this.mode === 'editor' && lod && lod.handlesVisible && (isHover || this.activeId === h.id) && !h.locked) {
       ctx.fillStyle = this.accentColour;
       ctx.strokeStyle = this.handleStrokeColour;
       ctx.lineWidth = 1.5 / this.scale;
@@ -855,7 +865,43 @@ export class Viewer {
         ctx.strokeRect(hx - hs / 2, hy - hs / 2, hs, hs);
       }
     }
+    if (h.locked && this.scale > 0.2) {
+      this._drawLockBadge(ctx, x + w, y);
+    }
     ctx.globalAlpha = 1;
+  }
+
+  _drawLockBadge(ctx, cx, cy) {
+    ctx.save();
+    const s = 1 / this.scale;
+    const size = 14 * s;
+    const padX = 4 * s;
+    const x = cx - size - padX;
+    const y = cy + padX;
+    ctx.fillStyle = 'rgba(20,20,28,0.85)';
+    ctx.beginPath();
+    if (typeof ctx.roundRect === 'function') {
+      ctx.roundRect(x, y, size, size, 3 * s);
+    } else {
+      ctx.rect(x, y, size, size);
+    }
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.3 * s;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    const bodyW = 7 * s;
+    const bodyH = 6 * s;
+    const bx = x + (size - bodyW) / 2;
+    const by = y + size - bodyH - 2 * s;
+    ctx.strokeRect(bx, by, bodyW, bodyH);
+    ctx.beginPath();
+    const arcR = 2.2 * s;
+    const arcCx = bx + bodyW / 2;
+    const arcCy = by;
+    ctx.arc(arcCx, arcCy, arcR, Math.PI, 0, false);
+    ctx.stroke();
+    ctx.restore();
   }
 
   _updateTooltip() {
@@ -879,7 +925,15 @@ export class Viewer {
 
   _installEvents() {
     const c = this.canvas;
-    c.addEventListener('wheel', this._onWheel.bind(this), { passive: false });
+    const viewport = c.parentElement;
+    if (viewport) {
+      viewport.addEventListener('wheel', this._onWheel.bind(this), { passive: false });
+      viewport.addEventListener('contextmenu', this._onContextMenu.bind(this));
+      viewport.addEventListener('mousedown', this._onViewportMouseDown.bind(this));
+    } else {
+      c.addEventListener('wheel', this._onWheel.bind(this), { passive: false });
+      c.addEventListener('contextmenu', this._onContextMenu.bind(this));
+    }
     c.addEventListener('mousedown', this._onMouseDown.bind(this));
     window.addEventListener('mousemove', this._onMouseMove.bind(this));
     window.addEventListener('mouseup', this._onMouseUp.bind(this));
@@ -889,8 +943,16 @@ export class Viewer {
       this._updateTooltip();
       this.requestDraw();
     });
-    c.addEventListener('contextmenu', this._onContextMenu.bind(this));
     c.addEventListener('dblclick', this._onDoubleClick.bind(this));
+    this._suppressNextContextMenu = false;
+  }
+
+  _onViewportMouseDown(ev) {
+    if (this.dragState) return;
+    if (ev.target === this.canvas) return;
+    if (ev.button === 1 || ev.button === 2) {
+      this._onMouseDown(ev);
+    }
   }
 
   _onDoubleClick(ev) {
@@ -930,6 +992,21 @@ export class Viewer {
       this.canvas.parentElement.classList.add('grabbing');
       return;
     }
+
+    if (ev.button === 2) {
+      ev.preventDefault();
+      this.dragState = {
+        kind: 'pan',
+        startScreen: screen,
+        startPan: { x: this.panX, y: this.panY },
+        candidateHotspot: null,
+        rightButton: true,
+        moved: false,
+      };
+      this.canvas.parentElement.classList.add('grabbing');
+      return;
+    }
+
     if (ev.button !== 0) return;
 
     if (this.mode === 'editor') {
@@ -952,7 +1029,8 @@ export class Viewer {
 
       if (tool === 'select') {
         if (hover) {
-          const handle = this.handleAtImagePoint(hover, img);
+          const locked = this._isLocked(hover.id);
+          const handle = !locked ? this.handleAtImagePoint(hover, img) : null;
           if (handle && !ev.shiftKey) {
             this.dragState = {
               kind: 'resize',
@@ -970,6 +1048,7 @@ export class Viewer {
             kind: 'edit-click',
             id: hover.id,
             kindOfTarget: 'hotspot',
+            locked,
             shiftKey: !!ev.shiftKey,
             startScreen: screen,
             startImg: img,
@@ -978,10 +1057,12 @@ export class Viewer {
           return;
         }
         if (grp) {
+          const locked = this._isLocked(grp.id);
           this.dragState = {
             kind: 'edit-click',
             id: grp.id,
             kindOfTarget: 'group',
+            locked,
             shiftKey: !!ev.shiftKey,
             startScreen: screen,
             startImg: img,
@@ -989,14 +1070,25 @@ export class Viewer {
           };
           return;
         }
+        if (ev.shiftKey) {
+          this.dragState = {
+            kind: 'marquee',
+            start: img,
+            current: img,
+            startScreen: screen,
+            shiftKey: true,
+            moved: false,
+          };
+          return;
+        }
         this.dragState = {
-          kind: 'marquee',
-          start: img,
-          current: img,
+          kind: 'pan',
           startScreen: screen,
-          shiftKey: !!ev.shiftKey,
+          startPan: { x: this.panX, y: this.panY },
+          candidateHotspot: null,
           moved: false,
         };
+        this.canvas.parentElement.classList.add('grabbing');
         return;
       }
 
@@ -1042,17 +1134,6 @@ export class Viewer {
       return;
     }
 
-    if (isSpaceHeld()) {
-      this.dragState = {
-        kind: 'pan',
-        startScreen: screen,
-        startPan: { x: this.panX, y: this.panY },
-        candidateHotspot: null,
-        moved: false,
-      };
-      this.canvas.parentElement.classList.add('grabbing');
-      return;
-    }
     const hover = this.hotspotAtImagePoint(img);
     this.dragState = {
       kind: 'pan',
@@ -1062,6 +1143,13 @@ export class Viewer {
       moved: false,
     };
     this.canvas.parentElement.classList.add('grabbing');
+  }
+
+  _isLocked(id) {
+    if (typeof this.editorOptions.isNodeLocked === 'function') {
+      try { return !!this.editorOptions.isNodeLocked(id); } catch (e) { void e; }
+    }
+    return false;
   }
 
   _onMouseMove(ev) {
@@ -1161,6 +1249,7 @@ export class Viewer {
       return;
     }
     if (d.kind === 'edit-click') {
+      if (d.locked) return;
       if (d.moved && !d.shiftKey) {
         const ids = this.selection.has(d.id)
           ? Array.from(this.selection)
@@ -1169,8 +1258,10 @@ export class Viewer {
           this.setSelection(new Set([d.id]));
           this.onSelectionChange({ ids });
         }
+        const filtered = ids.filter((id) => !this._isLocked(id));
+        if (!filtered.length) return;
         d.kind = 'drag-selection';
-        d.ids = ids;
+        d.ids = filtered;
         d.startImg = this.imagePointFromClient(d.startScreen.x, d.startScreen.y);
         d.lastImg = this.imagePointFromClient(ev.clientX, ev.clientY);
       }
@@ -1185,6 +1276,14 @@ export class Viewer {
     this.canvas.parentElement.classList.remove('grabbing');
 
     if (d.kind === 'pan') {
+      if (d.rightButton) {
+        this._suppressNextContextMenu = !!d.moved;
+        if (d.moved) {
+          try { document.body.dataset.suppressContextMenu = '1'; } catch (e) { void e; }
+          setTimeout(() => { try { delete document.body.dataset.suppressContextMenu; } catch (e) { void e; } }, 100);
+        }
+        return;
+      }
       if (!d.moved && d.candidateHotspot) {
         this.onHotspotClick(d.candidateHotspot, ev);
       }
@@ -1295,7 +1394,17 @@ export class Viewer {
 
   _onContextMenu(ev) {
     ev.preventDefault();
-    if (this.mode !== 'editor') return;
+    if (this._suppressNextContextMenu) {
+      this._suppressNextContextMenu = false;
+      return;
+    }
+    if (this.dragState && this.dragState.kind === 'pan' && this.dragState.rightButton && this.dragState.moved) {
+      return;
+    }
+    this._fireContextMenuAt(ev);
+  }
+
+  _fireContextMenuAt(ev) {
     const img = this.imagePointFromClient(ev.clientX, ev.clientY);
     const hover = this.hotspotAtImagePoint(img);
     if (hover) {

@@ -220,6 +220,70 @@ const LABEL_POSITION_PRESETS = [
   { value: 'near_target', labelKey: 'arrow_label_pos_near_target' },
 ];
 
+const STROKE_WIDTH_PRESETS = [1, 2, 3, 4, 6, 8];
+const STROKE_COLOR_SWATCHES_EDIT = ['#ffffff', '#000000', '#e83d3d', '#e88a3d', '#e8c83d', '#5fa854', '#2e6fe8', '#9a6ce8'];
+
+function popoverStrokeWidth(edge) {
+  if (edge && edge.stroke && Number.isFinite(edge.stroke.width)) return edge.stroke.width;
+  return 2;
+}
+
+function popoverStrokeColor(edge) {
+  if (edge && edge.stroke && typeof edge.stroke.color === 'string' && edge.stroke.color) return edge.stroke.color;
+  return 'auto';
+}
+
+function buildStrokeRow(edge, onPatch) {
+  const wrap = document.createElement('div');
+  wrap.className = 'arrow-props-row arrow-props-row-block arrow-props-stroke';
+
+  const widthRow = document.createElement('div');
+  widthRow.className = 'arrow-props-label-style-row';
+  const widthLab = document.createElement('span');
+  widthLab.className = 'arrow-props-mini-label';
+  widthLab.textContent = tr('edge_stroke_width');
+  widthRow.appendChild(widthLab);
+  const cur = popoverStrokeWidth(edge);
+  for (const w of STROKE_WIDTH_PRESETS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'arrow-props-mini-btn arrow-props-stroke-width-btn';
+    b.textContent = String(w);
+    if (w === cur) b.classList.add('active');
+    b.addEventListener('click', () => onPatch({ strokeWidth: w }));
+    widthRow.appendChild(b);
+  }
+  wrap.appendChild(widthRow);
+
+  const colorRow = document.createElement('div');
+  colorRow.className = 'arrow-props-label-style-row';
+  const colorLab = document.createElement('span');
+  colorLab.className = 'arrow-props-mini-label';
+  colorLab.textContent = tr('edge_stroke_color');
+  colorRow.appendChild(colorLab);
+  const currentColor = popoverStrokeColor(edge);
+  const autoBtn = document.createElement('button');
+  autoBtn.type = 'button';
+  autoBtn.className = 'arrow-props-mini-btn';
+  autoBtn.textContent = 'A';
+  autoBtn.title = tr('arrow_label_color_auto');
+  if (currentColor === 'auto') autoBtn.classList.add('active');
+  autoBtn.addEventListener('click', () => onPatch({ strokeColor: 'auto' }));
+  colorRow.appendChild(autoBtn);
+  for (const c of STROKE_COLOR_SWATCHES_EDIT) {
+    const sw = document.createElement('button');
+    sw.type = 'button';
+    sw.className = 'arrow-props-color-swatch';
+    sw.style.background = c;
+    if (currentColor === c) sw.classList.add('active');
+    sw.addEventListener('click', () => onPatch({ strokeColor: c }));
+    colorRow.appendChild(sw);
+  }
+  wrap.appendChild(colorRow);
+
+  return wrap;
+}
+
 function buildLabelStyleRow(currentLabel, onPatch) {
   const wrap = document.createElement('div');
   wrap.className = 'arrow-props-row arrow-props-row-block arrow-props-label-style';
@@ -332,6 +396,9 @@ export class EdgePropsPopover {
     }));
     popover.appendChild(this._buildSelectRow('edge_color', COLOURS, edge.color || 'accent', (v) => {
       this.layer.applyEdgePatch(edge.id, { color: v });
+    }));
+    popover.appendChild(buildStrokeRow(edge, (p) => {
+      this.layer.applyEdgePatch(edge.id, p);
     }));
 
     const labelRow = document.createElement('div');

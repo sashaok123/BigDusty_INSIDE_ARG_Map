@@ -26,6 +26,25 @@ export { isValidRouting, isValidStyle, ROUTINGS, STYLES };
 
 export function isValidColour(c) { return COLOURS.includes(c); }
 
+const STROKE_COLOR_SWATCHES = ['#ffffff', '#000000', '#e83d3d', '#e88a3d', '#e8c83d', '#5fa854', '#2e6fe8', '#9a6ce8'];
+
+function ensureStrokeShape(stroke) {
+  const def = { width: 2, color: 'auto' };
+  if (!stroke || typeof stroke !== 'object') return { ...def };
+  const w = Number(stroke.width);
+  const width = Number.isFinite(w) ? Math.max(1, Math.min(12, w)) : def.width;
+  const color = typeof stroke.color === 'string' && stroke.color ? stroke.color : def.color;
+  return { width, color };
+}
+
+function strokeFor(edge, fallbackColour) {
+  const s = ensureStrokeShape(edge.stroke);
+  const colour = s.color === 'auto' ? COLOUR_VAR[fallbackColour] || COLOUR_VAR.accent : s.color;
+  return { width: s.width, colour };
+}
+
+export { STROKE_COLOR_SWATCHES, ensureStrokeShape };
+
 function ensureLabelShape(label) {
   if (label && typeof label === 'object' && typeof label.text === 'string') {
     const pos = label.position;
@@ -262,6 +281,16 @@ export class ArrowLayer {
     if (patch.routing !== undefined) e.routing = isValidRouting(patch.routing) ? patch.routing : e.routing;
     if (patch.style   !== undefined) e.style   = isValidStyle(patch.style)   ? patch.style   : e.style;
     if (patch.color   !== undefined) e.color   = isValidColour(patch.color)  ? patch.color   : 'accent';
+    if (patch.strokeWidth !== undefined) {
+      const cur = ensureStrokeShape(e.stroke);
+      const w = Number(patch.strokeWidth);
+      e.stroke = { ...cur, width: Number.isFinite(w) ? Math.max(1, Math.min(12, w)) : cur.width };
+    }
+    if (patch.strokeColor !== undefined) {
+      const cur = ensureStrokeShape(e.stroke);
+      const c = typeof patch.strokeColor === 'string' && patch.strokeColor ? patch.strokeColor : 'auto';
+      e.stroke = { ...cur, color: c };
+    }
     if (patch.routing !== undefined) this._pathCache.delete(id);
     if (patch.label   !== undefined) e.label   = normaliseLabelValue(patch.label, e.label);
     if (patch.labelText !== undefined) {
@@ -545,10 +574,12 @@ export class ArrowLayer {
     const path = document.createElementNS(SVG_NS, 'path');
     path.setAttribute('d', d);
     path.setAttribute('fill', 'none');
-    path.setAttribute('stroke', COLOUR_VAR[colour]);
+    const stroke = strokeFor(edge, colour);
+    path.setAttribute('stroke', stroke.colour);
     path.setAttribute('stroke-linecap',  'round');
     path.setAttribute('stroke-linejoin', 'round');
-    const baseWidth = this.selectedId === edge.id ? 3.4 : 2.4;
+    const selectedBoost = this.selectedId === edge.id ? 1.0 : 0;
+    const baseWidth = stroke.width + selectedBoost;
     path.setAttribute('stroke-width', String(baseWidth / scale));
     const dash = dashFor(edge.style, scale);
     if (dash) path.setAttribute('stroke-dasharray', dash);
@@ -593,8 +624,10 @@ export class ArrowLayer {
     const path = document.createElementNS(SVG_NS, 'path');
     path.setAttribute('d', d);
     path.setAttribute('fill', 'none');
-    path.setAttribute('stroke', COLOUR_VAR[colour] || COLOUR_VAR.accent);
-    path.setAttribute('stroke-width', String(2.2 / scale));
+    const stroke = strokeFor(edge, colour);
+    const strokeColour = stroke.color === 'auto' ? (COLOUR_VAR[colour] || COLOUR_VAR.accent) : stroke.colour;
+    path.setAttribute('stroke', strokeColour);
+    path.setAttribute('stroke-width', String((stroke.width * 0.9) / scale));
     path.setAttribute('stroke-linecap', 'round');
     path.setAttribute('stroke-linejoin', 'round');
     path.setAttribute('marker-end', `url(#arrowhead-${COLOUR_VAR[colour] ? colour : 'accent'})`);
@@ -1089,6 +1122,9 @@ export class ArrowLayer {
     if (!id) return;
     ev.preventDefault();
     ev.stopPropagation();
+    if (document.body && document.body.dataset && document.body.dataset.suppressContextMenu === '1') {
+      return;
+    }
     const img = this._imgPointFromClient(ev.clientX, ev.clientY);
     const branchAttr = tgt && tgt.getAttribute ? tgt.getAttribute('data-branch') : null;
     const items = [
