@@ -1,6 +1,6 @@
 /* Top-level bootstrap. Wires viewer + arrow layer + side panel + editor +
-   search + i18n + minimap + outline + keyboard + left rail + touch. Owns the
-   canvas nodes/edges maps, syncs persistence. */
+   search + i18n + minimap + keyboard + left rail + touch. Owns the canvas
+   nodes/edges maps, syncs persistence, drives presence + snapshots. */
 
 import { Viewer } from './viewer.js';
 import { SidePanel } from './side-panel.js';
@@ -9,7 +9,6 @@ import { EditorModal } from './editor.js';
 import { ContextMenu, statusSubmenu, isInOwnedSurface } from './context-menu.js';
 import { ArrowLayer } from './arrows.js';
 import { Minimap } from './minimap.js';
-import { OutlinePanel } from './outline.js';
 import { KeyboardShortcuts } from './keyboard.js';
 import { StatusFilter } from './status-filter.js';
 import {
@@ -70,6 +69,8 @@ import { VideoOverlay } from './video-overlay.js';
 import { LANGS, initLang, getLang, setLang, tr } from './i18n.js';
 import { AuthUI } from './auth-ui.js';
 import { Realtime } from './realtime.js';
+import { PresencePanel } from './presence.js';
+import { openActivityLog, openSnapshots, openPresence } from './admin-modals.js';
 import {
   isLoggedIn, getCurrentUser, subscribeAuth,
   getCanvas as apiGetCanvas,
@@ -114,7 +115,6 @@ let leftRail;
 let contextMenu;
 let arrowLayer;
 let minimap;
-let outlinePanel;
 let keyboard;
 let statusFilter;
 let authUI;
@@ -132,6 +132,7 @@ let alignFloater;
 let commentsLayer;
 let snapGuides;
 let videoOverlay;
+let presencePanel;
 
 function $(id) { return document.getElementById(id); }
 
@@ -175,7 +176,6 @@ async function bootstrap() {
 
   setupStatusFilter();
   setupMinimap();
-  setupOutline();
   setupKeyboard();
   setupAuthUI();
   setupEditNodeModal();
@@ -189,9 +189,9 @@ async function bootstrap() {
   setupCommentsLayer();
   setupVideoOverlay();
   setupToastBridge();
+  setupPresence();
 
   await loadInitialData();
-  await outlinePanel.loadInitial();
   applyFilters();
   applyAuthState();
 
@@ -210,7 +210,6 @@ async function bootstrap() {
     }
     if (arrowLayer) arrowLayer.retranslate();
     if (minimap) minimap.retranslate();
-    if (outlinePanel) outlinePanel.retranslate();
     if (keyboard) keyboard.retranslate();
     if (leftRail) leftRail.setLang(getLang());
     refreshMigrationBannerText();
@@ -349,6 +348,59 @@ function setupToastBridge() {
   });
 }
 
+function setupPresence() {
+  presencePanel = new PresencePanel({ mountEl: $('presence-badges') });
+}
+
+function openActivityLogModal() {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  openActivityLog();
+}
+
+function openSnapshotsModal() {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  openSnapshots({
+    canvasId: 'main',
+    onPreview: (snap) => previewSnapshot(snap),
+    onRestored: (result) => {
+      if (result && result.data) {
+        state.revision = Number(result.revision) || state.revision;
+        ingestCanvasData(result.data).catch((e) => console.warn('[app] restore ingest', e));
+      }
+      toast(tr('snapshots_restored_toast'));
+    },
+  });
+}
+
+function openPresenceModal() {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  openPresence(() => (presencePanel ? presencePanel.getUsers() : []));
+}
+
+function previewSnapshot(snap) {
+  if (!snap || !snap.data) return;
+  const overlay = document.createElement('div');
+  overlay.className = 'snapshot-preview-overlay';
+  const head = document.createElement('div');
+  head.className = 'snapshot-preview-head';
+  const title = document.createElement('span');
+  title.textContent = tr('snapshots_preview_revision', { revision: snap.revision });
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.textContent = '×';
+  close.className = 'snapshot-preview-close';
+  head.appendChild(title); head.appendChild(close);
+  const body = document.createElement('pre');
+  body.className = 'snapshot-preview-body';
+  const data = snap.data || {};
+  const ncount = Array.isArray(data.nodes) ? data.nodes.length : 0;
+  const ecount = Array.isArray(data.edges) ? data.edges.length : 0;
+  body.textContent = `nodes: ${ncount}\nedges: ${ecount}\n\n${JSON.stringify(data, null, 2).slice(0, 4000)}`;
+  overlay.appendChild(head); overlay.appendChild(body);
+  document.body.appendChild(overlay);
+  close.addEventListener('click', () => { try { document.body.removeChild(overlay); } catch (e) { void e; } });
+}
+
 function setupVideoOverlay() {
   videoOverlay = new VideoOverlay({
     viewport: $('viewport'),
@@ -464,6 +516,14 @@ function setupAuthUI() {
       if (state.mode === 'editor') setMode('viewer');
     },
     onMessage: (msg) => { if (msg) toast(msg); },
+    adminHandlers: {
+      onDownloadSnapshot: () => triggerDownloadSnapshot(),
+      onImportCanvas:     () => triggerImportCanvas(),
+      onResetDefaults:    () => triggerResetDefaults(),
+      onOpenActivityLog:  () => openActivityLogModal(),
+      onOpenSnapshots:    () => openSnapshotsModal(),
+      onOpenPresence:     () => openPresenceModal(),
+    },
   });
   subscribeAuth((kind) => {
     if (kind === 'login' || kind === 'logout' || kind === 'expired') applyAuthState();
@@ -484,10 +544,7 @@ function applyAuthState() {
   }
   if (!authed && state.mode === 'editor') setMode('viewer');
   if (leftRail) leftRail.setAuthState(authed, isAdmin);
-  const importBtn = $('btn-import');
-  const resetBtn = $('btn-reset');
-  if (importBtn) importBtn.style.display = isAdmin ? '' : 'none';
-  if (resetBtn) resetBtn.style.display = isAdmin ? '' : 'none';
+  if (authUI) authUI.refreshAdmin();
 }
 
 function setupRealtime() {
@@ -763,7 +820,6 @@ function deletePuzzleNode(id) {
   removeNode(state.nodes, id);
   if (viewer && wasFile) viewer.removeBlock(id);
   if (arrowLayer) arrowLayer.notifyNodeDeleted(id);
-  if (outlinePanel) outlinePanel.removeByNodeId(id);
   refreshPuzzleViewsInViewer();
   if (viewer) viewer.notifyNodesChanged();
   if (sidePanel.isOpen() && sidePanel.currentSlug() === slug) {
@@ -803,7 +859,6 @@ function setupLeftRail() {
         const s = $('search');
         if (s) { s.focus(); s.select(); }
       },
-      onToggleOutline: () => outlinePanel && outlinePanel.toggle(),
       onToggleMinimap: () => minimap && minimap.toggle(),
       onThemeChange: (choice) => {
         try { localStorage.setItem(THEME_KEY, choice); } catch (e) { void e; }
@@ -1546,20 +1601,8 @@ function setupToolbar() {
   });
   if (zfit) zfit.addEventListener('click', () => viewer.fitToScreen());
 
-  const dlBtn = $('btn-download-snapshot');
-  if (dlBtn) dlBtn.addEventListener('click', () => exportCanvasAndOutline());
-
-  const importBtn = $('btn-import');
-  if (importBtn) importBtn.addEventListener('click', () => {
-    confirmWithWord({
-      title: tr('import_confirm_title'),
-      message: tr('import_confirm_message'),
-      requireWord: tr('import_confirm_word'),
-      confirmLabel: tr('import_confirm_ok'),
-      onConfirm: () => $('file-import').click(),
-    });
-  });
-  $('file-import').addEventListener('change', async (e) => {
+  const fileImport = $('file-import');
+  if (fileImport) fileImport.addEventListener('change', async (e) => {
     const f = e.target.files[0];
     if (!f) return;
     try {
@@ -1572,16 +1615,29 @@ function setupToolbar() {
     }
     e.target.value = '';
   });
+}
 
-  const resetBtn = $('btn-reset');
-  if (resetBtn) resetBtn.addEventListener('click', () => {
-    confirmWithWord({
-      title: tr('reset_title'),
-      message: tr('reset_message'),
-      requireWord: tr('reset_confirm_word'),
-      confirmLabel: tr('reset_confirm'),
-      onConfirm: () => { clearState(); window.location.reload(); },
-    });
+function triggerDownloadSnapshot() {
+  exportCanvasSnapshot();
+}
+
+function triggerImportCanvas() {
+  confirmWithWord({
+    title: tr('import_confirm_title'),
+    message: tr('import_confirm_message'),
+    requireWord: tr('import_confirm_word'),
+    confirmLabel: tr('import_confirm_ok'),
+    onConfirm: () => $('file-import').click(),
+  });
+}
+
+function triggerResetDefaults() {
+  confirmWithWord({
+    title: tr('reset_title'),
+    message: tr('reset_message'),
+    requireWord: tr('reset_confirm_word'),
+    confirmLabel: tr('reset_confirm'),
+    onConfirm: () => { clearState(); window.location.reload(); },
   });
 }
 
@@ -1630,19 +1686,8 @@ function confirmWithWord(opts) {
   modal.classList.add('open');
 }
 
-function exportCanvasAndOutline() {
+function exportCanvasSnapshot() {
   downloadCanvasFile(state.nodes, state.edges, 'canvas.canvas');
-  if (outlinePanel && outlinePanel.dirty) {
-    const blob = new Blob([JSON.stringify(outlinePanel.serialize(), null, 2) + '\n'], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'outline.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 200);
-  }
   toast(tr('toast_exported'));
 }
 
@@ -2257,24 +2302,6 @@ function setupMinimap() {
   if (mmBtn) mmBtn.addEventListener('click', () => minimap && minimap.toggle());
 }
 
-function setupOutline() {
-  outlinePanel = new OutlinePanel({
-    container: document.body,
-    getNodes: () => state.nodes,
-    onFlyTo: (id, view) => {
-      viewer.centerOnHotspot(view);
-      viewer.setActiveId(id);
-      sidePanel.open(view);
-    },
-    onHighlight: (id) => {
-      viewer.setOutlineHighlight(id);
-    },
-    onScheduleSave: () => scheduleSave(),
-  });
-  const outBtn = $('btn-outline-toggle');
-  if (outBtn) outBtn.addEventListener('click', () => outlinePanel && outlinePanel.toggle());
-}
-
 function setupKeyboard() {
   keyboard = new KeyboardShortcuts({
     overlayContainer: document.body,
@@ -2300,7 +2327,6 @@ function setupKeyboard() {
         viewer.setActiveId(null);
       },
       onMinimapToggle: () => minimap && minimap.toggle(),
-      onOutlineToggle: () => outlinePanel && outlinePanel.toggle(),
       onFilterCycle: () => statusFilter && statusFilter.cycle(),
       onModeToggle: () => setMode(state.mode === 'viewer' ? 'editor' : 'viewer'),
       onCreateChild: () => createChildNode(),

@@ -12,7 +12,6 @@
   <link rel="stylesheet" href="css/editor.css">
   <link rel="stylesheet" href="css/markdown.css">
   <link rel="stylesheet" href="css/minimap.css">
-  <link rel="stylesheet" href="css/outline.css">
   <link rel="stylesheet" href="css/auth.css">
   <link rel="stylesheet" href="css/left-rail.css">
   <link rel="stylesheet" href="css/edit-modal.css">
@@ -22,81 +21,71 @@
 <body>
 
 <div id="toolbar">
-  <div class="tb-group tb-group-left">
+  <div class="tb-zone tb-zone-left">
     <div class="logo" data-i18n="app_title">INSIDE ARG // Investigation Map</div>
   </div>
 
-  <div class="tb-divider"></div>
-
-  <div class="tb-group tb-group-search" id="tb-group-search">
-    <div id="search-wrap">
-      <input type="text" id="search" data-i18n-placeholder="toolbar_search_placeholder" placeholder="search hotspots..." autocomplete="off" spellcheck="false">
-      <div id="search-results"></div>
+  <div class="tb-zone tb-zone-center">
+    <div class="tb-group tb-group-search" id="tb-group-search">
+      <div id="search-wrap">
+        <input type="text" id="search" data-i18n-placeholder="toolbar_search_placeholder" placeholder="search hotspots..." autocomplete="off" spellcheck="false">
+        <div id="search-results"></div>
+      </div>
+      <div class="tb-filter-chips">
+        <button class="filter-btn active" data-filter="all"><span data-i18n="filter_all">All</span></button>
+        <button class="filter-btn" data-filter="solved"><span class="status-dot dot-solved"></span><span data-i18n="filter_solved">Solved</span></button>
+        <button class="filter-btn" data-filter="partial"><span class="status-dot dot-partial"></span><span data-i18n="filter_partial">Partial</span></button>
+        <button class="filter-btn" data-filter="unsolved"><span class="status-dot dot-unsolved"></span><span data-i18n="filter_unsolved">Unsolved</span></button>
+        <button class="filter-btn" data-filter="dead-end"><span class="status-dot dot-deadend"></span><span data-i18n="filter_dead_end">Dead end</span></button>
+        <button class="filter-btn" data-filter="no-data"><span class="status-dot dot-nodata"></span><span data-i18n="filter_no_data">No Data</span></button>
+      </div>
     </div>
-    <div class="tb-filter-chips">
-      <button class="filter-btn active" data-filter="all"><span data-i18n="filter_all">All</span></button>
-      <button class="filter-btn" data-filter="solved"><span class="status-dot dot-solved"></span><span data-i18n="filter_solved">Solved</span></button>
-      <button class="filter-btn" data-filter="partial"><span class="status-dot dot-partial"></span><span data-i18n="filter_partial">Partial</span></button>
-      <button class="filter-btn" data-filter="unsolved"><span class="status-dot dot-unsolved"></span><span data-i18n="filter_unsolved">Unsolved</span></button>
-      <button class="filter-btn" data-filter="dead-end"><span class="status-dot dot-deadend"></span><span data-i18n="filter_dead_end">Dead end</span></button>
-      <button class="filter-btn" data-filter="no-data"><span class="status-dot dot-nodata"></span><span data-i18n="filter_no_data">No Data</span></button>
+  </div>
+
+  <div class="tb-zone tb-zone-right">
+    <button class="tb-icon-btn" id="tb-overflow-btn" type="button" data-i18n-aria="toolbar_more" aria-label="More" title="More">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></svg>
+    </button>
+
+    <div class="tb-group tb-group-view">
+      <button class="tb-icon-btn" id="btn-minimap-toggle" type="button" data-i18n-title="minimap_toggle" data-i18n-aria="minimap_toggle" title="Minimap" aria-label="Minimap">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="13" rx="1.5"/><rect x="6.5" y="6.5" width="6" height="4"/></svg>
+      </button>
+      <button class="tb-icon-btn" id="btn-settings" type="button" data-i18n-title="settings_title" data-i18n-aria="settings_title" title="Settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
     </div>
-  </div>
 
-  <button class="tb-icon-btn" id="tb-overflow-btn" type="button" data-i18n-aria="toolbar_more" aria-label="More" title="More">
-    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></svg>
-  </button>
+    <div class="tb-group tb-group-theme" id="theme-switch" data-i18n-aria="theme_toggle_aria" aria-label="Theme">
+      <button class="theme-btn" type="button" data-theme-value="white" data-i18n-title="theme_white" title="White" aria-label="White">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 3v2.4M12 18.6V21M3 12h2.4M18.6 12H21M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7"/></svg>
+      </button>
+      <button class="theme-btn" type="button" data-theme-value="dark" data-i18n-title="theme_dark" title="Dark" aria-label="Dark">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+      </button>
+      <button class="theme-btn" type="button" data-theme-value="graphite" data-i18n-title="theme_graphite" title="Graphite" aria-label="Graphite">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4v16"/></svg>
+      </button>
+      <button class="theme-btn" type="button" data-theme-value="auto" data-i18n-title="theme_auto" title="Auto" aria-label="Auto">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="1.5"/><path d="M8 21h8M12 17v4"/></svg>
+      </button>
+    </div>
 
-  <div class="spacer"></div>
+    <div id="presence-badges"></div>
 
-  <div class="tb-group tb-group-view">
-    <button class="tb-icon-btn" id="btn-outline-toggle" type="button" data-i18n-title="outline_toggle" data-i18n-aria="outline_toggle" title="Outline" aria-label="Outline">
-      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M5 6h14M5 12h14M5 18h14"/></svg>
-    </button>
-    <button class="tb-icon-btn" id="btn-minimap-toggle" type="button" data-i18n-title="minimap_toggle" data-i18n-aria="minimap_toggle" title="Minimap" aria-label="Minimap">
-      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="13" rx="1.5"/><rect x="6.5" y="6.5" width="6" height="4"/></svg>
-    </button>
-    <button class="tb-icon-btn" id="btn-settings" type="button" data-i18n-title="settings_title" data-i18n-aria="settings_title" title="Settings" aria-label="Settings">
-      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
-    </button>
-  </div>
+    <div class="tb-group tb-group-lang" id="lang-select-wrap">
+      <select id="lang-select" data-i18n-aria="lang_label" aria-label="Language">
+        <option value="en">EN</option>
+        <option value="ru">RU</option>
+        <option value="de">DE</option>
+        <option value="it">IT</option>
+        <option value="da">DA</option>
+      </select>
+    </div>
 
-  <div class="tb-divider"></div>
+    <span id="realtime-status" class="offline" title="" aria-label="realtime status"></span>
 
-  <div class="tb-group tb-group-theme" id="theme-switch" data-i18n-aria="theme_toggle_aria" aria-label="Theme">
-    <button class="theme-btn" type="button" data-theme-value="white" data-i18n-title="theme_white" title="White" aria-label="White">
-      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 3v2.4M12 18.6V21M3 12h2.4M18.6 12H21M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7"/></svg>
-    </button>
-    <button class="theme-btn" type="button" data-theme-value="dark" data-i18n-title="theme_dark" title="Dark" aria-label="Dark">
-      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
-    </button>
-    <button class="theme-btn" type="button" data-theme-value="graphite" data-i18n-title="theme_graphite" title="Graphite" aria-label="Graphite">
-      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4v16"/></svg>
-    </button>
-    <button class="theme-btn" type="button" data-theme-value="auto" data-i18n-title="theme_auto" title="Auto" aria-label="Auto">
-      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="1.5"/><path d="M8 21h8M12 17v4"/></svg>
-    </button>
-  </div>
-
-  <div class="tb-group tb-group-lang" id="lang-select-wrap">
-    <select id="lang-select" data-i18n-aria="lang_label" aria-label="Language">
-      <option value="en">EN</option>
-      <option value="ru">RU</option>
-      <option value="de">DE</option>
-      <option value="it">IT</option>
-      <option value="da">DA</option>
-    </select>
-  </div>
-
-  <span id="realtime-status" class="offline" title="" aria-label="realtime status"></span>
-
-  <div class="tb-divider"></div>
-
-  <div class="tb-group tb-group-actions">
-    <button class="tb-btn" id="btn-download-snapshot" data-i18n="download_snapshot">Download snapshot</button>
-    <button class="tb-btn" id="btn-import" data-i18n="import_button" style="display:none">Import</button>
     <input type="file" id="file-import" accept=".canvas,.json" style="display:none">
-    <button class="tb-btn" id="btn-reset" data-i18n="reset_defaults_button" style="display:none">Reset</button>
   </div>
 </div>
 

@@ -92,12 +92,6 @@ export class KeyboardShortcuts {
       this._call('onMinimapToggle', ev);
       return;
     }
-    if (k === 'o' || k === 'O') {
-      if (meta) return;
-      ev.preventDefault();
-      this._call('onOutlineToggle', ev);
-      return;
-    }
     if (k === 'f' || k === 'F') {
       if (meta) return;
       ev.preventDefault();
@@ -194,7 +188,6 @@ export class KeyboardShortcuts {
       ]},
       { titleKey: 'shortcut_section_navigation', rows: [
         { keys: ['M'],           descKey: 'shortcut_desc_minimap' },
-        { keys: ['O'],           descKey: 'shortcut_desc_outline' },
         { keys: ['+', '-', '0'], descKey: 'shortcut_desc_zoom' },
         { keys: ['E'],           descKey: 'shortcut_desc_mode' },
       ]},

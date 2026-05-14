@@ -147,10 +147,13 @@
   border-color: var(--accent);
 }
 
-/* Tools section visibility: only shown in editor mode (rail itself is open
-   whenever the user is authed, so Browse-mode users can switch back). */
+/* Tools and logo visibility: only shown in editor mode (rail itself stays
+   visible whenever the user is authed, so Browse-mode users can switch the
+   mode without losing access). In Browse mode only the mode switch shows. */
 #left-rail .rail-tools { display: none; }
+#left-rail .rail-top   { display: none; }
 body.authed.editor-mode #left-rail .rail-tools { display: flex; }
+body.authed.editor-mode #left-rail .rail-top   { display: flex; }
 
 /* Rail is hidden only when anonymous. */
 #left-rail { display: none; }

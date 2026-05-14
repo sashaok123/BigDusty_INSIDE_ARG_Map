@@ -165,3 +165,27 @@ class CommentOut(BaseModel):
     y: float
     thread: list[CommentMessage]
     created_at: Any
+
+
+class SnapshotSummary(BaseModel):
+    id: uuid.UUID
+    revision: int
+    created_at: Any
+    created_by: str | None = None
+    comment: str | None = None
+
+
+class SnapshotOut(BaseModel):
+    id: uuid.UUID
+    canvas_id: str
+    revision: int
+    data: dict[str, Any]
+    comment: str | None = None
+    created_by: str | None = None
+    created_at: Any
+
+
+class SnapshotRestoreOut(BaseModel):
+    revision: int
+    data: dict[str, Any]
+    snapshot_id: uuid.UUID
