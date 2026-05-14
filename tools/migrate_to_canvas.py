@@ -1,4 +1,11 @@
-"""Convert legacy data/{blocks_raw,hotspots,arrows}.json to data/canvas.canvas.
+"""Build data/canvas.canvas from the user's manual block annotation, or fall
+back to the legacy three-file layout when no annotation file is present.
+
+Source of truth (priority order):
+1. arg_graph_blocks.json next to the source poster (workspace root, two
+   levels above this script). Produced by tools/annotate.html. Shape:
+   `{version, source: {name, w, h}, blocks: [{id, label, rect: {x, y, w, h}}]}`.
+2. Legacy fallback: data/blocks_raw.json + data/hotspots.json + data/arrows.json.
 
 JSON Canvas v1.0 (https://jsoncanvas.org/spec/1.0/) with project-specific
 extension fields. Idempotent: rerunning regenerates the canvas.
@@ -12,7 +19,9 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 DATA = REPO / "data"
+WORKSPACE = REPO.parent
 
+ANNOTATION_FILE = WORKSPACE / "arg_graph_blocks.json"
 BLOCKS_FILE = DATA / "blocks_raw.json"
 HOTSPOTS_FILE = DATA / "hotspots.json"
 ARROWS_FILE = DATA / "arrows.json"
@@ -45,7 +54,27 @@ def read_puzzle_md(slug: str) -> str:
     return f"# {slug}\n\nNo markdown file at data/puzzles/{slug}.md yet.\n"
 
 
-def block_to_node(block: dict) -> dict:
+def annotation_block_to_node(block: dict) -> dict:
+    rect = block["rect"]
+    node = {
+        "id": block["id"],
+        "type": "file",
+        "x": int(rect["x"]),
+        "y": int(rect["y"]),
+        "width": int(rect["w"]),
+        "height": int(rect["h"]),
+        "file": f"data/blocks/{block['id']}.webp",
+        "status": "no-data",
+        "tags": [],
+        "kind": "block",
+    }
+    label = block.get("label")
+    if isinstance(label, str) and label:
+        node["label"] = label
+    return node
+
+
+def legacy_block_to_node(block: dict) -> dict:
     rect = block["rect"]
     return {
         "id": block["id"],
@@ -133,12 +162,18 @@ def arrow_to_edge(arrow: dict) -> dict | None:
     return edge
 
 
-def build_canvas() -> dict:
+def build_canvas_from_annotation(annotation: dict) -> dict:
+    blocks = annotation.get("blocks") or []
+    nodes = [annotation_block_to_node(b) for b in blocks if isinstance(b, dict)]
+    return {"nodes": nodes, "edges": []}
+
+
+def build_canvas_from_legacy() -> dict:
     blocks_data = load_json(BLOCKS_FILE)
     hotspots_data = load_json(HOTSPOTS_FILE)
     arrows_data = load_json(ARROWS_FILE)
 
-    file_nodes = [block_to_node(b) for b in blocks_data.get("blocks", [])]
+    file_nodes = [legacy_block_to_node(b) for b in blocks_data.get("blocks", [])]
     file_ids = {n["id"] for n in file_nodes}
     text_nodes = [
         hotspot_to_node(h, file_ids)
@@ -158,23 +193,29 @@ def build_canvas() -> dict:
 
 
 def main() -> int:
-    if not BLOCKS_FILE.is_file():
-        print(f"missing {BLOCKS_FILE}", file=sys.stderr)
-        return 1
-    if not HOTSPOTS_FILE.is_file():
-        print(f"missing {HOTSPOTS_FILE}", file=sys.stderr)
-        return 1
-    if not ARROWS_FILE.is_file():
-        print(f"missing {ARROWS_FILE}", file=sys.stderr)
+    if ANNOTATION_FILE.is_file():
+        annotation = load_json(ANNOTATION_FILE)
+        canvas = build_canvas_from_annotation(annotation)
+        source = "annotation"
+    elif BLOCKS_FILE.is_file() and HOTSPOTS_FILE.is_file() and ARROWS_FILE.is_file():
+        canvas = build_canvas_from_legacy()
+        source = "legacy"
+    else:
+        print(
+            "missing inputs: need either "
+            f"{ANNOTATION_FILE} or the legacy "
+            f"{BLOCKS_FILE}+{HOTSPOTS_FILE}+{ARROWS_FILE} triplet",
+            file=sys.stderr,
+        )
         return 1
 
-    canvas = build_canvas()
     OUTPUT_FILE.write_text(
         json.dumps(canvas, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
     n_file = sum(1 for n in canvas["nodes"] if n["type"] == "file")
     n_text = sum(1 for n in canvas["nodes"] if n["type"] == "text")
+    print(f"source: {source}")
     print(f"wrote {OUTPUT_FILE.relative_to(REPO)}")
     print(f"nodes: {len(canvas['nodes'])} ({n_file} file, {n_text} text)")
     print(f"edges: {len(canvas['edges'])}")
