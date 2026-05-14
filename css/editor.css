@@ -2,7 +2,7 @@
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.72);
+  background: rgba(0, 0, 0, 0.36);
   z-index: 2000;
   align-items: center;
   justify-content: center;
@@ -11,13 +11,13 @@
 #editor-modal.open { display: flex; }
 
 #editor-modal-box {
-  background: #0f0f18;
+  background: var(--panel-bg);
   border: 1px solid var(--panel-border);
   width: 580px;
   max-height: 86vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+  box-shadow: var(--shadow-modal);
   border-radius: var(--radius);
 }
 
@@ -70,8 +70,8 @@
 .field-group textarea,
 .field-group select {
   width: 100%;
-  background: #07070d;
-  border: 1px solid #2a2a40;
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
   color: var(--text);
   font-family: var(--font-mono);
   font-size: 12px;
@@ -117,17 +117,17 @@
   border-radius: var(--radius);
 }
 .modal-btn.primary { border-color: var(--accent); color: var(--accent); }
-.modal-btn.primary:hover { background: rgba(232, 107, 46, 0.14); }
-.modal-btn.cancel { border-color: #2a2a40; color: var(--text-dim); }
+.modal-btn.primary:hover { background: var(--accent-soft-bg-hover); }
+.modal-btn.cancel { border-color: var(--field-border); color: var(--text-dim); }
 .modal-btn.cancel:hover { border-color: var(--text); color: var(--text); }
 .modal-btn.danger { border-color: var(--unsolved); color: var(--unsolved); }
-.modal-btn.danger:hover { background: rgba(232, 61, 61, 0.14); }
+.modal-btn.danger:hover { background: var(--unsolved-soft-bg); }
 
 #confirm-modal {
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.78);
+  background: rgba(0, 0, 0, 0.42);
   z-index: 2100;
   align-items: center;
   justify-content: center;
@@ -135,12 +135,12 @@
 }
 #confirm-modal.open { display: flex; }
 #confirm-box {
-  background: #0f0f18;
+  background: var(--panel-bg);
   border: 1px solid var(--panel-border);
   width: 420px;
   padding: 22px 24px;
   border-radius: var(--radius);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+  box-shadow: var(--shadow-modal);
 }
 #confirm-box h3 {
   font-family: var(--font-mono);
@@ -165,11 +165,11 @@
 
 .context-menu {
   position: fixed;
-  background: #0f0f18;
+  background: var(--panel-bg);
   border: 1px solid var(--panel-border);
   min-width: 160px;
   z-index: 1500;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--shadow-soft);
   border-radius: var(--radius);
   padding: 4px 0;
 }
@@ -191,4 +191,4 @@
   color: var(--accent);
 }
 .context-menu button.danger { color: var(--unsolved); }
-.context-menu button.danger:hover { background: rgba(232, 61, 61, 0.12); }
+.context-menu button.danger:hover { background: var(--unsolved-soft-bg); }

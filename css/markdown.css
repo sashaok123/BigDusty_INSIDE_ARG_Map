@@ -11,7 +11,7 @@
 .md-rendered h4,
 .md-rendered h5,
 .md-rendered h6 {
-  color: #fff;
+  color: var(--text-strong);
   margin: 18px 0 8px;
   line-height: 1.3;
   font-weight: 600;
@@ -54,12 +54,12 @@
 }
 .md-rendered a:hover { border-bottom-color: var(--accent2); }
 
-.md-rendered strong { color: #fff; font-weight: 600; }
+.md-rendered strong { color: var(--text-strong); font-weight: 600; }
 .md-rendered em     { color: var(--text); font-style: italic; }
 
 .md-rendered code {
   font-family: var(--font-mono);
-  background: #07070d;
+  background: var(--panel-2);
   border: 1px solid var(--panel-border);
   color: var(--accent2);
   padding: 1px 5px;
@@ -70,7 +70,7 @@
 
 .md-rendered pre {
   font-family: var(--font-mono);
-  background: #07070d;
+  background: var(--panel-2);
   border: 1px solid var(--panel-border);
   color: var(--accent2);
   padding: 12px 14px;
@@ -91,7 +91,7 @@
 
 .md-rendered blockquote {
   border-left: 3px solid var(--accent);
-  background: rgba(232, 107, 46, 0.04);
+  background: var(--accent-soft-bg);
   padding: 6px 14px;
   margin: 10px 0;
   color: var(--text-dim);
@@ -134,7 +134,7 @@
   font-size: 11px;
   text-transform: uppercase;
 }
-.md-rendered tr:nth-child(even) td { background: rgba(20, 20, 30, 0.4); }
+.md-rendered tr:nth-child(even) td { background: var(--panel-2); }
 
 .md-rendered .copy-pre {
   position: relative;
@@ -143,8 +143,8 @@
   position: absolute;
   top: 6px;
   right: 6px;
-  background: var(--panel-2);
-  border: 1px solid #2a2a40;
+  background: var(--panel-bg);
+  border: 1px solid var(--field-border);
   color: var(--text-dim);
   font-family: var(--font-mono);
   font-size: 9px;
@@ -155,4 +155,4 @@
   border-radius: 3px;
 }
 .md-rendered .copy-pre button.copy-btn:hover { color: var(--accent2); border-color: var(--accent2); }
-.md-rendered .copy-pre button.copy-btn.copied { color: var(--solved); border-color: var(--solved); }
+.md-rendered .copy-pre button.copy-btn.copied { color: var(--status-solved); border-color: var(--status-solved); }

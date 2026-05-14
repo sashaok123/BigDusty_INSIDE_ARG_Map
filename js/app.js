@@ -58,6 +58,8 @@ import { isPlaceholderApiBase } from './config.js';
 
 const STATE_VERSION = 3;
 const DETECTIVE_KEY = 'arg_map_detective_theme';
+const THEME_KEY = 'arg.theme';
+const THEME_CHOICES = ['light', 'dark', 'auto'];
 const SELF_ECHO_WINDOW_MS = 250;
 
 const state = {
@@ -115,6 +117,7 @@ function scheduleSave() {
 
 async function bootstrap() {
   initLang();
+  setupThemeSwitch();
   applyStaticTranslations();
   setupLangSelect();
   setupViewer();
@@ -1155,6 +1158,67 @@ function setSelectedStatus(status) {
   scheduleSave();
   toast(tr('node_status_changed', { status: statusLabel(status) }));
   return true;
+}
+
+function readStoredThemeChoice() {
+  try {
+    const raw = localStorage.getItem(THEME_KEY);
+    if (THEME_CHOICES.includes(raw)) return raw;
+  } catch (e) { void e; }
+  return 'light';
+}
+
+function resolveTheme(choice) {
+  if (choice === 'dark' || choice === 'light') return choice;
+  try {
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark';
+  } catch (e) { void e; }
+  return 'light';
+}
+
+function applyTheme(choice) {
+  const resolved = resolveTheme(choice);
+  document.documentElement.dataset.theme = resolved;
+  document.documentElement.dataset.themeChoice = choice;
+  if (viewer && typeof viewer.setBackgroundFromCSS === 'function') {
+    viewer.setBackgroundFromCSS();
+  }
+  if (minimap && typeof minimap.refreshPalette === 'function') {
+    minimap.refreshPalette();
+  }
+  document.querySelectorAll('#theme-switch button').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.themeValue === choice);
+  });
+}
+
+function setupThemeSwitch() {
+  const choice = readStoredThemeChoice();
+  applyTheme(choice);
+
+  const root = document.getElementById('theme-switch');
+  if (root) {
+    root.querySelectorAll('button[data-theme-value]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const next = btn.dataset.themeValue;
+        if (!THEME_CHOICES.includes(next)) return;
+        try { localStorage.setItem(THEME_KEY, next); } catch (e) { void e; }
+        applyTheme(next);
+      });
+    });
+  }
+
+  try {
+    const mq = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
+    if (mq && typeof mq.addEventListener === 'function') {
+      mq.addEventListener('change', () => {
+        if (readStoredThemeChoice() === 'auto') applyTheme('auto');
+      });
+    } else if (mq && typeof mq.addListener === 'function') {
+      mq.addListener(() => {
+        if (readStoredThemeChoice() === 'auto') applyTheme('auto');
+      });
+    }
+  } catch (e) { void e; }
 }
 
 function setupDetectiveTheme() {

@@ -377,7 +377,7 @@ export class ArrowLayer {
     path.style.cursor = this.mode === 'editor' ? 'pointer' : 'default';
     if (this.selectedId === edge.id) {
       path.setAttribute('filter', '');
-      path.style.filter = 'drop-shadow(0 0 4px rgba(85,170,255,0.55))';
+      path.classList.add('arrow-selected-glow');
     }
     if (this.mode === 'editor') {
       path.addEventListener('mousedown', (ev) => {
@@ -455,8 +455,8 @@ export class ArrowLayer {
     bg.setAttribute('height', String(approxH));
     bg.setAttribute('rx', String(3 / scale));
     bg.setAttribute('class', 'arrow-label-bg');
-    bg.setAttribute('fill',   'rgba(10,10,14,0.86)');
-    bg.setAttribute('stroke', 'rgba(232,107,46,0.45)');
+    bg.setAttribute('fill',   'var(--label-bg)');
+    bg.setAttribute('stroke', 'var(--label-stroke)');
     bg.setAttribute('stroke-width', String(1 / scale));
     bg.setAttribute('pointer-events', 'none');
     if (labelOpacity < 1) bg.setAttribute('opacity', String(labelOpacity));
@@ -467,7 +467,7 @@ export class ArrowLayer {
     text.setAttribute('font-size', String(fontPx));
     text.setAttribute('font-family', 'var(--font-mono)');
     text.setAttribute('class', 'arrow-label-text');
-    text.setAttribute('fill', '#d4d4e8');
+    text.setAttribute('fill', 'var(--label-text)');
     text.setAttribute('text-anchor', 'middle');
     text.setAttribute('dominant-baseline', 'central');
     text.setAttribute('pointer-events', 'none');

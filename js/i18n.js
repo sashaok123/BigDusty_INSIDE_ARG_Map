@@ -445,6 +445,10 @@ const _I18N_DATA = {
     'Modalità offline (file locale)',
     'Offline tilstand (lokal fil)',
   ],
+  theme_light: ['Light', 'Светлая', 'Hell', 'Chiaro', 'Lys'],
+  theme_dark: ['Dark', 'Тёмная', 'Dunkel', 'Scuro', 'Mørk'],
+  theme_auto: ['Auto', 'Авто', 'Automatisch', 'Auto', 'Auto'],
+  theme_toggle_aria: ['Theme', 'Тема', 'Design', 'Tema', 'Tema'],
 };
 
 const I18N = Object.fromEntries(
