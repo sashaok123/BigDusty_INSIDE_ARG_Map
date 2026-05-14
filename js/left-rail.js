@@ -1,12 +1,14 @@
 /* Left-side primary navigation rail. Labelled by default (200 px wide),
-   collapses to icon-only (60 px) via a toggle. Tools route through the
-   shared tools.js activeTool state machine. Modes section (Browse / Edit)
-   is always visible to authed users; tool stack only in Edit mode. */
+   collapses to icon-only (60 px) via a toggle at the bottom. Tools route
+   through the shared tools.js activeTool state machine. Modes section is
+   always visible to authed users; Tools and History only in Edit mode.
+   Selection section only when at least one node is selected in Edit mode. */
 
 import { tr } from './i18n.js';
 import { setActiveTool, getActiveTool, onActiveToolChange } from './tools.js';
 
-const STORAGE_KEY = 'arg.editorRail';
+const STORAGE_KEY = 'argLeftRailCollapsed';
+const LEGACY_STORAGE_KEY = 'arg.editorRail';
 
 const SVG_PATHS = {
   browse:     '<circle cx="11" cy="11" r="7"/><path d="M16.2 16.2L21 21"/>',
@@ -24,6 +26,9 @@ const SVG_PATHS = {
   group_sel:  '<rect x="3.5" y="5.5" width="17" height="13" rx="1.5" stroke-dasharray="3 2"/><rect x="7" y="9" width="4" height="3"/><rect x="13" y="12" width="4" height="3"/>',
   ungroup:    '<rect x="3.5" y="5.5" width="17" height="13" rx="1.5" stroke-dasharray="3 2"/><path d="M7 9 L17 15"/><path d="M17 9 L7 15"/>',
   trash:      '<path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1 -13"/>',
+  duplicate:  '<rect x="3.5" y="3.5" width="13" height="13" rx="1.5"/><rect x="7.5" y="7.5" width="13" height="13" rx="1.5"/>',
+  lock:       '<rect x="5" y="11" width="14" height="9" rx="1.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+  unlock:     '<rect x="5" y="11" width="14" height="9" rx="1.5"/><path d="M8 11V8a4 4 0 0 1 7.4 -2.1"/>',
   undo:       '<path d="M9 6L4 11l5 5"/><path d="M4 11h11a4 4 0 0 1 0 8H10"/>',
   redo:       '<path d="M15 6l5 5l-5 5"/><path d="M20 11H9a4 4 0 0 0 0 8h5"/>',
   collapse:   '<path d="M15 6l-6 6 6 6"/>',
@@ -42,31 +47,29 @@ function svgIcon(name, size) {
   return s;
 }
 
-function loadRailState() {
+function loadCollapsed() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const obj = JSON.parse(raw);
-    if (obj && typeof obj === 'object') return obj;
+    if (raw === '1' || raw === 'true') return true;
+    if (raw === '0' || raw === 'false') return false;
   } catch (e) { void e; }
-  return null;
+  try { localStorage.removeItem(LEGACY_STORAGE_KEY); } catch (e) { void e; }
+  return false;
 }
 
-function persistRailState(state) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { void e; }
+function persistCollapsed(value) {
+  try { localStorage.setItem(STORAGE_KEY, value ? '1' : '0'); } catch (e) { void e; }
 }
 
 export class LeftRail {
   constructor(opts) {
     this.handlers = opts.handlers || {};
-    const stored = loadRailState();
-    this.state = {
-      collapsed: !!(stored && stored.collapsed),
-    };
+    this.state = { collapsed: loadCollapsed() };
     this._buttons = {};
     this._build();
     this._applyCollapsed();
     this._applyActiveTool(getActiveTool());
+    this.refreshSelectionGroup();
     onActiveToolChange((t) => this._applyActiveTool(t));
     document.addEventListener('i18n:changed', () => this._retranslate());
   }
@@ -76,6 +79,7 @@ export class LeftRail {
     rail.id = 'left-rail';
     rail.className = 'left-rail';
 
+    rail.appendChild(this._sectionHeading('rail_section_modes'));
     const modes = this._makeSection('rail-modes');
     modes.appendChild(this._makeLabelBtn({
       id: 'rail-mode-viewer', icon: 'browse', i18n: 'mode_viewer',
@@ -87,6 +91,10 @@ export class LeftRail {
     }));
     rail.appendChild(modes);
 
+    const toolsHead = this._sectionHeading('rail_section_tools');
+    toolsHead.classList.add('rail-section-tools-head');
+    rail.appendChild(toolsHead);
+    this.toolsHeadEl = toolsHead;
     const tools = this._makeSection('rail-tools');
 
     tools.appendChild(this._makeLabelBtn({
@@ -141,35 +149,53 @@ export class LeftRail {
       id: 'rail-tool-arrow', icon: 'arrow', i18n: 'tool_arrow', tool: 'arrow', shortcut: 'A',
       onClick: () => setActiveTool('arrow'),
     }));
+    rail.appendChild(tools);
+    this.toolsEl = tools;
 
-    tools.appendChild(this._sep());
-
-    tools.appendChild(this._makeLabelBtn({
-      id: 'rail-tool-group-sel', icon: 'group_sel', i18n: 'editor_tools_group_selection', shortcut: 'Ctrl+G',
+    const selectionHead = this._sectionHeading('rail_section_selection');
+    selectionHead.classList.add('rail-section-selection-head');
+    rail.appendChild(selectionHead);
+    this.selectionHeadEl = selectionHead;
+    const selection = this._makeSection('rail-selection');
+    selection.appendChild(this._makeLabelBtn({
+      id: 'rail-sel-group', icon: 'group_sel', i18n: 'editor_tools_group_selection', shortcut: 'Ctrl+G',
       onClick: () => this.handlers.onGroupSelection && this.handlers.onGroupSelection(),
     }));
-    tools.appendChild(this._makeLabelBtn({
-      id: 'rail-tool-ungroup', icon: 'ungroup', i18n: 'editor_tools_ungroup', shortcut: 'Ctrl+Shift+G',
+    selection.appendChild(this._makeLabelBtn({
+      id: 'rail-sel-ungroup', icon: 'ungroup', i18n: 'editor_tools_ungroup', shortcut: 'Ctrl+Shift+G',
       onClick: () => this.handlers.onUngroup && this.handlers.onUngroup(),
     }));
-    tools.appendChild(this._makeLabelBtn({
-      id: 'rail-tool-delete', icon: 'trash', i18n: 'editor_tools_delete', shortcut: 'Del',
+    selection.appendChild(this._makeLabelBtn({
+      id: 'rail-sel-duplicate', icon: 'duplicate', i18n: 'editor_tools_duplicate', shortcut: 'Ctrl+D',
+      onClick: () => this.handlers.onDuplicate && this.handlers.onDuplicate(),
+    }));
+    selection.appendChild(this._makeLabelBtn({
+      id: 'rail-sel-lock', icon: 'lock', i18n: 'editor_tools_lock', shortcut: 'L',
+      onClick: () => this.handlers.onToggleLock && this.handlers.onToggleLock(),
+    }));
+    selection.appendChild(this._makeLabelBtn({
+      id: 'rail-sel-delete', icon: 'trash', i18n: 'editor_tools_delete', shortcut: 'Del',
       danger: true,
       onClick: () => this.handlers.onDeleteSelection && this.handlers.onDeleteSelection(),
     }));
+    rail.appendChild(selection);
+    this.selectionEl = selection;
 
-    tools.appendChild(this._sep());
-
-    tools.appendChild(this._makeLabelBtn({
-      id: 'rail-tool-undo', icon: 'undo', i18n: 'editor_tools_undo', shortcut: 'Ctrl+Z',
+    const historyHead = this._sectionHeading('rail_section_history');
+    historyHead.classList.add('rail-section-history-head');
+    rail.appendChild(historyHead);
+    this.historyHeadEl = historyHead;
+    const history = this._makeSection('rail-history');
+    history.appendChild(this._makeLabelBtn({
+      id: 'rail-history-undo', icon: 'undo', i18n: 'editor_tools_undo', shortcut: 'Ctrl+Z',
       onClick: () => this.handlers.onUndo && this.handlers.onUndo(),
     }));
-    tools.appendChild(this._makeLabelBtn({
-      id: 'rail-tool-redo', icon: 'redo', i18n: 'editor_tools_redo', shortcut: 'Ctrl+Y',
+    history.appendChild(this._makeLabelBtn({
+      id: 'rail-history-redo', icon: 'redo', i18n: 'editor_tools_redo', shortcut: 'Ctrl+Y',
       onClick: () => this.handlers.onRedo && this.handlers.onRedo(),
     }));
-    rail.appendChild(tools);
-    this.toolsEl = tools;
+    rail.appendChild(history);
+    this.historyEl = history;
 
     const footer = this._makeSection('rail-footer');
     const collapseBtn = document.createElement('button');
@@ -195,6 +221,14 @@ export class LeftRail {
 
     document.body.appendChild(rail);
     this.railEl = rail;
+  }
+
+  _sectionHeading(i18nKey) {
+    const h = document.createElement('div');
+    h.className = 'rail-section-head';
+    h.dataset.i18n = i18nKey;
+    h.textContent = tr(i18nKey);
+    return h;
   }
 
   _makeSection(cls) {
@@ -238,7 +272,7 @@ export class LeftRail {
 
   _toggleCollapsed() {
     this.state.collapsed = !this.state.collapsed;
-    persistRailState(this.state);
+    persistCollapsed(this.state.collapsed);
     this._applyCollapsed();
   }
 
@@ -264,6 +298,26 @@ export class LeftRail {
     buttons.forEach((b) => {
       b.classList.toggle('active', b.dataset.tool === tool);
     });
+  }
+
+  refreshSelectionGroup() {
+    if (!this.selectionEl) return;
+    const info = (this.handlers.getSelectionInfo && this.handlers.getSelectionInfo()) || { size: 0, allLocked: false };
+    const empty = !(info.size > 0);
+    this.selectionEl.classList.toggle('rail-section-hidden', empty);
+    if (this.selectionHeadEl) this.selectionHeadEl.classList.toggle('rail-section-hidden', empty);
+    const lockBtn = this._buttons['rail-sel-lock'];
+    if (lockBtn) {
+      const labKey = info.allLocked ? 'editor_tools_unlock' : 'editor_tools_lock';
+      lockBtn.dataset.i18n = labKey;
+      const labEl = lockBtn.querySelector('.rail-btn-label');
+      if (labEl) labEl.textContent = tr(labKey);
+      const iconHolder = lockBtn.querySelector('svg');
+      if (iconHolder) iconHolder.innerHTML = SVG_PATHS[info.allLocked ? 'unlock' : 'lock'];
+      const aria = `${tr(labKey)} (L)`;
+      lockBtn.title = aria;
+      lockBtn.setAttribute('aria-label', aria);
+    }
   }
 
   setActiveMode(mode) {
@@ -295,6 +349,9 @@ export class LeftRail {
       if (lab) lab.textContent = text;
       b.title = text;
       b.setAttribute('aria-label', text);
+    });
+    this.railEl.querySelectorAll('.rail-section-head[data-i18n]').forEach((h) => {
+      h.textContent = tr(h.dataset.i18n);
     });
     if (this._collapseLabelEl) {
       const key = this.state.collapsed ? 'rail_expand' : 'rail_collapse';

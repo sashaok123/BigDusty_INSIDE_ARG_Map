@@ -677,6 +677,10 @@ function setupRealtime() {
 function setupViewer() {
   viewer = new Viewer($('map-canvas'), {
     drawPreviewEl: $('draw-preview'),
+    isNodeLocked: (id) => {
+      const n = findNode(state.nodes, id);
+      return !!(n && n.locked);
+    },
     onHotspotClick: (id) => {
       const n = findNode(state.nodes, id);
       if (!n) return;
@@ -955,6 +959,7 @@ function setupEditorModal() {
 function deletePuzzleNode(id) {
   const n = findNode(state.nodes, id);
   if (!n) return;
+  if (n.locked) { toast(tr('node_locked_toast')); return; }
   const slug = n.slug;
   const wasFile = n.type === 'file';
   removeNode(state.nodes, id);
@@ -993,11 +998,20 @@ function setupLeftRail() {
       onGroupSelection: () => groupCurrentSelection(),
       onUngroup: () => ungroupCurrentSelection(),
       onDeleteSelection: () => deleteCurrentSelection(),
+      onDuplicate: () => doDuplicate(),
+      onToggleLock: () => toggleLockSelection(),
       onUndo: () => doUndo(),
       onRedo: () => doRedo(),
       onUploadImage: () => uploader && uploader.openFilePicker(),
       onAddVideo: () => triggerAddVideo(),
       onUploadAudio: () => triggerAddAudio(),
+      getSelectionInfo: () => ({
+        size: state.selection.size,
+        allLocked: state.selection.size > 0 && Array.from(state.selection).every((id) => {
+          const n = findNode(state.nodes, id);
+          return !!(n && n.locked);
+        }),
+      }),
     },
   });
   leftRail.setActiveMode(state.mode);
@@ -1007,6 +1021,9 @@ function setupLeftRail() {
   document.body.classList.toggle('rail-collapsed', leftRail.isCollapsed());
   document.addEventListener('rail:toggle', () => {
     document.body.classList.toggle('rail-collapsed', leftRail.isCollapsed());
+  });
+  document.addEventListener('selection:changed', () => {
+    if (leftRail) leftRail.refreshSelectionGroup();
   });
   const railEl = document.getElementById('left-rail');
   if (railEl) {
@@ -1142,6 +1159,14 @@ function buildContextMenuItemsForNode(id) {
   items.push({
     label: tr('ctx_set_status'),
     submenu: statusSubmenu(view.status, (status) => setStatusForNode(id, status)),
+  });
+  items.push({
+    label: tr(n.locked ? 'ctx_unlock' : 'ctx_lock'),
+    fn: () => {
+      state.selection = new Set([id]);
+      if (viewer) viewer.setSelection(state.selection);
+      toggleLockSelection();
+    },
   });
   if (selSize > 0 && selHasId && selSize > 1) {
     items.push({ label: tr('ctx_group'), fn: () => groupCurrentSelection() });
@@ -1729,15 +1754,40 @@ function deleteCurrentSelection() {
 
 function _performDeleteSelection() {
   pushHistory();
+  let skippedLocked = 0;
   for (const id of Array.from(state.selection)) {
     const n = findNode(state.nodes, id);
     if (!n) continue;
+    if (n.locked) { skippedLocked++; continue; }
     if (isGroupNode(n)) deleteGroupKeepChildren(id);
     else deletePuzzleNode(id);
   }
   state.selection = new Set();
   if (viewer) viewer.setSelection(state.selection);
   refreshSelectionStatus();
+  if (skippedLocked > 0) toast(tr('node_locked_toast'));
+}
+
+function toggleLockSelection() {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  if (state.selection.size === 0) return;
+  const ids = Array.from(state.selection);
+  const anyUnlocked = ids.some((id) => {
+    const n = findNode(state.nodes, id);
+    return n && !n.locked;
+  });
+  const targetLocked = anyUnlocked;
+  for (const id of ids) {
+    const n = findNode(state.nodes, id);
+    if (!n) continue;
+    if (targetLocked) n.locked = true;
+    else delete n.locked;
+    pushNodePatch(id, { locked: !!targetLocked });
+  }
+  refreshPuzzleViewsInViewer();
+  refreshSelectionStatus();
+  scheduleSave();
+  toast(tr(targetLocked ? 'node_locked_done' : 'node_unlocked_done'));
 }
 
 function computeUnionBbox(ids) {
@@ -2643,6 +2693,13 @@ function setupKeyboard() {
       onGroupShortcut: () => {
         if (state.selection.size >= 2) {
           groupCurrentSelection();
+          return true;
+        }
+        return false;
+      },
+      onToggleLock: () => {
+        if (state.mode === 'editor' && state.selection.size > 0) {
+          toggleLockSelection();
           return true;
         }
         return false;

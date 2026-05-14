@@ -172,6 +172,7 @@ export function normaliseNode(raw) {
   if (raw.kind === 'video' || raw.kind === 'audio' || raw.kind === 'document') node.kind = raw.kind;
   if (typeof raw.name === 'string') node.name = raw.name;
   if (Array.isArray(raw.branches)) node.branches = raw.branches.filter((b) => typeof b === 'string');
+  if (raw.locked === true) node.locked = true;
   return node;
 }
 
@@ -210,8 +211,18 @@ export function normaliseEdge(raw) {
       && typeof raw.toPoint.x === 'number' && typeof raw.toPoint.y === 'number') {
     edge.toPoint = { x: raw.toPoint.x, y: raw.toPoint.y };
   }
+  edge.stroke = normaliseEdgeStroke(raw.stroke);
   edge.bindings = normaliseBindings(raw.bindings);
   return edge;
+}
+
+export function normaliseEdgeStroke(raw) {
+  const def = { width: 2, color: 'auto' };
+  if (!raw || typeof raw !== 'object') return def;
+  const w = Number(raw.width);
+  const width = Number.isFinite(w) ? Math.max(1, Math.min(12, w)) : def.width;
+  const color = typeof raw.color === 'string' && raw.color ? raw.color : def.color;
+  return { width, color };
 }
 
 export function normaliseEdgeLabel(raw) {

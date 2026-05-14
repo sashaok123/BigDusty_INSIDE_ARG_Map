@@ -204,3 +204,10 @@ body.space-held #viewport #arrow-layer * { pointer-events: none !important; curs
   border-radius: var(--radius);
   width: 72px;
 }
+
+.arrow-props-stroke-width-btn {
+  min-width: 28px;
+  text-align: center;
+}
+
+.arrow-props-stroke .arrow-props-label-style-row { gap: 4px; }

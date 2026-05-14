@@ -114,6 +114,7 @@ export function toViewShape(n) {
     type: n.type,
     file: n.file || null,
     color: n.color || '',
+    locked: !!n.locked,
     caption: n.caption ? { ...n.caption } : null,
     label: typeof n.label === 'string' ? n.label : '',
     translations: n.translations && typeof n.translations === 'object' ? { ...n.translations } : null,
