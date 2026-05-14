@@ -3,6 +3,17 @@
    < 5 px between mousedown and mouseup. */
 
 import { lodFor } from './lod.js';
+import { pickTextColor, pickTextStroke, bgFromTheme } from './contrast.js';
+
+const COLOR_PRESET_BG = {
+  '':  null,
+  '1': '#e83d3d',
+  '2': '#e88a3d',
+  '3': '#e8c83d',
+  '4': '#3de88a',
+  '5': '#3dc8e8',
+  '6': '#9a6ce8',
+};
 
 const MIN_SCALE = 0.05;
 const MAX_SCALE = 8;
@@ -605,7 +616,7 @@ export class Viewer {
     if (this.scale > 0.4 && lod && lod.edgeLabelsVisible) {
       const fontPx = Math.max(11, Math.min(20, 14 / this.scale));
       ctx.font = `500 ${fontPx}px var(--font-ui)`;
-      ctx.fillStyle = '#3a2a06';
+      ctx.fillStyle = pickTextColor(stickyFill, { dark: '#3a2a06' });
       ctx.textBaseline = 'top';
       const padding = 8 / this.scale;
       const text = h.title || '';
@@ -620,17 +631,59 @@ export class Viewer {
     const { x, y, w, h: hh } = h.rect;
     const isHover = this.hoverId === h.id || this.activeId === h.id || this.selection.has(h.id);
     const isOutlineHL = this.outlineHighlightId === h.id;
+    const ts = h.text_style || h.textStyle || {};
     ctx.save();
     if (this.scale > 0.25 && lod && lod.edgeLabelsVisible) {
-      const fontPx = Math.max(11, Math.min(20, 14 / this.scale));
-      ctx.font = `400 ${fontPx}px var(--font-ui)`;
-      ctx.fillStyle = this.statusPalette.unsolved ? this.statusPalette.unsolved.stroke : this.borderColour;
-      ctx.fillStyle = readCssVar('--text', '#16181c');
+      const sizeMap = { S: 12, M: 16, L: 20, XL: 28 };
+      const baseSize = sizeMap[ts.size] || 16;
+      const fontPx = Math.max(11, Math.min(40, baseSize / this.scale));
+      const family = ts.family === 'mono' ? 'var(--font-mono)'
+                   : ts.family === 'serif' ? 'Georgia, serif'
+                   : 'var(--font-ui)';
+      ctx.font = `400 ${fontPx}px ${family}`;
+      let fillCol;
+      if (ts.color && ts.color !== 'auto' && ts.color !== '') {
+        fillCol = ts.color;
+      } else {
+        fillCol = pickTextColor(this.bgColour);
+      }
+      const strokeCol = pickTextStroke(this.bgColour);
+      const align = ts.align === 'center' ? 'center' : ts.align === 'right' ? 'right' : 'left';
+      ctx.textAlign = align;
       ctx.textBaseline = 'top';
       const text = h.title || '';
-      const maxChars = Math.max(8, Math.floor(w / (fontPx * 0.55)));
-      const shown = text.length > maxChars ? text.slice(0, maxChars - 1) + '…' : text;
-      ctx.fillText(shown, x, y);
+      const wrap = ts.wrap !== 'none';
+      let drawX = x;
+      if (align === 'center') drawX = x + w / 2;
+      else if (align === 'right') drawX = x + w;
+      if (wrap) {
+        const lines = this._wrapTextLines(ctx, text, w, fontPx);
+        let lineY = y;
+        const strokeW = Math.max(1.4, 2 / this.scale);
+        for (const ln of lines) {
+          ctx.lineWidth = strokeW;
+          ctx.strokeStyle = strokeCol;
+          ctx.lineJoin = 'round';
+          ctx.miterLimit = 2;
+          ctx.strokeText(ln, drawX, lineY);
+          ctx.fillStyle = fillCol;
+          ctx.fillText(ln, drawX, lineY);
+          lineY += fontPx * 1.2;
+          if (lineY > y + hh - fontPx) break;
+        }
+      } else {
+        const maxChars = Math.max(8, Math.floor(w / (fontPx * 0.55)));
+        const shown = text.length > maxChars ? text.slice(0, maxChars - 1) + '…' : text;
+        const strokeW = Math.max(1.4, 2 / this.scale);
+        ctx.lineWidth = strokeW;
+        ctx.strokeStyle = strokeCol;
+        ctx.lineJoin = 'round';
+        ctx.miterLimit = 2;
+        ctx.strokeText(shown, drawX, y);
+        ctx.fillStyle = fillCol;
+        ctx.fillText(shown, drawX, y);
+      }
+      ctx.textAlign = 'left';
     }
     if (this.mode === 'editor' && (isHover || isOutlineHL || this.selection.has(h.id))) {
       ctx.lineWidth = 1.4 / this.scale;
@@ -651,6 +704,25 @@ export class Viewer {
       }
     }
     ctx.restore();
+  }
+
+  _wrapTextLines(ctx, text, maxWidth, fontPx) {
+    const paragraphs = String(text || '').split('\n');
+    const lines = [];
+    for (const para of paragraphs) {
+      if (!para) { lines.push(''); continue; }
+      const words = para.split(' ');
+      let line = '';
+      for (const w of words) {
+        const candidate = line ? line + ' ' + w : w;
+        const width = ctx.measureText(candidate).width;
+        if (width > maxWidth && line) { lines.push(line); line = w; }
+        else line = candidate;
+      }
+      if (line) lines.push(line);
+    }
+    void fontPx;
+    return lines;
   }
 
   _stickyAngleHash(id) {

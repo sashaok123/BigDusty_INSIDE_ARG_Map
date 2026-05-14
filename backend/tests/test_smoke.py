@@ -347,6 +347,129 @@ async def test_edge_label_object_round_trip(client, admin_token):
     assert snap2.json()["revision"] == rev1 + 1
 
 
+_TINY_WEBM = (
+    b"\x1a\x45\xdf\xa3"
+    b"\x9f\x42\x86\x81\x01"
+    b"\x42\xf7\x81\x01"
+    b"\x42\xf2\x81\x04"
+    b"\x42\xf3\x81\x08"
+    b"\x42\x82\x84webm"
+    b"\x42\x87\x81\x02"
+    b"\x42\x85\x81\x02"
+)
+
+
+async def test_video_upload_accepted(client, admin_token):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    files = {"file": ("clip.webm", _TINY_WEBM, "video/webm")}
+    resp = await client.post("/canvas/main/images", files=files, headers=headers)
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert body["mime"] == "video/webm"
+    assert body["size"] == len(_TINY_WEBM)
+    fetched = await client.get(body["url"])
+    assert fetched.status_code == 200
+    assert fetched.headers["content-type"].startswith("video/webm")
+    audit = await client.get("/admin/audit", headers=headers)
+    actions = [r["action"] for r in audit.json()]
+    assert "video_uploaded" in actions
+
+
+async def test_video_upload_rejects_unsupported(client, admin_token):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    files = {"file": ("clip.avi", b"\x00" * 16, "video/x-msvideo")}
+    resp = await client.post("/canvas/main/images", files=files, headers=headers)
+    assert resp.status_code == 415
+
+
+async def test_comments_create_list_reply(client, admin_token):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    create = await client.post(
+        "/canvas/main/comments",
+        json={"x": 100.5, "y": 50.25, "body": "Look at this corner"},
+        headers=headers,
+    )
+    assert create.status_code == 201, create.text
+    body = create.json()
+    assert body["id"]
+    assert body["x"] == 100.5
+    assert body["y"] == 50.25
+    assert isinstance(body["thread"], list)
+    assert body["thread"][0]["body"] == "Look at this corner"
+
+    reply = await client.post(
+        f"/canvas/main/comments/{body['id']}/reply",
+        json={"body": "I see it too"},
+        headers=headers,
+    )
+    assert reply.status_code == 200, reply.text
+    assert len(reply.json()["thread"]) == 2
+
+    listed = await client.get("/canvas/main/comments")
+    assert listed.status_code == 200
+    rows = listed.json()
+    ids = [r["id"] for r in rows]
+    assert body["id"] in ids
+
+
+async def test_comments_anonymous_can_read_not_write(client):
+    listed = await client.get("/canvas/main/comments")
+    assert listed.status_code == 200
+    rejected = await client.post(
+        "/canvas/main/comments",
+        json={"x": 1.0, "y": 1.0, "body": "anon"},
+    )
+    assert rejected.status_code == 401
+
+
+async def test_node_text_style_round_trip(client, admin_token):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    create = await client.post(
+        "/canvas/main/nodes",
+        json={
+            "id": "node_textstyle",
+            "type": "text",
+            "x": 0, "y": 0, "width": 200, "height": 60,
+            "text": "Hello",
+            "kind": "text",
+            "text_style": {"size": "L", "family": "mono", "color": "auto", "align": "center"},
+        },
+        headers=headers,
+    )
+    assert create.status_code == 201, create.text
+    snap = await client.get("/canvas/main")
+    node = next(n for n in snap.json()["data"]["nodes"] if n["id"] == "node_textstyle")
+    assert node["text_style"]["size"] == "L"
+    assert node["text_style"]["family"] == "mono"
+
+
+async def test_video_node_round_trip(client, admin_token):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    create = await client.post(
+        "/canvas/main/nodes",
+        json={
+            "id": "node_video",
+            "type": "link",
+            "x": 0, "y": 0, "width": 560, "height": 320,
+            "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            "kind": "video",
+            "media": {
+                "kind": "youtube",
+                "provider": "youtube",
+                "videoId": "dQw4w9WgXcQ",
+                "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                "embedUrl": "https://www.youtube.com/embed/dQw4w9WgXcQ",
+            },
+        },
+        headers=headers,
+    )
+    assert create.status_code == 201, create.text
+    snap = await client.get("/canvas/main")
+    node = next(n for n in snap.json()["data"]["nodes"] if n["id"] == "node_video")
+    assert node["kind"] == "video"
+    assert node["media"]["videoId"] == "dQw4w9WgXcQ"
+
+
 async def test_node_translations_persist(client, admin_token):
     headers = {"Authorization": f"Bearer {admin_token}"}
     create = await client.post(

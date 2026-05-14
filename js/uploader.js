@@ -4,13 +4,22 @@
 
 import { tr } from './i18n.js';
 
-export const ALLOWED_MIMES = new Set(['image/png', 'image/jpeg', 'image/webp']);
+export const ALLOWED_IMAGE_MIMES = new Set(['image/png', 'image/jpeg', 'image/webp']);
+export const ALLOWED_VIDEO_MIMES = new Set(['video/mp4', 'video/webm']);
+export const ALLOWED_MIMES = new Set([...ALLOWED_IMAGE_MIMES, ...ALLOWED_VIDEO_MIMES]);
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+export const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
+
+export function isVideoMime(mime) {
+  return ALLOWED_VIDEO_MIMES.has(String(mime || '').toLowerCase());
+}
 
 export function validateImageFile(file) {
   if (!file || !file.type) return 'invalid_type';
-  if (!ALLOWED_MIMES.has(file.type.toLowerCase())) return 'invalid_type';
-  if (typeof file.size === 'number' && file.size > MAX_IMAGE_BYTES) return 'too_large';
+  const mime = file.type.toLowerCase();
+  if (!ALLOWED_MIMES.has(mime)) return 'invalid_type';
+  const max = isVideoMime(mime) ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
+  if (typeof file.size === 'number' && file.size > max) return 'too_large';
   return null;
 }
 
@@ -51,7 +60,7 @@ export class Uploader {
       input = document.createElement('input');
       input.type = 'file';
       input.id = 'upload-image-picker';
-      input.accept = 'image/png,image/jpeg,image/webp';
+      input.accept = 'image/png,image/jpeg,image/webp,video/mp4,video/webm';
       input.multiple = true;
       input.style.display = 'none';
       document.body.appendChild(input);
@@ -133,8 +142,9 @@ export class Uploader {
       if (reason === 'invalid_type') { this.onToast(tr('upload_image_invalid_type'), 'error'); continue; }
       if (reason === 'too_large')   { this.onToast(tr('upload_image_too_large'),  'error'); continue; }
       try {
+        const isVideo = isVideoMime(f.type);
         let toUpload = f;
-        if (f.type && f.type !== 'image/webp') {
+        if (!isVideo && f.type && f.type !== 'image/webp') {
           const converted = await this._convertToWebP(f).catch(() => null);
           if (converted) {
             const baseName = (f.name || 'image').replace(/\.[^.]+$/, '') + '.webp';
@@ -143,14 +153,18 @@ export class Uploader {
         }
         const result = await this.onUpload(toUpload);
         if (!result || !result.url) continue;
-        const dims = await this._readImageDims(toUpload).catch(() => null);
-        const w = dims ? dims.w : 400;
-        const h = dims ? dims.h : 300;
-        const longest = Math.max(w, h) || 1;
-        const target = 400;
-        const scale = longest > target ? target / longest : 1;
-        const finalW = Math.max(40, Math.round(w * scale));
-        const finalH = Math.max(40, Math.round(h * scale));
+        let w; let h;
+        if (isVideo) { w = 560; h = 320; }
+        else {
+          const dims = await this._readImageDims(toUpload).catch(() => null);
+          w = dims ? dims.w : 400;
+          h = dims ? dims.h : 300;
+          const longest = Math.max(w, h) || 1;
+          const target = 400;
+          const scale = longest > target ? target / longest : 1;
+          w = Math.max(40, Math.round(w * scale));
+          h = Math.max(40, Math.round(h * scale));
+        }
         const worldPt = dropPoint
           ? this.toClientToImage(dropPoint.clientX, dropPoint.clientY)
           : this._defaultWorldPoint();
@@ -161,12 +175,13 @@ export class Uploader {
           sha256: result.sha256 || null,
           mime: result.mime || f.type || 'image/png',
           size: result.size || f.size || 0,
-          name: f.name || 'image',
+          name: f.name || (isVideo ? 'video' : 'image'),
+          kind: isVideo ? 'video' : 'image',
           rect: {
-            x: Math.round(worldPt.x - finalW / 2 + offset),
-            y: Math.round(worldPt.y - finalH / 2 + offset),
-            w: finalW,
-            h: finalH,
+            x: Math.round(worldPt.x - w / 2 + offset),
+            y: Math.round(worldPt.y - h / 2 + offset),
+            w,
+            h,
           },
         };
         await this.onPlaceNode(placement);

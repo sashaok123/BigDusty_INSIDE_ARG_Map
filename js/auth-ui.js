@@ -487,8 +487,21 @@ export class AuthUI {
       if (!np || np.length < 8) return;
       try { await resetPassword(u.id, np); } catch (e) { void e; }
     }});
-    const toggle = el('button', { type: 'button', text: tr('user_toggle_admin'), onclick: async () => {
-      try { await setAdmin(u.id, !u.is_admin); await reload(); } catch (e) { void e; }
+    const toggleLabel = u.is_admin ? tr('user_revoke_admin') : tr('user_grant_admin');
+    const toggle = el('button', { type: 'button', text: toggleLabel, onclick: async () => {
+      const grant = !u.is_admin;
+      const word = grant ? tr('user_admin_grant_word') : tr('user_admin_revoke_word');
+      const titleK = grant ? 'user_grant_admin_title' : 'user_revoke_admin_title';
+      const messageK = grant ? 'user_grant_admin_message' : 'user_revoke_admin_message';
+      this._showAdminToggleConfirm({
+        title: tr(titleK),
+        message: tr(messageK, { username: u.username }),
+        word,
+        onConfirm: async () => {
+          try { await setAdmin(u.id, grant); await reload(); }
+          catch (e) { void e; }
+        },
+      });
     }});
     const me = getCurrentUser();
     const del = el('button', { type: 'button', class: 'danger', text: tr('user_delete'), onclick: async () => {
@@ -496,10 +509,58 @@ export class AuthUI {
       if (!confirm(msg)) return;
       try { await deleteUser(u.id); await reload(); } catch (e) { void e; }
     }});
-    if (me && me.id === u.id) del.disabled = true;
+    if (me && me.id === u.id) { del.disabled = true; toggle.disabled = true; }
     acts.appendChild(reset); acts.appendChild(toggle); acts.appendChild(del);
     row.appendChild(name); row.appendChild(acts);
     return row;
+  }
+
+  _showAdminToggleConfirm(opts) {
+    const o = opts || {};
+    const overlay = el('div', { class: 'auth-modal open' });
+    overlay.style.zIndex = '2700';
+    const box = el('div', { class: 'auth-modal-box' });
+    const head = el('div', { class: 'auth-modal-head' });
+    const titleEl = el('h2', { text: o.title || tr('user_admin_confirm_title') });
+    const closeBtn = el('button', { type: 'button', class: 'auth-x', html: '&times;' });
+    head.appendChild(titleEl); head.appendChild(closeBtn);
+    const body = el('div', { class: 'auth-modal-body' });
+    const msg = el('p', { class: 'auth-confirm-text', text: o.message || '' });
+    const hint = el('p', { class: 'auth-confirm-hint',
+      text: tr('user_admin_confirm_hint', { word: o.word }) });
+    const input = el('input', { type: 'text', autocomplete: 'off', spellcheck: 'false' });
+    input.placeholder = o.word;
+    const err = el('div', { class: 'auth-error' });
+    const actions = el('div', { class: 'auth-actions' });
+    const cancelBtn = el('button', { type: 'button', class: 'modal-btn cancel', text: tr('editor_cancel_button') });
+    const okBtn = el('button', { type: 'button', class: 'auth-primary', text: o.confirmLabel || tr('user_admin_confirm_apply') });
+    okBtn.disabled = true;
+    actions.appendChild(cancelBtn); actions.appendChild(okBtn);
+    body.appendChild(msg); body.appendChild(hint); body.appendChild(input);
+    body.appendChild(err); body.appendChild(actions);
+    box.appendChild(head); box.appendChild(body);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    const close = () => { try { document.body.removeChild(overlay); } catch (e) { void e; } };
+    closeBtn.addEventListener('click', close);
+    cancelBtn.addEventListener('click', close);
+    overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) close(); });
+    input.addEventListener('input', () => {
+      okBtn.disabled = input.value.trim() !== o.word;
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); if (!okBtn.disabled) okBtn.click(); }
+    });
+    okBtn.addEventListener('click', async () => {
+      if (input.value.trim() !== o.word) return;
+      okBtn.disabled = true;
+      try { await o.onConfirm(); close(); }
+      catch (e) {
+        err.textContent = tr('login_error_credentials');
+        okBtn.disabled = false;
+      }
+    });
+    setTimeout(() => input.focus(), 30);
   }
 
   _renderInvitationRow(inv, reload) {

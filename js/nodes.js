@@ -56,8 +56,16 @@ export function isTextNode(n) {
   return n && n.kind === 'text';
 }
 
+export function isVideoNode(n) {
+  if (!n) return false;
+  if (n.kind === 'video') return true;
+  if (typeof n.mime === 'string' && /^video\//i.test(n.mime)) return true;
+  if (n.media && (n.media.kind === 'youtube' || n.media.kind === 'vimeo' || n.media.kind === 'video')) return true;
+  return false;
+}
+
 export function isEditableNode(n) {
-  return n && (isPuzzleNode(n) || isStickyNode(n) || isGroupNode(n) || isTextNode(n));
+  return n && (isPuzzleNode(n) || isStickyNode(n) || isGroupNode(n) || isTextNode(n) || isVideoNode(n));
 }
 
 export function nodeRect(n) {
@@ -95,6 +103,9 @@ export function toViewShape(n) {
     label: typeof n.label === 'string' ? n.label : '',
     translations: n.translations && typeof n.translations === 'object' ? { ...n.translations } : null,
     text: typeof n.text === 'string' ? n.text : '',
+    text_style: n.text_style && typeof n.text_style === 'object' ? { ...n.text_style } : null,
+    media: n.media && typeof n.media === 'object' ? { ...n.media } : null,
+    mime: n.mime || null,
   };
 }
 
@@ -242,6 +253,17 @@ export function updatePuzzleNode(nodes, id, patch) {
     } else {
       delete n.translations;
     }
+  }
+  if (patch.text_style !== undefined) {
+    if (patch.text_style && typeof patch.text_style === 'object') {
+      n.text_style = { ...patch.text_style };
+    } else {
+      delete n.text_style;
+    }
+  }
+  if (patch.media !== undefined) {
+    if (patch.media && typeof patch.media === 'object') n.media = { ...patch.media };
+    else delete n.media;
   }
   return true;
 }

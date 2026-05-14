@@ -9,6 +9,7 @@ import { tr } from './i18n.js';
 const STORAGE_KEY = 'arg.editorTools';
 const CREATE_MODES = ['block', 'sticky', 'group', 'text'];
 const ROUTINGS = ['straight', 'orthogonal', 'manhattan', 'smooth'];
+const VIDEO_ICON = '<rect x="3.5" y="6.5" width="13" height="11" rx="1.5"/><path d="M16.5 10 L21 7.5 L21 16.5 L16.5 14 Z"/>';
 
 const SVG_PATHS = {
   browse:     '<circle cx="11" cy="11" r="7"/><path d="M16.2 16.2L21 21"/>',
@@ -37,6 +38,9 @@ const SVG_PATHS = {
   theme_auto: '<rect x="3" y="4" width="18" height="13" rx="1.5"/><path d="M8 21h8M12 17v4"/>',
   lang:       '<path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18"/><path d="M12 3a14 14 0 0 0 0 18"/><circle cx="12" cy="12" r="9"/>',
   signin:     '<path d="M10 17l5-5l-5-5"/><path d="M15 12H3"/><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/>',
+  video:      VIDEO_ICON,
+  align:      '<path d="M3 5h18"/><path d="M3 9h12"/><path d="M3 13h18"/><path d="M3 17h9"/>',
+  comment:    '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
 };
 
 function svgIcon(name, size) {
@@ -122,6 +126,14 @@ export class LeftRail {
     tools.appendChild(this._makeIconBtn({
       id: 'rail-tool-upload', icon: 'image_add', i18n: 'upload_image_button',
       onClick: () => this.handlers.onUploadImage && this.handlers.onUploadImage(),
+    }));
+    tools.appendChild(this._makeIconBtn({
+      id: 'rail-tool-video', icon: 'video', i18n: 'tool_add_video',
+      onClick: () => this.handlers.onAddVideo && this.handlers.onAddVideo(),
+    }));
+    tools.appendChild(this._makeIconBtn({
+      id: 'rail-tool-comment', icon: 'comment', i18n: 'tool_add_comment',
+      onClick: () => this.handlers.onAddComment && this.handlers.onAddComment(),
     }));
     tools.appendChild(this._makeArrowSubmenu());
     tools.appendChild(this._makeIconBtn({

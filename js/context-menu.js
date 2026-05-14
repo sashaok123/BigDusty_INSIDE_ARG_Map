@@ -1,9 +1,47 @@
 /* Global right-click context menu. Replaces the browser's native menu when
    the click lands on our surfaces (canvas, viewport, side panel, nodes). The
    item list is supplied by the caller per click, so context (single node /
-   multi-selection / empty canvas / group / file-image) decides what's shown. */
+   multi-selection / empty canvas / group / file-image) decides what's shown.
+   Surfaces that should never expose the native context menu are tagged via
+   the OWNED_SURFACES selector and the global capture-phase listener.       */
 
 import { tr } from './i18n.js';
+
+export const OWNED_SURFACES = [
+  '#viewport',
+  '#left-rail',
+  '#toolbar',
+  '#tb-overflow-menu',
+  '#panel',
+  '#minimap',
+  '#outline',
+  '#edit-node-modal',
+  '#editor-modal',
+  '#confirm-modal',
+  '#auth-login-modal',
+  '#auth-changepw-modal',
+  '#auth-users-modal',
+  '#auth-setup-modal',
+  '#auth-settings-modal',
+  '#auth-user-menu',
+  '#zoom-controls',
+  '#hotspot-tooltip',
+  '#selection-status',
+  '#offline-banner',
+  '#migration-banner',
+  '#search-results',
+  '.crop-overlay',
+  '.ctx-menu',
+  '.video-dialog',
+  '.align-floater',
+  '.comments-panel',
+  '.comment-pin',
+].join(',');
+
+export function isInOwnedSurface(el) {
+  if (!el || !el.closest) return false;
+  return !!el.closest(OWNED_SURFACES);
+}
 
 export class ContextMenu {
   constructor(opts) {

@@ -6,7 +6,7 @@ import { Viewer } from './viewer.js';
 import { SidePanel } from './side-panel.js';
 import { SearchBar } from './search.js';
 import { EditorModal } from './editor.js';
-import { ContextMenu, statusSubmenu } from './context-menu.js';
+import { ContextMenu, statusSubmenu, isInOwnedSurface } from './context-menu.js';
 import { ArrowLayer } from './arrows.js';
 import { Minimap } from './minimap.js';
 import { OutlinePanel } from './outline.js';
@@ -56,11 +56,17 @@ import {
   viewWithLang,
 } from './nodes.js';
 import { LeftRail } from './left-rail.js';
-import { EditNodeModal } from './edit-node-modal.js';
-import { Uploader, validateImageFile } from './uploader.js';
+import { EditNodeModal, detectVideoUrl } from './edit-node-modal.js';
+import { Uploader, validateImageFile, isVideoMime } from './uploader.js';
 import { openCropper } from './crop-tool.js';
 import { TouchHandler } from './touch.js';
 import { NodeClipboard } from './clipboard.js';
+import { openVideoUrlDialog } from './video-dialog.js';
+import { SettingsModal } from './settings-modal.js';
+import { AlignFloater } from './align-floater.js';
+import { CommentsLayer } from './comments-layer.js';
+import { SnapGuides } from './snap-guides.js';
+import { VideoOverlay } from './video-overlay.js';
 import { LANGS, initLang, getLang, setLang, tr } from './i18n.js';
 import { AuthUI } from './auth-ui.js';
 import { Realtime } from './realtime.js';
@@ -121,6 +127,11 @@ let clipboardMgr;
 let pendingTextClick = false;
 let backendRetryTimer = null;
 let backendOfflineMode = 'placeholder';
+let settingsModal;
+let alignFloater;
+let commentsLayer;
+let snapGuides;
+let videoOverlay;
 
 function $(id) { return document.getElementById(id); }
 
@@ -172,6 +183,12 @@ async function bootstrap() {
   setupSelectionStatus();
   setupTouch();
   setupBeforeUnload();
+  setupSettingsModal();
+  setupSnapGuides();
+  setupAlignFloater();
+  setupCommentsLayer();
+  setupVideoOverlay();
+  setupToastBridge();
 
   await loadInitialData();
   await outlinePanel.loadInitial();
@@ -286,6 +303,150 @@ function setupBeforeUnload() {
     }
     return undefined;
   });
+}
+
+function setupSettingsModal() {
+  settingsModal = new SettingsModal();
+  const btn = $('btn-settings');
+  if (btn) btn.addEventListener('click', () => settingsModal.open());
+}
+
+function setupSnapGuides() {
+  snapGuides = new SnapGuides({
+    viewport: $('viewport'),
+    getTransform: () => viewer ? viewer.getTransform() : { scale: 1, panX: 0, panY: 0 },
+  });
+}
+
+function setupAlignFloater() {
+  alignFloater = new AlignFloater({
+    viewport: $('viewport'),
+    getSelection: () => Array.from(state.selection),
+    getNode: (id) => findNode(state.nodes, id),
+    onApply: (op) => applyAlignmentOperation(op),
+  });
+}
+
+function setupCommentsLayer() {
+  commentsLayer = new CommentsLayer({
+    viewport: $('viewport'),
+    getTransform: () => viewer ? viewer.getTransform() : { scale: 1, panX: 0, panY: 0 },
+    isLoggedIn,
+    canvasId: 'main',
+  });
+  if (viewer && typeof viewer.subscribe === 'function') {
+    viewer.subscribe((kind) => {
+      if (kind === 'transform') commentsLayer.requestDraw();
+    });
+  }
+  commentsLayer.loadInitial();
+}
+
+function setupToastBridge() {
+  document.addEventListener('toast', (ev) => {
+    if (!ev || !ev.detail) return;
+    toast(ev.detail.msg || '', ev.detail.kind);
+  });
+}
+
+function setupVideoOverlay() {
+  videoOverlay = new VideoOverlay({
+    viewport: $('viewport'),
+    getNodes: () => state.nodes,
+    getTransform: () => viewer ? viewer.getTransform() : { scale: 1, panX: 0, panY: 0 },
+    viewer,
+  });
+  if (viewer) {
+    try { window.__viewer = viewer; } catch (e) { void e; }
+  }
+  videoOverlay.requestDraw();
+}
+
+function renderVideoOverlay() {
+  if (videoOverlay) videoOverlay.requestDraw();
+}
+
+async function triggerAddVideo() {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  const info = await openVideoUrlDialog();
+  if (!info) return;
+  const pt = viewer.imagePointFromClient(window.innerWidth / 2, window.innerHeight / 2);
+  const rect = { x: Math.round(pt.x - 280), y: Math.round(pt.y - 160), w: 560, h: 320 };
+  createVideoNode(rect, info);
+}
+
+function triggerAddComment() {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  if (!commentsLayer) return;
+  commentsLayer.armNextClick();
+  toast(tr('comment_arm_hint'));
+}
+
+function createVideoNode(rect, media) {
+  pushHistory();
+  const id = uniqueId(state.nodes, `video-${media.provider || 'media'}`);
+  const node = {
+    id,
+    type: 'link',
+    url: media.url,
+    x: rect.x, y: rect.y, width: rect.w, height: rect.h,
+    kind: 'video',
+    status: 'no-data',
+    tags: [],
+    slug: id,
+    media: { ...media },
+  };
+  state.nodes.set(id, node);
+  refreshPuzzleViewsInViewer();
+  if (viewer) viewer.notifyNodesChanged();
+  const newNode = findNode(state.nodes, id);
+  if (newNode) pushNodeCreate(toViewShape(newNode), '');
+  scheduleSave();
+  toast(tr('node_created'));
+  renderVideoOverlay();
+}
+
+function applyAlignmentOperation(op) {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  const ids = Array.from(state.selection);
+  if (ids.length < 2) return;
+  pushHistory();
+  const nodes = ids.map((id) => findNode(state.nodes, id)).filter(Boolean);
+  if (!nodes.length) return;
+  const lefts = nodes.map((n) => n.x);
+  const tops = nodes.map((n) => n.y);
+  const rights = nodes.map((n) => n.x + n.width);
+  const bottoms = nodes.map((n) => n.y + n.height);
+  const minLeft = Math.min(...lefts);
+  const minTop = Math.min(...tops);
+  const maxRight = Math.max(...rights);
+  const maxBottom = Math.max(...bottoms);
+  const cxMid = (minLeft + maxRight) / 2;
+  const cyMid = (minTop + maxBottom) / 2;
+  if (op === 'left') for (const n of nodes) n.x = minLeft;
+  else if (op === 'right') for (const n of nodes) n.x = maxRight - n.width;
+  else if (op === 'top') for (const n of nodes) n.y = minTop;
+  else if (op === 'bottom') for (const n of nodes) n.y = maxBottom - n.height;
+  else if (op === 'centerH') for (const n of nodes) n.x = Math.round(cxMid - n.width / 2);
+  else if (op === 'middleV') for (const n of nodes) n.y = Math.round(cyMid - n.height / 2);
+  else if (op === 'distH') {
+    const sorted = nodes.slice().sort((a, b) => a.x - b.x);
+    const totalW = sorted.reduce((s, n) => s + n.width, 0);
+    const span = maxRight - minLeft;
+    const gap = (span - totalW) / Math.max(1, sorted.length - 1);
+    let cur = minLeft;
+    for (const n of sorted) { n.x = Math.round(cur); cur += n.width + gap; }
+  } else if (op === 'distV') {
+    const sorted = nodes.slice().sort((a, b) => a.y - b.y);
+    const totalH = sorted.reduce((s, n) => s + n.height, 0);
+    const span = maxBottom - minTop;
+    const gap = (span - totalH) / Math.max(1, sorted.length - 1);
+    let cur = minTop;
+    for (const n of sorted) { n.y = Math.round(cur); cur += n.height + gap; }
+  }
+  for (const n of nodes) pushNodePatch(n.id, { x: n.x, y: n.y });
+  refreshPuzzleViewsInViewer();
+  scheduleSave();
 }
 
 function setupAuthUI() {
@@ -618,6 +779,7 @@ function refreshPuzzleViewsInViewer() {
   viewer.setHotspots(puzzleViews(state.nodes).map((v) => viewWithLang(v, lang)));
   viewer.setGroups(groupViews(state.nodes).map((v) => viewWithLang(v, lang)));
   if (viewer) viewer.notifyNodesChanged();
+  if (videoOverlay) videoOverlay.requestDraw();
 }
 
 function setupLeftRail() {
@@ -635,6 +797,8 @@ function setupLeftRail() {
       onUndo: () => doUndo(),
       onRedo: () => doRedo(),
       onUploadImage: () => uploader && uploader.openFilePicker(),
+      onAddVideo: () => triggerAddVideo(),
+      onAddComment: () => triggerAddComment(),
       onFocusSearch: () => {
         const s = $('search');
         if (s) { s.focus(); s.select(); }
@@ -717,6 +881,8 @@ function refreshSelectionStatus() {
   } else {
     selectionStatusEl.classList.remove('visible');
   }
+  try { document.dispatchEvent(new CustomEvent('selection:changed', { detail: { ids: Array.from(state.selection) } })); } catch (e) { void e; }
+  if (alignFloater) alignFloater.refresh();
 }
 
 function openRichEdit(id) {
@@ -743,11 +909,7 @@ function setupGlobalContextMenu() {
     const tgt = ev.target;
     if (!tgt) return;
     if (tgt.closest && tgt.closest('input, textarea, select, [contenteditable="true"]')) return;
-    const onCanvas = !!(tgt.closest && tgt.closest('#viewport'));
-    const onPanel = !!(tgt.closest && tgt.closest('#panel'));
-    const onToolbar = !!(tgt.closest && (tgt.closest('#toolbar') || tgt.closest('#editor-toolbar')));
-    if (!onCanvas && !onPanel && !onToolbar) return;
-    if (onCanvas) return;
+    if (!isInOwnedSurface(tgt)) return;
     ev.preventDefault();
   }, true);
 }
@@ -890,27 +1052,39 @@ function setupUploader() {
 async function placeUploadedImageNode(placement) {
   if (!placement || !placement.file) return null;
   const baseId = placement.name || 'image';
-  const id = uniqueId(state.nodes, `img-${baseId}`);
+  const isVideo = placement.kind === 'video' || isVideoMime(placement.mime);
+  const id = uniqueId(state.nodes, isVideo ? `video-${baseId}` : `img-${baseId}`);
   const parent = nodeAtParentLookup(state.nodes, placement.rect);
   const rect = placement.rect;
-  const node = {
-    id,
-    type: 'file',
-    x: rect.x,
-    y: rect.y,
-    width: rect.w,
-    height: rect.h,
-    file: placement.file,
-    kind: 'block',
-    status: 'no-data',
-    tags: [],
-    slug: id,
-  };
+  const node = isVideo
+    ? {
+        id,
+        type: 'file',
+        x: rect.x, y: rect.y, width: rect.w, height: rect.h,
+        file: placement.file,
+        kind: 'video',
+        mime: placement.mime,
+        status: 'no-data',
+        tags: [],
+        slug: id,
+        media: { kind: 'video', url: placement.file, provider: 'local' },
+      }
+    : {
+        id,
+        type: 'file',
+        x: rect.x, y: rect.y, width: rect.w, height: rect.h,
+        file: placement.file,
+        kind: 'block',
+        status: 'no-data',
+        tags: [],
+        slug: id,
+      };
   if (parent) node.parent = parent;
   state.nodes.set(id, node);
-  if (viewer) await viewer.addBlock({ id, rect, file: placement.file });
+  if (viewer && !isVideo) await viewer.addBlock({ id, rect, file: placement.file });
   refreshPuzzleViewsInViewer();
   if (viewer) viewer.notifyNodesChanged();
+  if (isVideo) renderVideoOverlay();
   if (state.backendOnline && isLoggedIn()) {
     trackSelfMutation('node_created', id);
     try {
@@ -1102,8 +1276,21 @@ function applyDragSelection(ids, dx, dy, commit) {
     n.y = o.y + dy;
     if (arrowLayer) arrowLayer.invalidateNode(id);
   }
+  if (snapGuides && !commit) {
+    const otherRects = [];
+    for (const n of state.nodes.values()) {
+      if (allIds.has(n.id)) continue;
+      otherRects.push({ x: n.x, y: n.y, w: n.width, h: n.height });
+    }
+    const dragRect = computeUnionBbox(Array.from(allIds));
+    if (dragRect) {
+      const guides = computeSnapGuides(dragRect, otherRects);
+      snapGuides.show(guides);
+    }
+  }
   refreshPuzzleViewsInViewer();
   if (commit) {
+    if (snapGuides) snapGuides.clear();
     for (const id of allIds) {
       const n = findNode(state.nodes, id);
       if (!n) continue;
@@ -1112,6 +1299,36 @@ function applyDragSelection(ids, dx, dy, commit) {
     applyDragSelection._orig = null;
     scheduleSave();
   }
+}
+
+function computeSnapGuides(dragRect, otherRects) {
+  const SNAP = 4;
+  const out = [];
+  const dragXs = [
+    { v: dragRect.x, role: 'left' },
+    { v: dragRect.x + dragRect.w, role: 'right' },
+    { v: dragRect.x + dragRect.w / 2, role: 'centerH' },
+  ];
+  const dragYs = [
+    { v: dragRect.y, role: 'top' },
+    { v: dragRect.y + dragRect.h, role: 'bottom' },
+    { v: dragRect.y + dragRect.h / 2, role: 'middleV' },
+  ];
+  for (const r of otherRects) {
+    const xs = [r.x, r.x + r.w, r.x + r.w / 2];
+    const ys = [r.y, r.y + r.h, r.y + r.h / 2];
+    for (const d of dragXs) for (const ox of xs) {
+      if (Math.abs(d.v - ox) <= SNAP) {
+        out.push({ x1: ox, y1: Math.min(dragRect.y, r.y) - 30, x2: ox, y2: Math.max(dragRect.y + dragRect.h, r.y + r.h) + 30 });
+      }
+    }
+    for (const d of dragYs) for (const oy of ys) {
+      if (Math.abs(d.v - oy) <= SNAP) {
+        out.push({ x1: Math.min(dragRect.x, r.x) - 30, y1: oy, x2: Math.max(dragRect.x + dragRect.w, r.x + r.w) + 30, y2: oy });
+      }
+    }
+  }
+  return out;
 }
 
 function groupCurrentSelection() {
@@ -1280,11 +1497,16 @@ function persistRichEditSave(payload) {
     caption: payload.caption,
     parent: payload.parent,
     translations: payload.translations || null,
+    text_style: payload.text_style || null,
+    media: payload.media || null,
   };
   if (isPuzzleNode(n) || isStickyNode(n) || isTextNode(n)) {
     patch.md = payload.md;
   } else if (isGroupNode(n)) {
     patch.label = payload.title;
+  }
+  if (payload.kind === 'video' && n.kind !== 'video') {
+    n.kind = 'video';
   }
   updatePuzzleNode(state.nodes, payload.id, patch);
   const updated = findNode(state.nodes, payload.id);
@@ -1298,6 +1520,9 @@ function persistRichEditSave(payload) {
     parent: updated.parent || null,
     caption: updated.caption || null,
     translations: updated.translations || null,
+    text_style: updated.text_style || null,
+    media: updated.media || null,
+    kind: updated.kind || null,
   };
   if (updated.type === 'text') wireBody.text = updated.text || '';
   pushNodePatch(payload.id, wireBody);
