@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Block annotator - INSIDE ARG map</title>
+<style>
+:root {
+  --bg:           #0F1115;
+  --panel-bg:     #1A1D24;
+  --panel-border: #2A2F3A;
+  --hover:        #232730;
+  --accent:       #4F8FF7;
+  --accent-dark:  #3B73D1;
+  --text:         #E8E8EC;
+  --text-dim:     #9598A1;
+  --danger:       #E83D3D;
+  --radius:       4px;
+  --topbar-h:     56px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 13px;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  user-select: none;
+}
+#topbar {
+  height: var(--topbar-h);
+  background: var(--panel-bg);
+  border-bottom: 1px solid var(--panel-border);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 12px;
+  flex-shrink: 0;
+  z-index: 10;
+  position: relative;
+}
+#title {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  margin-right: 8px;
+}
+#topbar .spacer { flex: 1; }
+#topbar .counter {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-right: 4px;
+}
+#topbar .counter b { color: var(--text); font-weight: 600; }
+.btn {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  cursor: pointer;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  transition: background .12s, border-color .12s;
+}
+.btn:hover { background: var(--hover); border-color: #3a3f4d; }
+.btn:active { background: #14171c; }
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.btn.primary:hover { background: var(--accent-dark); border-color: var(--accent-dark); }
+.btn.danger:hover { border-color: var(--danger); color: var(--danger); }
+#stage {
+  position: absolute;
+  inset: var(--topbar-h) 0 0 0;
+  overflow: hidden;
+  background:
+    linear-gradient(45deg, #16191f 25%, transparent 25%) 0 0/24px 24px,
+    linear-gradient(-45deg, #16191f 25%, transparent 25%) 0 0/24px 24px,
+    linear-gradient(45deg, transparent 75%, #16191f 75%) 0 0/24px 24px,
+    linear-gradient(-45deg, transparent 75%, #16191f 75%) 0 0/24px 24px,
+    var(--bg);
+}
+#canvas {
+  position: absolute;
+  top: 0; left: 0;
+  display: block;
+}
+#hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  color: var(--text-dim);
+  font-size: 14px;
+  text-align: center;
+  z-index: 3;
+}
+#hint.hidden { display: none; }
+#hint h2 {
+  color: var(--text);
+  font-weight: 600;
+  font-size: 18px;
+  margin-bottom: 8px;
+}
+#hint p { line-height: 1.55; max-width: 460px; }
+#hint kbd {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-family: 'Consolas', monospace;
+  font-size: 12px;
+  color: var(--text);
+}
+#statusbar {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  background: rgba(15, 17, 21, 0.86);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  padding: 4px 10px;
+  color: var(--text-dim);
+  font-family: 'Consolas', monospace;
+  font-size: 12px;
+  pointer-events: none;
+  z-index: 5;
+}
+#statusbar b { color: var(--text); font-weight: 600; }
+#ctxmenu {
+  position: fixed;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  padding: 4px 0;
+  min-width: 160px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+  z-index: 100;
+  font-size: 13px;
+}
+#ctxmenu .item {
+  padding: 6px 14px;
+  cursor: pointer;
+  color: var(--text);
+}
+#ctxmenu .item:hover { background: var(--hover); }
+#ctxmenu .item.danger:hover { background: #3a1a1c; color: var(--danger); }
+#ctxmenu .sep {
+  height: 1px;
+  background: var(--panel-border);
+  margin: 4px 0;
+}
+.modal-bg {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  min-width: 320px;
+  max-width: 480px;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.7);
+}
+.modal h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+.modal p { color: var(--text-dim); margin-bottom: 16px; line-height: 1.5; }
+.modal input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  margin-bottom: 16px;
+}
+.modal input:focus { outline: none; border-color: var(--accent); }
+.modal .row {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+input[type="file"] { display: none; }
+</style>
+</head>
+<body>
+<div id="topbar">
+  <div id="title">Block annotator - INSIDE ARG map</div>
+  <button id="btn-load" class="btn">Load poster</button>
+  <button id="btn-import" class="btn">Import JSON</button>
+  <button id="btn-export" class="btn primary">Export JSON</button>
+  <button id="btn-clear" class="btn danger">Clear all</button>
+  <div class="spacer"></div>
+  <div class="counter"><b id="count">0</b> blocks</div>
+</div>
+<div id="stage">
+  <canvas id="canvas"></canvas>
+  <div id="hint">
+    <h2>Load a poster to begin</h2>
+    <p>Click <kbd>Load poster</kbd> above, then left-drag to draw block rectangles. Use the wheel to zoom, <kbd>Shift</kbd>+drag or middle-mouse to pan.</p>
+  </div>
+  <div id="statusbar">zoom <b id="sb-zoom">1.00x</b> &nbsp; cursor <b id="sb-cursor">-, -</b> &nbsp; sel <b id="sb-sel">-</b></div>
+</div>
+<input type="file" id="file-load" accept="image/png,image/jpeg,image/webp">
+<input type="file" id="file-import" accept="application/json,.json">
+
+<script>
+"use strict";
+
+const PALETTE = [
+  "#4F8FF7", "#F77E4F", "#7ECF6A", "#E8B53D",
+  "#C36AE8", "#6AE8DC", "#E8556A", "#A8D03A",
+  "#3DA6E8", "#E84FB5", "#8FA8E8", "#E8D14F"
+];
+const ACCENT = "#4F8FF7";
+const MIN_RECT = 20;
+const HANDLE_SIZE = 8;
+const HANDLE_HIT = 12;
+const BORDER_PX = 3;
+const MIN_ZOOM = 0.1;
+const MAX_ZOOM = 8;
+const HISTORY_MAX = 50;
+const STORAGE_KEY = "inside_arg_annotate_v1";
+const SAVE_DEBOUNCE_MS = 300;
+const DRAG_THRESHOLD = 4;
+
+const state = {
+  image: null,
+  imageName: "poster.png",
+  imageW: 0,
+  imageH: 0,
+  blocks: [],
+  selectedId: null,
+  nextNum: 1,
+  zoom: 1,
+  tx: 0,
+  ty: 0,
+  history: [],
+  historyIdx: -1,
+  drag: null,
+  saveTimer: null,
+  dpr: window.devicePixelRatio || 1
+};
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const stage = document.getElementById("stage");
+const hint = document.getElementById("hint");
+const countEl = document.getElementById("count");
+const sbZoom = document.getElementById("sb-zoom");
+const sbCursor = document.getElementById("sb-cursor");
+const sbSel = document.getElementById("sb-sel");
+
+function uid() { return state.nextNum++; }
+function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+function fmtId(n) { return "block_" + String(n).padStart(3, "0"); }
+
+function paletteFor(num) { return PALETTE[(num - 1) % PALETTE.length]; }
+
+function hexToRgb(hex) {
+  const m = hex.replace("#", "");
+  return {
+    r: parseInt(m.slice(0, 2), 16),
+    g: parseInt(m.slice(2, 4), 16),
+    b: parseInt(m.slice(4, 6), 16)
+  };
+}
+
+function rgba(hex, alpha) {
+  const c = hexToRgb(hex);
+  return "rgba(" + c.r + "," + c.g + "," + c.b + "," + alpha + ")";
+}
+
+function fitZoom() {
+  if (!state.image) return;
+  const sw = stage.clientWidth;
+  const sh = stage.clientHeight;
+  const pad = 24;
+  const z = Math.min((sw - pad * 2) / state.imageW, (sh - pad * 2) / state.imageH);
+  state.zoom = clamp(z, MIN_ZOOM, MAX_ZOOM);
+  state.tx = Math.floor((sw - state.imageW * state.zoom) / 2);
+  state.ty = Math.floor((sh - state.imageH * state.zoom) / 2);
+}
+
+function resizeCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  state.dpr = dpr;
+  const w = stage.clientWidth;
+  const h = stage.clientHeight;
+  canvas.width = Math.floor(w * dpr);
+  canvas.height = Math.floor(h * dpr);
+  canvas.style.width = w + "px";
+  canvas.style.height = h + "px";
+  draw();
+}
+
+function worldToScreen(x, y) {
+  return { x: x * state.zoom + state.tx, y: y * state.zoom + state.ty };
+}
+function screenToWorld(x, y) {
+  return { x: (x - state.tx) / state.zoom, y: (y - state.ty) / state.zoom };
+}
+
+function findBlock(id) { return state.blocks.find(b => b.id === id); }
+
+function selectedBlock() {
+  return state.selectedId ? findBlock(state.selectedId) : null;
+}
+
+function setSelected(id) {
+  state.selectedId = id;
+  sbSel.textContent = id ? id : "-";
+  draw();
+}
+
+function updateCounter() {
+  countEl.textContent = state.blocks.length;
+}
+
+function pushHistory() {
+  state.history = state.history.slice(0, state.historyIdx + 1);
+  state.history.push(JSON.parse(JSON.stringify({
+    blocks: state.blocks,
+    selectedId: state.selectedId,
+    nextNum: state.nextNum
+  })));
+  while (state.history.length > HISTORY_MAX) state.history.shift();
+  state.historyIdx = state.history.length - 1;
+  scheduleSave();
+}
+
+function restore(snap) {
+  state.blocks = JSON.parse(JSON.stringify(snap.blocks));
+  state.selectedId = snap.selectedId;
+  state.nextNum = snap.nextNum;
+  updateCounter();
+  sbSel.textContent = state.selectedId || "-";
+  draw();
+}
+
+function undo() {
+  if (state.historyIdx <= 0) return;
+  state.historyIdx--;
+  restore(state.history[state.historyIdx]);
+  scheduleSave();
+}
+
+function redo() {
+  if (state.historyIdx >= state.history.length - 1) return;
+  state.historyIdx++;
+  restore(state.history[state.historyIdx]);
+  scheduleSave();
+}
+
+function scheduleSave() {
+  if (state.saveTimer) clearTimeout(state.saveTimer);
+  state.saveTimer = setTimeout(saveLocal, SAVE_DEBOUNCE_MS);
+}
+
+function saveLocal() {
+  try {
+    const payload = {
+      version: 1,
+      imageName: state.imageName,
+      imageW: state.imageW,
+      imageH: state.imageH,
+      blocks: state.blocks,
+      nextNum: state.nextNum
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  } catch (e) {
+    console.warn("save failed", e);
+  }
+}
+
+function loadLocal() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return false;
+    const p = JSON.parse(raw);
+    state.pendingRestore = {
+      imageName: p.imageName || "poster.png",
+      imageW: p.imageW || 0,
+      imageH: p.imageH || 0,
+      blocks: p.blocks || [],
+      nextNum: p.nextNum || ((p.blocks || []).length + 1)
+    };
+    if (state.pendingRestore.blocks.length > 0) {
+      toast("Found " + state.pendingRestore.blocks.length + " saved rectangles - load the same poster to restore");
+    }
+    return true;
+  } catch (e) {
+    console.warn("load local failed", e);
+    return false;
+  }
+}
+
+function loadImageFromFile(file) {
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    const url = ev.target.result;
+    const img = new Image();
+    img.onload = () => {
+      state.image = img;
+      state.imageName = file.name || "poster.png";
+      state.imageW = img.naturalWidth;
+      state.imageH = img.naturalHeight;
+      const pr = state.pendingRestore;
+      const same = pr && pr.imageName === state.imageName && pr.imageW === state.imageW && pr.imageH === state.imageH;
+      if (same && pr.blocks.length > 0) {
+        state.blocks = pr.blocks.map(b => ({
+          id: b.id,
+          num: b.num != null ? b.num : parseInt((b.id || "").replace(/[^0-9]/g, ""), 10) || 1,
+          label: b.label || ("Block " + (b.num || 1)),
+          color: b.color || paletteFor(b.num || 1),
+          rect: normalizeRect(b.rect)
+        }));
+        state.nextNum = pr.nextNum;
+        toast("Restored " + state.blocks.length + " rectangles");
+      } else {
+        state.blocks = [];
+        state.nextNum = 1;
+      }
+      state.pendingRestore = null;
+      state.selectedId = null;
+      state.history = [];
+      state.historyIdx = -1;
+      hint.classList.add("hidden");
+      fitZoom();
+      updateCounter();
+      pushHistory();
+      draw();
+    };
+    img.src = url;
+  };
+  reader.readAsDataURL(file);
+}
+
+function pixelSnap(v) { return Math.round(v); }
+
+function normalizeRect(r) {
+  let x = pixelSnap(Math.min(r.x, r.x + r.w));
+  let y = pixelSnap(Math.min(r.y, r.y + r.h));
+  let w = pixelSnap(Math.abs(r.w));
+  let h = pixelSnap(Math.abs(r.h));
+  x = clamp(x, 0, state.imageW);
+  y = clamp(y, 0, state.imageH);
+  if (x + w > state.imageW) w = state.imageW - x;
+  if (y + h > state.imageH) h = state.imageH - y;
+  return { x, y, w, h };
+}
+
+function makeBlock(rect) {
+  const n = state.nextNum;
+  const b = {
+    id: fmtId(n),
+    num: n,
+    label: "Block " + n,
+    color: paletteFor(n),
+    rect: normalizeRect(rect)
+  };
+  state.nextNum = n + 1;
+  state.blocks.push(b);
+  return b;
+}
+
+function deleteBlock(id) {
+  const i = state.blocks.findIndex(b => b.id === id);
+  if (i < 0) return false;
+  state.blocks.splice(i, 1);
+  if (state.selectedId === id) state.selectedId = null;
+  return true;
+}
+
+function bringFront(id) {
+  const i = state.blocks.findIndex(b => b.id === id);
+  if (i < 0) return;
+  const b = state.blocks.splice(i, 1)[0];
+  state.blocks.push(b);
+}
+
+function sendBack(id) {
+  const i = state.blocks.findIndex(b => b.id === id);
+  if (i < 0) return;
+  const b = state.blocks.splice(i, 1)[0];
+  state.blocks.unshift(b);
+}
+
+function pointInRect(px, py, r) {
+  return px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h;
+}
+
+function blockAt(wx, wy) {
+  for (let i = state.blocks.length - 1; i >= 0; i--) {
+    if (pointInRect(wx, wy, state.blocks[i].rect)) return state.blocks[i];
+  }
+  return null;
+}
+
+function handlePositions(r) {
+  const cx = r.x + r.w / 2;
+  const cy = r.y + r.h / 2;
+  return [
+    { k: "nw", x: r.x,       y: r.y       },
+    { k: "n",  x: cx,        y: r.y       },
+    { k: "ne", x: r.x + r.w, y: r.y       },
+    { k: "e",  x: r.x + r.w, y: cy        },
+    { k: "se", x: r.x + r.w, y: r.y + r.h },
+    { k: "s",  x: cx,        y: r.y + r.h },
+    { k: "sw", x: r.x,       y: r.y + r.h },
+    { k: "w",  x: r.x,       y: cy        }
+  ];
+}
+
+function handleAt(sx, sy, block) {
+  if (!block) return null;
+  const hs = handlePositions(block.rect);
+  for (const h of hs) {
+    const p = worldToScreen(h.x, h.y);
+    if (Math.abs(p.x - sx) <= HANDLE_HIT && Math.abs(p.y - sy) <= HANDLE_HIT) {
+      return h.k;
+    }
+  }
+  return null;
+}
+
+function cursorForHandle(k) {
+  switch (k) {
+    case "nw": case "se": return "nwse-resize";
+    case "ne": case "sw": return "nesw-resize";
+    case "n":  case "s":  return "ns-resize";
+    case "e":  case "w":  return "ew-resize";
+  }
+  return "default";
+}
+
+function applyResize(orig, k, dx, dy) {
+  let { x, y, w, h } = orig;
+  if (k.includes("w")) { x += dx; w -= dx; }
+  if (k.includes("e")) { w += dx; }
+  if (k.includes("n")) { y += dy; h -= dy; }
+  if (k.includes("s")) { h += dy; }
+  if (w < 0) { x += w; w = -w; }
+  if (h < 0) { y += h; h = -h; }
+  return normalizeRect({ x, y, w, h });
+}
+
+function draw() {
+  const dpr = state.dpr;
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  if (!state.image) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.save();
+  ctx.translate(state.tx, state.ty);
+  ctx.scale(state.zoom, state.zoom);
+  ctx.imageSmoothingEnabled = state.zoom < 1;
+  ctx.drawImage(state.image, 0, 0, state.imageW, state.imageH);
+  ctx.restore();
+
+  for (const b of state.blocks) {
+    drawBlock(b, b.id === state.selectedId);
+  }
+
+  if (state.drag && state.drag.kind === "draw") {
+    drawPreview(state.drag.previewRect);
+  }
+}
+
+function drawBlock(b, selected) {
+  const p = worldToScreen(b.rect.x, b.rect.y);
+  const w = b.rect.w * state.zoom;
+  const h = b.rect.h * state.zoom;
+  const color = selected ? ACCENT : b.color;
+  ctx.save();
+  ctx.fillStyle = rgba(color, 0.15);
+  ctx.fillRect(p.x, p.y, w, h);
+  ctx.lineWidth = BORDER_PX;
+  ctx.strokeStyle = color;
+  ctx.strokeRect(p.x + BORDER_PX / 2, p.y + BORDER_PX / 2, w - BORDER_PX, h - BORDER_PX);
+
+  const label = "B" + b.num;
+  ctx.font = "12px Segoe UI, system-ui, sans-serif";
+  const tw = ctx.measureText(label).width;
+  const pad = 4;
+  ctx.fillStyle = color;
+  ctx.fillRect(p.x, p.y, tw + pad * 2, 18);
+  ctx.fillStyle = "#fff";
+  ctx.textBaseline = "top";
+  ctx.fillText(label, p.x + pad, p.y + 3);
+
+  if (selected) {
+    ctx.font = "12px Segoe UI, system-ui, sans-serif";
+    const ltw = ctx.measureText(b.label).width;
+    ctx.fillStyle = "rgba(15,17,21,0.86)";
+    ctx.fillRect(p.x, p.y + h - 18, ltw + pad * 2, 18);
+    ctx.fillStyle = "#fff";
+    ctx.fillText(b.label, p.x + pad, p.y + h - 18 + 3);
+    drawHandles(b.rect);
+  }
+  ctx.restore();
+}
+
+function drawHandles(r) {
+  const hs = handlePositions(r);
+  ctx.save();
+  for (const h of hs) {
+    const p = worldToScreen(h.x, h.y);
+    const s = HANDLE_SIZE;
+    ctx.fillStyle = ACCENT;
+    ctx.fillRect(p.x - s / 2, p.y - s / 2, s, s);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "#fff";
+    ctx.strokeRect(p.x - s / 2, p.y - s / 2, s, s);
+  }
+  ctx.restore();
+}
+
+function drawPreview(r) {
+  const n = normalizeRect(r);
+  if (n.w < 1 || n.h < 1) return;
+  const p = worldToScreen(n.x, n.y);
+  const w = n.w * state.zoom;
+  const h = n.h * state.zoom;
+  ctx.save();
+  ctx.fillStyle = rgba(ACCENT, 0.18);
+  ctx.fillRect(p.x, p.y, w, h);
+  ctx.lineWidth = BORDER_PX;
+  ctx.setLineDash([6, 4]);
+  ctx.strokeStyle = ACCENT;
+  ctx.strokeRect(p.x, p.y, w, h);
+  ctx.restore();
+}
+
+function getEventPos(ev) {
+  const r = stage.getBoundingClientRect();
+  return { x: ev.clientX - r.left, y: ev.clientY - r.top };
+}
+
+stage.addEventListener("mousedown", function(ev) {
+  if (!state.image) return;
+  hideCtx();
+  const pos = getEventPos(ev);
+  const w = screenToWorld(pos.x, pos.y);
+
+  if (ev.button === 1 || (ev.button === 0 && ev.shiftKey)) {
+    state.drag = { kind: "pan", startX: pos.x, startY: pos.y, baseTx: state.tx, baseTy: state.ty };
+    stage.style.cursor = "grabbing";
+    ev.preventDefault();
+    return;
+  }
+
+  if (ev.button === 2) {
+    const b = blockAt(w.x, w.y);
+    if (b) {
+      setSelected(b.id);
+      showCtxMenu(ev.clientX, ev.clientY, b);
+    }
+    ev.preventDefault();
+    return;
+  }
+
+  if (ev.button !== 0) return;
+
+  const sel = selectedBlock();
+  if (sel) {
+    const hk = handleAt(pos.x, pos.y, sel);
+    if (hk) {
+      state.drag = {
+        kind: "resize",
+        id: sel.id,
+        handle: hk,
+        startW: w,
+        origRect: { ...sel.rect }
+      };
+      stage.style.cursor = cursorForHandle(hk);
+      return;
+    }
+  }
+
+  const hit = blockAt(w.x, w.y);
+  if (hit) {
+    setSelected(hit.id);
+    state.drag = {
+      kind: "move",
+      id: hit.id,
+      startW: w,
+      origRect: { ...hit.rect },
+      moved: false
+    };
+    stage.style.cursor = "move";
+    return;
+  }
+
+  setSelected(null);
+  state.drag = {
+    kind: "draw",
+    startW: w,
+    previewRect: { x: w.x, y: w.y, w: 0, h: 0 }
+  };
+  stage.style.cursor = "crosshair";
+});
+
+window.addEventListener("mousemove", function(ev) {
+  if (!state.image) return;
+  const pos = getEventPos(ev);
+  const wpos = screenToWorld(pos.x, pos.y);
+  sbCursor.textContent = Math.round(wpos.x) + ", " + Math.round(wpos.y);
+
+  if (!state.drag) {
+    const sel = selectedBlock();
+    if (sel) {
+      const hk = handleAt(pos.x, pos.y, sel);
+      if (hk) { stage.style.cursor = cursorForHandle(hk); return; }
+    }
+    const hit = blockAt(wpos.x, wpos.y);
+    stage.style.cursor = hit ? "move" : "default";
+    return;
+  }
+
+  const d = state.drag;
+
+  if (d.kind === "pan") {
+    state.tx = d.baseTx + (pos.x - d.startX);
+    state.ty = d.baseTy + (pos.y - d.startY);
+    draw();
+    return;
+  }
+
+  if (d.kind === "draw") {
+    d.previewRect = {
+      x: d.startW.x,
+      y: d.startW.y,
+      w: wpos.x - d.startW.x,
+      h: wpos.y - d.startW.y
+    };
+    draw();
+    return;
+  }
+
+  if (d.kind === "move") {
+    const dx = wpos.x - d.startW.x;
+    const dy = wpos.y - d.startW.y;
+    if (!d.moved && Math.abs(dx * state.zoom) + Math.abs(dy * state.zoom) > DRAG_THRESHOLD) {
+      d.moved = true;
+    }
+    if (d.moved) {
+      const b = findBlock(d.id);
+      if (b) {
+        b.rect = normalizeRect({
+          x: d.origRect.x + dx,
+          y: d.origRect.y + dy,
+          w: d.origRect.w,
+          h: d.origRect.h
+        });
+        draw();
+      }
+    }
+    return;
+  }
+
+  if (d.kind === "resize") {
+    const dx = wpos.x - d.startW.x;
+    const dy = wpos.y - d.startW.y;
+    const b = findBlock(d.id);
+    if (b) {
+      b.rect = applyResize(d.origRect, d.handle, dx, dy);
+      draw();
+    }
+    return;
+  }
+});
+
+window.addEventListener("mouseup", function(ev) {
+  if (!state.drag) return;
+  const d = state.drag;
+  state.drag = null;
+  stage.style.cursor = "default";
+
+  if (d.kind === "draw") {
+    const r = normalizeRect(d.previewRect);
+    if (r.w >= MIN_RECT && r.h >= MIN_RECT) {
+      const b = makeBlock(r);
+      setSelected(b.id);
+      updateCounter();
+      pushHistory();
+    } else {
+      draw();
+    }
+    return;
+  }
+
+  if (d.kind === "move") {
+    if (d.moved) {
+      pushHistory();
+    }
+    return;
+  }
+
+  if (d.kind === "resize") {
+    pushHistory();
+    return;
+  }
+});
+
+stage.addEventListener("wheel", function(ev) {
+  if (!state.image) return;
+  ev.preventDefault();
+  const pos = getEventPos(ev);
+  const w = screenToWorld(pos.x, pos.y);
+  const factor = ev.deltaY < 0 ? 1.15 : 1 / 1.15;
+  const newZoom = clamp(state.zoom * factor, MIN_ZOOM, MAX_ZOOM);
+  if (newZoom === state.zoom) return;
+  state.zoom = newZoom;
+  state.tx = pos.x - w.x * state.zoom;
+  state.ty = pos.y - w.y * state.zoom;
+  sbZoom.textContent = state.zoom.toFixed(2) + "x";
+  draw();
+}, { passive: false });
+
+stage.addEventListener("contextmenu", function(ev) {
+  ev.preventDefault();
+});
+
+window.addEventListener("keydown", function(ev) {
+  if (isTyping(ev.target)) return;
+  const key = ev.key;
+  if (key === "Escape") {
+    hideCtx();
+    setSelected(null);
+    if (state.drag) { state.drag = null; stage.style.cursor = "default"; draw(); }
+    return;
+  }
+  if ((key === "Delete" || key === "Backspace") && state.selectedId) {
+    ev.preventDefault();
+    const b = findBlock(state.selectedId);
+    if (b) askConfirm("Delete " + b.label + "?", function() {
+      deleteBlock(b.id);
+      updateCounter();
+      pushHistory();
+      draw();
+    });
+    return;
+  }
+  if (ev.ctrlKey || ev.metaKey) {
+    if (key === "z" || key === "Z") {
+      ev.preventDefault();
+      if (ev.shiftKey) redo(); else undo();
+      return;
+    }
+    if (key === "y" || key === "Y") { ev.preventDefault(); redo(); return; }
+    if (key === "e" || key === "E" || key === "s" || key === "S") {
+      ev.preventDefault();
+      exportJSON();
+      return;
+    }
+  }
+  if (key === "+" || key === "=") { zoomBy(1.2); return; }
+  if (key === "-" || key === "_") { zoomBy(1 / 1.2); return; }
+  if (key === "0") { fitZoom(); sbZoom.textContent = state.zoom.toFixed(2) + "x"; draw(); return; }
+});
+
+function isTyping(el) {
+  if (!el) return false;
+  const tag = el.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable;
+}
+
+function zoomBy(factor) {
+  if (!state.image) return;
+  const sw = stage.clientWidth;
+  const sh = stage.clientHeight;
+  const cx = sw / 2;
+  const cy = sh / 2;
+  const w = screenToWorld(cx, cy);
+  state.zoom = clamp(state.zoom * factor, MIN_ZOOM, MAX_ZOOM);
+  state.tx = cx - w.x * state.zoom;
+  state.ty = cy - w.y * state.zoom;
+  sbZoom.textContent = state.zoom.toFixed(2) + "x";
+  draw();
+}
+
+document.getElementById("btn-load").addEventListener("click", () => {
+  document.getElementById("file-load").click();
+});
+document.getElementById("file-load").addEventListener("change", (ev) => {
+  const f = ev.target.files[0];
+  if (f) loadImageFromFile(f);
+  ev.target.value = "";
+});
+
+document.getElementById("btn-import").addEventListener("click", () => {
+  document.getElementById("file-import").click();
+});
+document.getElementById("file-import").addEventListener("change", (ev) => {
+  const f = ev.target.files[0];
+  if (f) importJSONFile(f);
+  ev.target.value = "";
+});
+
+document.getElementById("btn-export").addEventListener("click", exportJSON);
+
+document.getElementById("btn-clear").addEventListener("click", () => {
+  if (!state.blocks.length) return;
+  askConfirm("Delete all " + state.blocks.length + " blocks?", () => {
+    state.blocks = [];
+    state.nextNum = 1;
+    state.selectedId = null;
+    updateCounter();
+    pushHistory();
+    draw();
+  });
+});
+
+function exportJSON() {
+  if (!state.image) {
+    toast("Load a poster first");
+    return;
+  }
+  const payload = {
+    version: 1,
+    source: {
+      name: state.imageName,
+      w: state.imageW,
+      h: state.imageH
+    },
+    blocks: state.blocks.map((b, i) => ({
+      id: "block_" + String(i + 1).padStart(3, "0"),
+      label: b.label,
+      rect: { x: b.rect.x, y: b.rect.y, w: b.rect.w, h: b.rect.h }
+    }))
+  };
+  const text = JSON.stringify(payload, null, 2);
+  const blob = new Blob([text], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const stem = state.imageName.replace(/\.[^.]+$/, "") || "poster";
+  a.href = url;
+  a.download = stem + "_blocks.json";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function importJSONFile(file) {
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const parsed = JSON.parse(ev.target.result);
+      if (!parsed || !Array.isArray(parsed.blocks)) {
+        toast("Invalid JSON (missing blocks array)");
+        return;
+      }
+      if (!state.image) {
+        toast("Load a poster first, then import");
+        return;
+      }
+      const imported = parsed.blocks.map((b, i) => {
+        const num = state.nextNum + i;
+        const r = b.rect || { x: 0, y: 0, w: 100, h: 100 };
+        return {
+          id: fmtId(num),
+          num: num,
+          label: b.label || ("Block " + num),
+          color: paletteFor(num),
+          rect: normalizeRect(r)
+        };
+      });
+      state.blocks = state.blocks.concat(imported);
+      state.nextNum += imported.length;
+      updateCounter();
+      pushHistory();
+      draw();
+      toast("Imported " + imported.length + " blocks");
+    } catch (e) {
+      toast("Parse error: " + e.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+const ctxmenu = document.createElement("div");
+ctxmenu.id = "ctxmenu";
+ctxmenu.style.display = "none";
+document.body.appendChild(ctxmenu);
+
+function showCtxMenu(x, y, block) {
+  ctxmenu.innerHTML = "";
+  const items = [
+    { label: "Rename...",        action: () => askRename(block) },
+    { label: "Bring to front",   action: () => { bringFront(block.id); pushHistory(); draw(); } },
+    { label: "Send to back",     action: () => { sendBack(block.id);   pushHistory(); draw(); } },
+    { sep: true },
+    { label: "Delete", danger: true, action: () => askConfirm("Delete " + block.label + "?", () => {
+      deleteBlock(block.id); updateCounter(); pushHistory(); draw();
+    }) }
+  ];
+  for (const it of items) {
+    if (it.sep) {
+      const s = document.createElement("div");
+      s.className = "sep";
+      ctxmenu.appendChild(s);
+      continue;
+    }
+    const d = document.createElement("div");
+    d.className = "item" + (it.danger ? " danger" : "");
+    d.textContent = it.label;
+    d.addEventListener("click", () => { hideCtx(); it.action(); });
+    ctxmenu.appendChild(d);
+  }
+  ctxmenu.style.left = x + "px";
+  ctxmenu.style.top = y + "px";
+  ctxmenu.style.display = "block";
+  const r = ctxmenu.getBoundingClientRect();
+  if (r.right > window.innerWidth) ctxmenu.style.left = (window.innerWidth - r.width - 4) + "px";
+  if (r.bottom > window.innerHeight) ctxmenu.style.top = (window.innerHeight - r.height - 4) + "px";
+}
+
+function hideCtx() { ctxmenu.style.display = "none"; }
+
+window.addEventListener("mousedown", function(ev) {
+  if (ev.target.closest && ev.target.closest("#ctxmenu")) return;
+  hideCtx();
+}, true);
+
+function askConfirm(msg, onYes) {
+  const bg = document.createElement("div");
+  bg.className = "modal-bg";
+  const m = document.createElement("div");
+  m.className = "modal";
+  m.innerHTML = "<h3>Confirm</h3><p></p><div class='row'></div>";
+  m.querySelector("p").textContent = msg;
+  const row = m.querySelector(".row");
+  const cancel = document.createElement("button");
+  cancel.className = "btn";
+  cancel.textContent = "Cancel";
+  const ok = document.createElement("button");
+  ok.className = "btn primary";
+  ok.textContent = "OK";
+  row.appendChild(cancel);
+  row.appendChild(ok);
+  bg.appendChild(m);
+  document.body.appendChild(bg);
+  const close = () => document.body.removeChild(bg);
+  cancel.addEventListener("click", close);
+  ok.addEventListener("click", () => { close(); onYes(); });
+  bg.addEventListener("click", (ev) => { if (ev.target === bg) close(); });
+  ok.focus();
+}
+
+function askRename(block) {
+  const bg = document.createElement("div");
+  bg.className = "modal-bg";
+  const m = document.createElement("div");
+  m.className = "modal";
+  m.innerHTML = "<h3>Rename block</h3><input type='text'><div class='row'></div>";
+  const input = m.querySelector("input");
+  input.value = block.label;
+  const row = m.querySelector(".row");
+  const cancel = document.createElement("button");
+  cancel.className = "btn";
+  cancel.textContent = "Cancel";
+  const ok = document.createElement("button");
+  ok.className = "btn primary";
+  ok.textContent = "Save";
+  row.appendChild(cancel);
+  row.appendChild(ok);
+  bg.appendChild(m);
+  document.body.appendChild(bg);
+  const close = () => document.body.removeChild(bg);
+  const commit = () => {
+    const v = input.value.trim();
+    if (v) {
+      block.label = v;
+      pushHistory();
+      draw();
+    }
+    close();
+  };
+  cancel.addEventListener("click", close);
+  ok.addEventListener("click", commit);
+  input.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") commit();
+    if (ev.key === "Escape") close();
+    ev.stopPropagation();
+  });
+  bg.addEventListener("click", (ev) => { if (ev.target === bg) close(); });
+  setTimeout(() => { input.focus(); input.select(); }, 10);
+}
+
+let toastTimer = null;
+function toast(msg) {
+  let t = document.getElementById("toast-el");
+  if (!t) {
+    t = document.createElement("div");
+    t.id = "toast-el";
+    t.style.cssText = "position:fixed;bottom:24px;right:24px;background:var(--panel-bg);border:1px solid var(--accent);padding:10px 16px;border-radius:4px;color:var(--text);font-size:13px;z-index:300;box-shadow:0 8px 24px rgba(0,0,0,0.5);transition:opacity .2s";
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = "1";
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.style.opacity = "0"; }, 2200);
+}
+
+window.addEventListener("resize", resizeCanvas);
+
+resizeCanvas();
+sbZoom.textContent = state.zoom.toFixed(2) + "x";
+loadLocal();
+</script>
+</body>
+</html>
