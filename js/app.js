@@ -48,6 +48,7 @@ import {
   isStickyNode,
   isGroupNode,
   isTextNode,
+  isBlockNode,
   isEditableNode,
   groupDescendantIds,
   nextGroupLabel,
@@ -1233,7 +1234,7 @@ function buildContextMenuItemsForNode(id) {
     return items;
   }
 
-  if (isEditableNode(n) || isPuzzleNode(n) || isStickyNode(n)) {
+  if (isEditableNode(n) || isPuzzleNode(n) || isStickyNode(n) || isBlockNode(n)) {
     items.push({ label: tr('ctx_edit'), fn: () => openRichEdit(id) });
   }
   items.push({

@@ -983,7 +983,7 @@ export class Viewer {
 
   _onDoubleClick(ev) {
     const img = this.imagePointFromClient(ev.clientX, ev.clientY);
-    const target = this.selectableAtImagePoint(img);
+    const target = this.selectableAtImagePoint(img) || this.blockAtImagePoint(img);
     if (!target) return;
     ev.preventDefault();
     this.onHotspotDoubleClick(target.id, ev);
