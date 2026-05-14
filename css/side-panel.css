@@ -11,7 +11,7 @@
   z-index: 900;
   transition: right .3s cubic-bezier(.4, 0, .2, 1);
   font-size: 13px;
-  box-shadow: -16px 0 32px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--shadow-panel);
 }
 #panel.open { right: 0; }
 
@@ -65,7 +65,7 @@
 #panel-title {
   font-size: 18px;
   font-weight: 600;
-  color: #fff;
+  color: var(--text-strong);
   line-height: 1.3;
   margin-bottom: 6px;
   padding-right: 30px;
@@ -79,7 +79,7 @@
 }
 .tag {
   background: var(--panel-2);
-  border: 1px solid #2a2a40;
+  border: 1px solid var(--field-border);
   color: var(--text-dim);
   font-family: var(--font-mono);
   font-size: 9.5px;
@@ -93,7 +93,7 @@
   flex: 1;
   padding: 16px 22px;
   scrollbar-width: thin;
-  scrollbar-color: #2a2a40 transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
 #panel-footer {
@@ -102,13 +102,13 @@
   display: flex;
   gap: 8px;
   flex-shrink: 0;
-  background: rgba(7, 7, 10, 0.6);
+  background: var(--panel-2);
 }
 
 #panel-footer button {
   flex: 1;
   background: var(--panel-2);
-  border: 1px solid #2a2a40;
+  border: 1px solid var(--field-border);
   color: var(--text-dim);
   font-family: var(--font-mono);
   font-size: 10px;
@@ -128,14 +128,14 @@
   color: var(--accent);
 }
 #panel-footer button.primary:hover {
-  background: rgba(232, 107, 46, 0.12);
+  background: var(--accent-soft-bg-hover);
 }
 
 #md-edit-overlay {
   display: none;
   position: absolute;
   inset: 0;
-  background: rgba(7, 7, 10, 0.98);
+  background: var(--panel-bg);
   z-index: 950;
   flex-direction: column;
   padding: 14px 18px;
@@ -153,8 +153,8 @@
 
 #md-edit-textarea {
   flex: 1;
-  background: #07070d;
-  border: 1px solid #2a2a40;
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
   color: var(--text);
   font-family: var(--font-mono);
   font-size: 12px;
@@ -174,7 +174,7 @@
 }
 #md-edit-actions button {
   background: var(--panel-2);
-  border: 1px solid #2a2a40;
+  border: 1px solid var(--field-border);
   color: var(--text-dim);
   font-family: var(--font-mono);
   font-size: 10px;
@@ -194,5 +194,5 @@
   color: var(--accent);
 }
 #md-edit-actions button.primary:hover {
-  background: rgba(232, 107, 46, 0.14);
+  background: var(--accent-soft-bg-hover);
 }

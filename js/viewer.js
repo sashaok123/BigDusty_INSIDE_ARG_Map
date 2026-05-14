@@ -7,13 +7,50 @@ import { lodFor } from './lod.js';
 const MIN_SCALE = 0.05;
 const MAX_SCALE = 8;
 const CLICK_SLOP = 5;
-const STATUS_COLOR = {
-  'solved':   { stroke: '#3de88a', fill: 'rgba(61,232,138,0.18)', fillHover: 'rgba(61,232,138,0.32)' },
-  'partial':  { stroke: '#e8c83d', fill: 'rgba(232,200,61,0.18)', fillHover: 'rgba(232,200,61,0.34)' },
-  'unsolved': { stroke: '#e83d3d', fill: 'rgba(232,61,61,0.18)',  fillHover: 'rgba(232,61,61,0.34)' },
-  'no-data':  { stroke: '#8888aa', fill: 'rgba(136,136,170,0.14)', fillHover: 'rgba(136,136,170,0.28)' },
-  'dead-end': { stroke: '#5a5a72', fill: 'rgba(90,90,114,0.14)',   fillHover: 'rgba(90,90,114,0.28)' },
+const STATUS_TOKEN = {
+  'solved':   '--status-solved',
+  'partial':  '--status-partial',
+  'unsolved': '--status-unsolved',
+  'no-data':  '--status-nodata',
+  'dead-end': '--status-deadend',
 };
+const STATUS_FILL_ALPHA = {
+  'solved':   { base: 0.18, hover: 0.32 },
+  'partial':  { base: 0.18, hover: 0.34 },
+  'unsolved': { base: 0.18, hover: 0.34 },
+  'no-data':  { base: 0.14, hover: 0.28 },
+  'dead-end': { base: 0.14, hover: 0.28 },
+};
+
+function readCssVar(name, fallback) {
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v || fallback;
+  } catch (e) {
+    void e;
+    return fallback;
+  }
+}
+
+function hexToRgb(hex) {
+  const m = String(hex).trim().match(/^#?([0-9a-fA-F]{3,8})$/);
+  if (!m) return null;
+  let h = m[1];
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+  if (h.length === 4) h = h.split('').map((c) => c + c).join('').slice(0, 8);
+  if (h.length !== 6 && h.length !== 8) return null;
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) return null;
+  return { r, g, b };
+}
+
+function rgba(hex, alpha) {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return hex;
+  return `rgba(${rgb.r},${rgb.g},${rgb.b},${alpha})`;
+}
 
 const HANDLE_SIZE = 8;
 const HANDLE_KEYS = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
@@ -27,7 +64,12 @@ export class Viewer {
     this.imageReady = false;
     this.imageW = 0;
     this.imageH = 0;
-    this.bgColour = '#0a0a0c';
+    this.bgColour = '#f6f6f8';
+    this.statusPalette = {};
+    this.borderColour = '#d8d8e0';
+    this.accentColour = '#2e6fe8';
+    this.handleStrokeColour = '#ffffff';
+    this._refreshPalette();
 
     this.scale = 1;
     this.panX = 0;
@@ -82,6 +124,7 @@ export class Viewer {
     await Promise.all(this.blocks.map((b) => this._loadBlockImage(b)));
     this.imageReady = true;
     this._refreshBg();
+    this._refreshPalette();
     this.fitToScreen();
     this.requestDraw();
     return { w: this.imageW, h: this.imageH };
@@ -117,6 +160,7 @@ export class Viewer {
 
   setBackgroundFromCSS() {
     this._refreshBg();
+    this._refreshPalette();
     this.requestDraw();
   }
 
@@ -127,6 +171,23 @@ export class Viewer {
     } catch (e) {
       void e;
     }
+  }
+
+  _refreshPalette() {
+    this.borderColour = readCssVar('--panel-border', this.borderColour);
+    this.accentColour = readCssVar('--accent', this.accentColour);
+    this.handleStrokeColour = readCssVar('--panel-bg', this.handleStrokeColour);
+    const next = {};
+    for (const [status, token] of Object.entries(STATUS_TOKEN)) {
+      const stroke = readCssVar(token, '#888888');
+      const alphas = STATUS_FILL_ALPHA[status];
+      next[status] = {
+        stroke,
+        fill:      rgba(stroke, alphas.base),
+        fillHover: rgba(stroke, alphas.hover),
+      };
+    }
+    this.statusPalette = next;
   }
 
   setHotspots(hotspots) {
@@ -309,7 +370,7 @@ export class Viewer {
         ctx.drawImage(img, b.rect.x, b.rect.y, b.rect.w, b.rect.h);
       }
     } else {
-      ctx.fillStyle = 'rgba(40,40,52,0.65)';
+      ctx.fillStyle = rgba(this.borderColour, 0.55);
       for (const b of this.blocks) {
         ctx.fillRect(b.rect.x, b.rect.y, b.rect.w, b.rect.h);
       }
@@ -328,8 +389,8 @@ export class Viewer {
       const w = Math.abs(cur.x - s.x);
       const h = Math.abs(cur.y - s.y);
       ctx.lineWidth = 2 / this.scale;
-      ctx.strokeStyle = '#e86b2e';
-      ctx.fillStyle = 'rgba(232,107,46,0.12)';
+      ctx.strokeStyle = this.accentColour;
+      ctx.fillStyle = rgba(this.accentColour, 0.12);
       ctx.setLineDash([8 / this.scale, 6 / this.scale]);
       ctx.fillRect(x, y, w, h);
       ctx.strokeRect(x, y, w, h);
@@ -342,7 +403,7 @@ export class Viewer {
   }
 
   _drawHotspot(ctx, h, lod) {
-    const c = STATUS_COLOR[h.status] || STATUS_COLOR.unsolved;
+    const c = this.statusPalette[h.status] || this.statusPalette.unsolved || { stroke: this.borderColour, fill: 'transparent', fillHover: 'transparent' };
     const searchDim = this.searchTerm && !this._matchesSearch(h);
     const filterDim = this.fadeNonMatching && !this._matchesFilter(h);
     const isHover = this.hoverId === h.id || this.activeId === h.id;
@@ -363,7 +424,7 @@ export class Viewer {
     if (isOutlineHL) {
       ctx.save();
       ctx.lineWidth = 4 / this.scale;
-      ctx.strokeStyle = '#e86b2e';
+      ctx.strokeStyle = this.accentColour;
       ctx.globalAlpha = alpha;
       const pad = 4 / this.scale;
       ctx.strokeRect(x - pad, y - pad, w + pad * 2, hh + pad * 2);
@@ -371,8 +432,8 @@ export class Viewer {
     }
 
     if (this.mode === 'editor' && lod && lod.handlesVisible && (isHover || this.activeId === h.id)) {
-      ctx.fillStyle = '#e86b2e';
-      ctx.strokeStyle = '#0a0a0c';
+      ctx.fillStyle = this.accentColour;
+      ctx.strokeStyle = this.handleStrokeColour;
       ctx.lineWidth = 1.5 / this.scale;
       const handles = this._handlePositions(x, y, w, hh);
       const hs = HANDLE_SIZE / this.scale;

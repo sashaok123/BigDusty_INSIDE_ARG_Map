@@ -10,13 +10,43 @@ const W = 220;
 const H = 160;
 const STORAGE_KEY = 'arg_map_minimap_open';
 
-const STATUS_FILL = {
-  'solved':   '#3de88a',
-  'partial':  '#e8c83d',
-  'unsolved': '#e83d3d',
-  'no-data':  '#8888aa',
-  'dead-end': '#5a5a72',
+const STATUS_TOKEN = {
+  'solved':   '--status-solved',
+  'partial':  '--status-partial',
+  'unsolved': '--status-unsolved',
+  'no-data':  '--status-nodata',
+  'dead-end': '--status-deadend',
 };
+
+function readCssVar(name, fallback) {
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v || fallback;
+  } catch (e) {
+    void e;
+    return fallback;
+  }
+}
+
+function hexToRgb(hex) {
+  const m = String(hex).trim().match(/^#?([0-9a-fA-F]{3,8})$/);
+  if (!m) return null;
+  let h = m[1];
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+  if (h.length === 4) h = h.split('').map((c) => c + c).join('').slice(0, 8);
+  if (h.length !== 6 && h.length !== 8) return null;
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) return null;
+  return { r, g, b };
+}
+
+function rgba(hex, alpha) {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return hex;
+  return `rgba(${rgb.r},${rgb.g},${rgb.b},${alpha})`;
+}
 
 export class Minimap {
   constructor(opts) {
@@ -34,6 +64,11 @@ export class Minimap {
     this._dragState = null;
     this._dirty = false;
     this._raf = null;
+    this.statusFill = {};
+    this.bgColour = '#f6f6f8';
+    this.borderColour = '#d8d8e0';
+    this.accentColour = '#2e6fe8';
+    this._refreshPalette();
 
     this._build();
     this._wireViewer();
@@ -44,6 +79,22 @@ export class Minimap {
     }
     this._recomputeBounds();
     this.requestDraw();
+  }
+
+  refreshPalette() {
+    this._refreshPalette();
+    this.requestDraw();
+  }
+
+  _refreshPalette() {
+    this.bgColour = readCssVar('--bg', this.bgColour);
+    this.borderColour = readCssVar('--panel-border', this.borderColour);
+    this.accentColour = readCssVar('--accent', this.accentColour);
+    const next = {};
+    for (const [status, token] of Object.entries(STATUS_TOKEN)) {
+      next[status] = readCssVar(token, '#888888');
+    }
+    this.statusFill = next;
   }
 
   _build() {
@@ -156,12 +207,12 @@ export class Minimap {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, W, H);
 
-    ctx.fillStyle = '#0a0a0c';
+    ctx.fillStyle = this.bgColour;
     ctx.fillRect(0, 0, W, H);
 
     if (this.imageW <= 0 || this.imageH <= 0) return;
 
-    ctx.fillStyle = 'rgba(40, 40, 52, 0.55)';
+    ctx.fillStyle = rgba(this.borderColour, 0.55);
     const blocks = this.viewer.getBlocks();
     for (const b of blocks) {
       const x = this.offsetX + b.rect.x * this.scale;
@@ -173,7 +224,7 @@ export class Minimap {
 
     const hotspots = this.viewer.getHotspots();
     for (const h of hotspots) {
-      const fill = STATUS_FILL[h.status] || STATUS_FILL.unsolved;
+      const fill = this.statusFill[h.status] || this.statusFill.unsolved || this.borderColour;
       const matches = !this.fadeNonMatching || !this.statusFilter || this.statusFilter.has(h.status);
       ctx.globalAlpha = matches ? 0.95 : 0.3;
       ctx.fillStyle = fill;
@@ -190,10 +241,10 @@ export class Minimap {
     const vy = this.offsetY + rect.y * this.scale;
     const vw = rect.w * this.scale;
     const vh = rect.h * this.scale;
-    ctx.strokeStyle = '#e86b2e';
+    ctx.strokeStyle = this.accentColour;
     ctx.lineWidth = 1.4;
     ctx.strokeRect(vx, vy, vw, vh);
-    ctx.fillStyle = 'rgba(232, 107, 46, 0.08)';
+    ctx.fillStyle = rgba(this.accentColour, 0.10);
     ctx.fillRect(vx, vy, vw, vh);
   }
 

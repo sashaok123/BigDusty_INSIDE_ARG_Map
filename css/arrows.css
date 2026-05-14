@@ -17,7 +17,7 @@
   padding: 12px 14px 10px;
   min-width: 260px;
   z-index: 1600;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.66);
+  box-shadow: var(--shadow-modal);
   font-family: var(--font-mono);
   font-size: 11px;
 }
@@ -74,39 +74,43 @@
   color: var(--accent);
 }
 .arrow-props-actions button.danger { border-color: var(--unsolved); color: var(--unsolved); }
-.arrow-props-actions button.danger:hover { background: rgba(232,61,61,0.14); }
+.arrow-props-actions button.danger:hover { background: var(--unsolved-soft-bg); }
 
 .arrow-anchor-handle {
-  fill: rgba(232, 107, 46, 0.94);
-  stroke: #0a0a0c;
+  fill: var(--accent);
+  stroke: var(--panel-bg);
   stroke-width: 1.2;
   transition: fill .12s;
 }
-.arrow-anchor-handle:hover { fill: rgba(61, 232, 200, 0.95); }
+.arrow-anchor-handle:hover { fill: var(--accent2); }
 
 .arrow-waypoint-handle {
-  fill: rgba(85, 170, 255, 0.95);
-  stroke: #0a0a0c;
+  fill: #55aaff;
+  stroke: var(--panel-bg);
   stroke-width: 1.2;
 }
-.arrow-waypoint-handle:hover { fill: rgba(180, 220, 255, 1); }
+.arrow-waypoint-handle:hover { fill: #b4dcff; }
 
 .arrow-endpoint-handle {
-  fill: rgba(232, 107, 46, 0.88);
-  stroke: #0a0a0c;
+  fill: var(--accent);
+  stroke: var(--panel-bg);
   stroke-width: 1.2;
 }
-.arrow-endpoint-handle:hover { fill: rgba(61, 232, 200, 0.95); }
+.arrow-endpoint-handle:hover { fill: var(--accent2); }
 
 .arrow-junction-handle {
-  fill: rgba(232, 200, 61, 0.95);
-  stroke: #0a0a0c;
+  fill: var(--partial);
+  stroke: var(--panel-bg);
   stroke-width: 1.2;
 }
-.arrow-junction-handle:hover { fill: rgba(255, 230, 100, 1); }
+.arrow-junction-handle:hover { fill: #ffe664; }
 
 .arrow-snap-target {
   fill: none;
-  stroke: rgba(61, 232, 200, 0.85);
+  stroke: var(--accent2);
   stroke-width: 2;
+}
+
+.arrow-selected-glow {
+  filter: drop-shadow(0 0 4px var(--accent));
 }

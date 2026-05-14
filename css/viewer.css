@@ -6,7 +6,7 @@
   bottom: 0;
   overflow: hidden;
   cursor: grab;
-  background: #050507;
+  background: var(--bg);
 }
 #viewport.grabbing { cursor: grabbing; }
 #viewport.editor   { cursor: crosshair; }
@@ -31,7 +31,7 @@
 .zoom-btn {
   width: 36px;
   height: 36px;
-  background: rgba(15, 15, 20, 0.94);
+  background: var(--panel-bg);
   border: 1px solid var(--panel-border);
   color: var(--text);
   font-size: 18px;
@@ -41,6 +41,7 @@
   justify-content: center;
   transition: border-color .15s, color .15s;
   border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
 }
 .zoom-btn:hover { border-color: var(--accent); color: var(--accent); }
 
@@ -56,7 +57,7 @@
   position: fixed;
   pointer-events: none;
   border: 2px dashed var(--accent);
-  background: rgba(232, 107, 46, 0.12);
+  background: var(--accent-soft-bg);
   display: none;
   z-index: 700;
 }
