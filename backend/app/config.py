@@ -25,7 +25,7 @@ class Settings(BaseSettings):
         default="https://sashaok123.github.io,http://localhost:8000",
         alias="ALLOWED_ORIGINS",
     )
-    canvas_seed_path: str = Field(default="../data/canvas.canvas", alias="CANVAS_SEED_PATH")
+    canvas_seed_path: str = Field(default="seed/canvas.canvas", alias="CANVAS_SEED_PATH")
     env: str = Field(default="production", alias="ENV")
 
     @field_validator("database_url")
