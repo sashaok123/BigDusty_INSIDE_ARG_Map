@@ -1,6 +1,7 @@
 """Media upload and serving endpoints. Bytes are stored in Postgres as bytea
 with sha256 dedupe; media items are served with immutable cache headers.
-The same table holds images and short video clips (mp4/webm up to 100 MB)."""
+The same table holds images, short video clips (mp4/webm), audio files, and
+small document files (html/json/text/pdf) for the in-canvas file viewer."""
 
 import hashlib
 import uuid
@@ -21,9 +22,42 @@ router = APIRouter(tags=["media"])
 
 ALLOWED_IMAGE_MIMES = {"image/png", "image/jpeg", "image/webp"}
 ALLOWED_VIDEO_MIMES = {"video/mp4", "video/webm"}
-ALLOWED_MIMES = ALLOWED_IMAGE_MIMES | ALLOWED_VIDEO_MIMES
+ALLOWED_AUDIO_MIMES = {"audio/mpeg", "audio/mp3", "audio/ogg", "audio/wav", "audio/x-wav", "audio/webm", "audio/aac", "audio/flac"}
+ALLOWED_DOC_MIMES = {
+    "text/html",
+    "text/plain",
+    "text/markdown",
+    "text/csv",
+    "application/json",
+    "application/xml",
+    "text/xml",
+    "application/pdf",
+}
+ALLOWED_MIMES = ALLOWED_IMAGE_MIMES | ALLOWED_VIDEO_MIMES | ALLOWED_AUDIO_MIMES | ALLOWED_DOC_MIMES
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
 MAX_VIDEO_BYTES = 100 * 1024 * 1024
+MAX_AUDIO_BYTES = 50 * 1024 * 1024
+MAX_DOC_BYTES = 5 * 1024 * 1024
+
+
+def _max_bytes_for(mime: str) -> int:
+    if mime in ALLOWED_VIDEO_MIMES:
+        return MAX_VIDEO_BYTES
+    if mime in ALLOWED_AUDIO_MIMES:
+        return MAX_AUDIO_BYTES
+    if mime in ALLOWED_DOC_MIMES:
+        return MAX_DOC_BYTES
+    return MAX_IMAGE_BYTES
+
+
+def _audit_action_for(mime: str) -> str:
+    if mime in ALLOWED_VIDEO_MIMES:
+        return "video_uploaded"
+    if mime in ALLOWED_AUDIO_MIMES:
+        return "audio_uploaded"
+    if mime in ALLOWED_DOC_MIMES:
+        return "document_uploaded"
+    return "image_uploaded"
 
 
 def _image_url(canvas_id: str, image_id: uuid.UUID) -> str:
@@ -47,7 +81,7 @@ async def upload_image(
     size = len(contents)
     if size == 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file")
-    max_bytes = MAX_VIDEO_BYTES if mime in ALLOWED_VIDEO_MIMES else MAX_IMAGE_BYTES
+    max_bytes = _max_bytes_for(mime)
     if size > max_bytes:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
@@ -86,7 +120,7 @@ async def upload_image(
             "size": again.size,
         }
     await db.refresh(record)
-    action = "video_uploaded" if mime in ALLOWED_VIDEO_MIMES else "image_uploaded"
+    action = _audit_action_for(mime)
     await log_action(db, user.id, action, {"media_id": str(record.id), "mime": record.mime, "size": record.size, "sha256": record.sha256})
     await db.commit()
     return {

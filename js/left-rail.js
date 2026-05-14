@@ -19,6 +19,7 @@ const SVG_PATHS = {
   text:       '<path d="M5 6h14"/><path d="M12 6v14"/><path d="M9 20h6"/>',
   image:      '<rect x="3.5" y="4.5" width="17" height="13" rx="1.5"/><path d="M3.5 14L8 10l3 3l3-3l4 4"/><circle cx="14.5" cy="8.5" r="1.4"/>',
   video:      '<rect x="3.5" y="6.5" width="13" height="11" rx="1.5"/><path d="M16.5 10 L21 7.5 L21 16.5 L16.5 14 Z"/>',
+  audio:      '<path d="M5 9v6h3l5 4V5L8 9z"/><path d="M16 8a5 5 0 0 1 0 8"/><path d="M19 5a9 9 0 0 1 0 14"/>',
   arrow:      '<path d="M4 12h14"/><path d="M13 7l5 5l-5 5"/>',
   group_sel:  '<rect x="3.5" y="5.5" width="17" height="13" rx="1.5" stroke-dasharray="3 2"/><rect x="7" y="9" width="4" height="3"/><rect x="13" y="12" width="4" height="3"/>',
   ungroup:    '<rect x="3.5" y="5.5" width="17" height="13" rx="1.5" stroke-dasharray="3 2"/><path d="M7 9 L17 15"/><path d="M17 9 L7 15"/>',
@@ -127,6 +128,13 @@ export class LeftRail {
       onClick: () => {
         setActiveTool('video');
         if (this.handlers.onAddVideo) this.handlers.onAddVideo();
+      },
+    }));
+    tools.appendChild(this._makeLabelBtn({
+      id: 'rail-tool-audio', icon: 'audio', i18n: 'tool_audio', tool: 'audio', shortcut: 'U',
+      onClick: () => {
+        setActiveTool('audio');
+        if (this.handlers.onUploadAudio) this.handlers.onUploadAudio();
       },
     }));
     tools.appendChild(this._makeLabelBtn({

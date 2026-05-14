@@ -1,0 +1,81 @@
+.file-viewer-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+  z-index: 1500; display: none; align-items: center; justify-content: center;
+}
+.file-viewer-overlay.open { display: flex; }
+.file-viewer-box {
+  width: 88vw; max-width: 1200px; height: 84vh;
+  background: var(--panel-bg); border: 1px solid var(--panel-border);
+  border-radius: var(--radius, 6px);
+  box-shadow: var(--shadow-modal, 0 12px 40px rgba(0,0,0,0.5));
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.file-viewer-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; background: var(--panel-2, var(--panel-bg));
+  border-bottom: 1px solid var(--panel-border);
+}
+.file-viewer-title-wrap {
+  flex: 1 1 auto; display: flex; align-items: baseline; gap: 8px; min-width: 0;
+}
+.file-viewer-title {
+  font: 600 13px/1.2 var(--font-mono); color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.file-viewer-filename {
+  font: 13px/1.2 var(--font-mono); color: var(--text-strong, var(--text));
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.file-viewer-tabs { display: flex; gap: 0; align-items: stretch; }
+.fv-tab {
+  background: transparent; border: 1px solid var(--panel-border);
+  color: var(--text); padding: 5px 10px;
+  font: 12px/1.2 var(--font-mono); cursor: pointer; letter-spacing: 0.04em;
+}
+.fv-tab:first-child {
+  border-top-left-radius: var(--radius, 4px);
+  border-bottom-left-radius: var(--radius, 4px); border-right-width: 0;
+}
+.fv-tab:last-child {
+  border-top-right-radius: var(--radius, 4px);
+  border-bottom-right-radius: var(--radius, 4px);
+}
+.fv-tab.active {
+  background: var(--accent-soft-bg-strong, var(--accent-soft-bg));
+  color: var(--accent); border-color: var(--accent);
+  position: relative; z-index: 1;
+}
+.file-viewer-actions { display: flex; gap: 6px; }
+.fv-action {
+  background: transparent; border: 1px solid transparent;
+  color: var(--text); width: 30px; height: 30px;
+  border-radius: var(--radius, 4px); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.fv-action:hover {
+  background: var(--accent-soft-bg, rgba(0,0,0,0.06));
+  border-color: var(--panel-border); color: var(--accent);
+}
+.file-viewer-body {
+  flex: 1 1 auto; overflow: auto;
+  background: var(--field-bg, var(--panel-bg)); padding: 0; position: relative;
+}
+.fv-pre {
+  margin: 0; padding: 14px 18px;
+  font: 13px/1.5 var(--font-mono); color: var(--text);
+  white-space: pre-wrap; word-break: break-word;
+}
+.fv-json { white-space: pre; }
+.fv-tok-key { color: var(--accent); }
+.fv-tok-string { color: var(--status-solved, #4caf50); }
+.fv-tok-num { color: var(--status-partial, #d49b3b); }
+.fv-tok-bool { color: var(--accent); font-weight: 600; }
+.fv-tok-punct { color: var(--text-dim); }
+.fv-tok-tag { color: var(--accent); font-weight: 600; }
+.fv-tok-attr { color: var(--status-partial, #d49b3b); }
+.fv-tok-error { color: var(--status-unsolved, #ff5454); display: block; padding-bottom: 6px; }
+.fv-tree-toggle {
+  display: inline-block; cursor: pointer;
+  color: var(--text-dim); user-select: none; margin-right: 2px;
+}
+.fv-tree-toggle:hover { color: var(--accent); }

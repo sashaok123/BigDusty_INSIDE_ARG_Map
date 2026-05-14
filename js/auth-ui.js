@@ -223,6 +223,7 @@ export class AuthUI {
       this.menuEl.appendChild(mk(tr('dropdown_activity_log'), () => { if (h.onOpenActivityLog) h.onOpenActivityLog(); }));
       this.menuEl.appendChild(mk(tr('dropdown_online_users'), () => { if (h.onOpenPresence) h.onOpenPresence(); }));
       this.menuEl.appendChild(mk(tr('dropdown_snapshots'),    () => { if (h.onOpenSnapshots) h.onOpenSnapshots(); }, { divider: true }));
+      this.menuEl.appendChild(mk(tr('branches_manage'),       () => { if (h.onManageBranches) h.onManageBranches(); }));
       this.menuEl.appendChild(mk(tr('dropdown_download_snapshot'), () => { if (h.onDownloadSnapshot) h.onDownloadSnapshot(); }));
       this.menuEl.appendChild(mk(tr('dropdown_import'), () => { if (h.onImportCanvas) h.onImportCanvas(); }));
       this.menuEl.appendChild(mk(tr('dropdown_reset'),  () => { if (h.onResetDefaults) h.onResetDefaults(); }, { danger: true }));

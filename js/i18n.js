@@ -971,6 +971,59 @@ const _I18N_DATA = {
 
   confirm_grant_admin_msg:  ['Grant admin to {username}?', 'Назначить {username} админом?', '{username} Admin-Rechte gewähren?', 'Concedere admin a {username}?', 'Tildel admin til {username}?'],
   confirm_revoke_admin_msg: ['Revoke admin from {username}?','Снять админа у {username}?', '{username} Admin-Rechte entziehen?', 'Revocare admin a {username}?', 'Fjern admin fra {username}?'],
+
+  tool_audio:           ['Audio',          'Аудио',             'Audio',               'Audio',              'Lyd'],
+  tool_audio_shortcut:  ['Upload audio (U)','Загрузить аудио (U)','Audio hochladen (U)','Carica audio (U)','Upload lyd (U)'],
+  audio_play:           ['Play',           'Воспроизвести',     'Abspielen',           'Riproduci',          'Afspil'],
+  audio_pause:          ['Pause',          'Пауза',             'Pause',               'Pausa',              'Pause'],
+  audio_volume:         ['Volume',         'Громкость',         'Lautstärke',          'Volume',             'Lydstyrke'],
+  audio_loading:        ['Tap to load',    'Нажмите для загрузки','Tippen zum Laden',  'Tocca per caricare', 'Tryk for at indlæse'],
+
+  video_play_placeholder: ['Click to play','Нажмите чтобы запустить','Zum Abspielen klicken','Clicca per riprodurre','Klik for at afspille'],
+
+  file_viewer_title:    ['Document',       'Документ',          'Dokument',            'Documento',          'Dokument'],
+  file_viewer_render:   ['Render',         'Просмотр',          'Anzeige',             'Render',             'Render'],
+  file_viewer_source:   ['Source',         'Исходник',          'Quelltext',           'Sorgente',           'Kilde'],
+  file_viewer_copy:     ['Copy',           'Копировать',        'Kopieren',            'Copia',              'Kopiér'],
+  file_viewer_download: ['Download',       'Скачать',           'Herunterladen',       'Scarica',            'Download'],
+  file_viewer_close:    ['Close',          'Закрыть',           'Schließen',           'Chiudi',             'Luk'],
+
+  upload_compressing_toast: [
+    'Compressing {from}...',
+    'Сжимаем {from}...',
+    'Komprimiere {from}...',
+    'Compressione {from}...',
+    'Komprimerer {from}...',
+  ],
+  upload_compressed_to: [
+    'Compressed {from} to {to}',
+    'Сжато {from} до {to}',
+    'Komprimiert: {from} zu {to}',
+    'Compresso da {from} a {to}',
+    'Komprimeret {from} til {to}',
+  ],
+  upload_large_audio_warning: [
+    'Large audio file ({size}). Consider converting to MP3 before upload.',
+    'Большой аудиофайл ({size}). Желательно сжать в MP3 до загрузки.',
+    'Große Audiodatei ({size}). Vor dem Upload in MP3 umwandeln.',
+    'File audio grande ({size}). Conviene convertirlo in MP3 prima.',
+    'Stor lydfil ({size}). Konvertér til MP3 før upload.',
+  ],
+  upload_large_audio_continue: ['Upload anyway','Загрузить как есть','Trotzdem hochladen','Carica comunque','Upload alligevel'],
+  upload_large_audio_cancel:   ['Cancel',     'Отмена',            'Abbrechen',           'Annulla',            'Annullér'],
+
+  branches_panel_title:  ['Branches',      'Ветви',             'Stränge',             'Filoni',             'Spor'],
+  branches_all:          ['All',           'Все',               'Alle',                'Tutti',              'Alle'],
+  branches_focus:        ['Focus',         'Фокус',             'Fokus',               'Focalizza',          'Fokus'],
+  branches_visible_toggle: ['Toggle visibility','Переключить видимость','Sichtbarkeit umschalten','Mostra/nascondi','Skift synlighed'],
+  branches_manage:       ['Manage branches','Управление ветвями','Stränge verwalten',  'Gestisci filoni',    'Administrer spor'],
+  branches_add_to_node:  ['Branches',      'Ветви',             'Stränge',             'Filoni',             'Spor'],
+  branches_remove_from_node: ['Remove from branch','Убрать из ветви','Aus Strang entfernen','Rimuovi dal filone','Fjern fra spor'],
+  branches_edit_label:   ['Label',         'Название',          'Bezeichnung',         'Etichetta',          'Etiket'],
+  branches_edit_color:   ['Color',         'Цвет',              'Farbe',               'Colore',             'Farve'],
+  branches_new_branch:   ['New branch',    'Новая ветвь',       'Neuer Strang',        'Nuovo filone',       'Nyt spor'],
+  branches_delete_confirm: ['Delete branch {label}?','Удалить ветвь {label}?','Strang {label} löschen?','Eliminare filone {label}?','Slet sporet {label}?'],
+  branches_assign_label: ['Branches',      'Ветви',             'Stränge',             'Filoni',             'Spor'],
 };
 
 const I18N = Object.fromEntries(

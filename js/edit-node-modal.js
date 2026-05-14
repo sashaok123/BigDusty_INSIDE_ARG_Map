@@ -99,6 +99,7 @@ function el(tag, attrs, kids) {
 export class EditNodeModal {
   constructor(opts) {
     this.getNodes = opts.getNodes || (() => new Map());
+    this.getBranches = opts.getBranches || (() => []);
     this.canEdit = opts.canEdit || (() => true);
     this.onSave = opts.onSave || (() => {});
     this.onDelete = opts.onDelete || (() => {});
@@ -359,6 +360,7 @@ export class EditNodeModal {
     body.appendChild(videoField);
     body.appendChild(captionField);
     body.appendChild(parentField);
+    body.appendChild(this._buildBranchesField());
     body.appendChild(translationsField);
     body.appendChild(imageField);
 
@@ -631,10 +633,12 @@ export class EditNodeModal {
       rect: view.rect ? { ...view.rect } : null,
       text_style: view.text_style ? { ...view.text_style } : null,
       media: view.media ? { ...view.media } : null,
+      branches: Array.isArray(view.branches) ? [...view.branches] : [],
     };
     this._tags = [...this._state.tags];
     this._translations = view.translations ? JSON.parse(JSON.stringify(view.translations)) : null;
     this._renderTranslations();
+    this._renderBranches();
     const isImage = looksLikeImage(this._state);
     this.imageFieldEl.style.display = isImage ? 'flex' : 'none';
     if (isImage) this._setImagePreview(this._state.file || '');
@@ -822,6 +826,48 @@ export class EditNodeModal {
     }
   }
 
+  _buildBranchesField() {
+    const field = el('div', { class: 'em-field em-branches' });
+    const lbl = el('label', { text: tr('branches_assign_label') });
+    const host = el('div', { class: 'em-branches-host' });
+    field.appendChild(lbl);
+    field.appendChild(host);
+    this._branchesHostEl = host;
+    this._branchesLabelEl = lbl;
+    return field;
+  }
+
+  _renderBranches() {
+    if (!this._branchesHostEl) return;
+    this._branchesHostEl.innerHTML = '';
+    const branches = this.getBranches() || [];
+    if (!branches.length) {
+      const empty = document.createElement('div');
+      empty.className = 'em-branches-empty';
+      empty.textContent = tr('branches_panel_title');
+      this._branchesHostEl.appendChild(empty);
+      return;
+    }
+    const cur = new Set(this._state.branches || []);
+    for (const b of branches) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'em-branch-chip';
+      if (cur.has(b.id)) chip.classList.add('selected');
+      chip.textContent = b.label || b.id;
+      chip.addEventListener('click', (e) => {
+        e.preventDefault();
+        const c = this._state.branches || [];
+        const idx = c.indexOf(b.id);
+        if (idx >= 0) c.splice(idx, 1);
+        else c.push(b.id);
+        this._state.branches = c;
+        this._renderBranches();
+      });
+      this._branchesHostEl.appendChild(chip);
+    }
+  }
+
   _rebuildParentSelect(currentParent) {
     const nodes = this.getNodes();
     this.parentSelectEl.innerHTML = '';
@@ -889,6 +935,7 @@ export class EditNodeModal {
     }
     if (this._state.media) payload.media = { ...this._state.media };
     else payload.media = null;
+    payload.branches = Array.isArray(this._state.branches) ? [...this._state.branches] : [];
     this.close();
     this.onSave(payload);
   }
@@ -920,6 +967,7 @@ export class EditNodeModal {
     this.parentLabelEl.textContent = tr('edit_modal_parent_group');
     if (this.translationsLabelEl) this.translationsLabelEl.textContent = tr('translations_header');
     if (this.translationsAddBtnEl) this.translationsAddBtnEl.textContent = tr('translations_add');
+    if (this._branchesLabelEl) this._branchesLabelEl.textContent = tr('branches_assign_label');
     this.deleteBtnEl.textContent = tr('edit_modal_delete');
     this.cancelBtnEl.textContent = tr('edit_modal_cancel');
     this.saveBtnEl.textContent = tr('edit_modal_save');

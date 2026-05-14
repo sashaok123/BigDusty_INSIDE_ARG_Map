@@ -19,6 +19,8 @@ import {
   normaliseNode,
   normaliseEdge,
   serializeCanvas,
+  normaliseBranches,
+  defaultBranchSeed,
 } from './data-loader.js';
 import {
   saveState,
@@ -66,6 +68,10 @@ import { AlignFloater } from './align-floater.js';
 import { CommentsLayer } from './comments-layer.js';
 import { SnapGuides } from './snap-guides.js';
 import { VideoOverlay } from './video-overlay.js';
+import { AudioOverlay } from './audio-overlay.js';
+import { DocumentOverlay } from './document-overlay.js';
+import { FileViewerModal } from './file-viewer.js';
+import { BranchesPanel, openManageBranchesModal } from './branches.js';
 import { LANGS, initLang, getLang, setLang, tr } from './i18n.js';
 import { AuthUI } from './auth-ui.js';
 import { Realtime } from './realtime.js';
@@ -75,6 +81,7 @@ import { getActiveTool, setActiveTool, onActiveToolChange, onSpaceHeldChange, is
 import {
   isLoggedIn, getCurrentUser, subscribeAuth,
   getCanvas as apiGetCanvas,
+  putCanvas as apiPutCanvas,
   createNode as apiCreateNode, patchNode as apiPatchNode, deleteNode as apiDeleteNode,
   createEdge as apiCreateEdge, patchEdge as apiPatchEdge, deleteEdge as apiDeleteEdge,
   uploadImage as apiUploadImage,
@@ -90,6 +97,7 @@ const BACKEND_RETRY_MS = 30000;
 const state = {
   nodes: new Map(),
   edges: new Map(),
+  branches: [],
   imageW: 0,
   imageH: 0,
   statusFilter: new Set(STATUSES),
@@ -133,6 +141,10 @@ let alignFloater;
 let commentsLayer;
 let snapGuides;
 let videoOverlay;
+let audioOverlay;
+let documentOverlay;
+let fileViewerModal;
+let branchesPanel;
 let presencePanel;
 
 function $(id) { return document.getElementById(id); }
@@ -149,7 +161,7 @@ function toast(msg, kind) {
 function snapshot() {
   return {
     version: STATE_VERSION,
-    canvas: serializeCanvas(state.nodes, state.edges),
+    canvas: serializeCanvas(state.nodes, state.edges, state.branches),
     lang: getLang(),
     puzzles: snapshotMarkdownCache(),
   };
@@ -189,6 +201,10 @@ async function bootstrap() {
   setupAlignFloater();
   setupCommentsLayer();
   setupVideoOverlay();
+  setupAudioOverlay();
+  setupDocumentOverlay();
+  setupFileViewer();
+  setupBranchesPanel();
   setupToastBridge();
   setupPresence();
 
@@ -418,8 +434,96 @@ function setupVideoOverlay() {
   videoOverlay.requestDraw();
 }
 
+function _overlayOpts() {
+  return { viewport: $('viewport'), getNodes: () => state.nodes,
+    getTransform: () => viewer ? viewer.getTransform() : { scale: 1, panX: 0, panY: 0 },
+    viewer };
+}
+
+function setupAudioOverlay() { audioOverlay = new AudioOverlay(_overlayOpts()); audioOverlay.requestDraw(); }
+
+function setupDocumentOverlay() {
+  documentOverlay = new DocumentOverlay({
+    ..._overlayOpts(),
+    onOpen: (node) => { if (fileViewerModal) fileViewerModal.open(node); },
+  });
+  documentOverlay.requestDraw();
+}
+
+function setupFileViewer() { fileViewerModal = new FileViewerModal(); }
+
+function setupBranchesPanel() {
+  branchesPanel = new BranchesPanel({
+    getBranches: () => state.branches,
+    getNodes: () => state.nodes,
+    canEdit: () => isLoggedIn(),
+    onFocus: (id) => focusBranch(id),
+    onFilterChange: () => refreshBranchFilter(),
+    onManage: () => openManageBranches(),
+  });
+  const btn = $('btn-branches-toggle');
+  if (btn) btn.addEventListener('click', () => branchesPanel && branchesPanel.toggle());
+}
+
 function renderVideoOverlay() {
   if (videoOverlay) videoOverlay.requestDraw();
+  if (audioOverlay) audioOverlay.requestDraw();
+  if (documentOverlay) documentOverlay.requestDraw();
+}
+
+function focusBranch(branchId) {
+  if (!branchId || !viewer) return;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, any = false;
+  for (const n of state.nodes.values()) {
+    if (!Array.isArray(n.branches) || !n.branches.includes(branchId)) continue;
+    any = true;
+    if (n.x < minX) minX = n.x;
+    if (n.y < minY) minY = n.y;
+    if (n.x + n.width > maxX) maxX = n.x + n.width;
+    if (n.y + n.height > maxY) maxY = n.y + n.height;
+  }
+  if (!any) return;
+  const rect = { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+  if (typeof viewer.fitToRect === 'function') viewer.fitToRect(rect);
+  else if (typeof viewer.centerOnHotspot === 'function') viewer.centerOnHotspot({ rect });
+}
+
+function refreshBranchFilter() { if (viewer) refreshPuzzleViewsInViewer(); }
+
+function openManageBranches() {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  openManageBranchesModal({
+    getBranches: () => state.branches,
+    onUpdate: (next) => applyBranchesUpdate(next),
+    onConfirmDelete: (msg) => window.confirm(msg),
+  });
+}
+
+function applyBranchesUpdate(nextList) {
+  pushHistory();
+  const validIds = new Set(nextList.map((b) => b.id));
+  state.branches = normaliseBranches(nextList);
+  for (const n of state.nodes.values()) {
+    if (!Array.isArray(n.branches)) continue;
+    const before = n.branches.length;
+    n.branches = n.branches.filter((b) => validIds.has(b));
+    if (n.branches.length !== before) pushNodePatch(n.id, { branches: n.branches });
+  }
+  if (branchesPanel) branchesPanel.setBranches();
+  refreshPuzzleViewsInViewer();
+  scheduleSave();
+  pushBranchesToBackend();
+}
+
+async function pushBranchesToBackend() {
+  if (!state.backendOnline || !isLoggedIn()) return;
+  try {
+    const data = serializeCanvas(state.nodes, state.edges, state.branches);
+    const res = await apiPutCanvas(data, state.revision);
+    if (res && typeof res.revision === 'number') state.revision = res.revision;
+  } catch (e) {
+    if (e && e.kind !== 'auth_expired') console.warn('[app] branches push failed', e);
+  }
 }
 
 async function triggerAddVideo() {
@@ -430,6 +534,11 @@ async function triggerAddVideo() {
   const rect = { x: Math.round(pt.x - 280), y: Math.round(pt.y - 160), w: 560, h: 320 };
   createVideoNode(rect, info);
   setActiveTool('select');
+}
+
+function triggerAddAudio() {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  if (uploader && typeof uploader.openAudioPicker === 'function') uploader.openAudioPicker();
 }
 
 function triggerAddComment() {
@@ -528,6 +637,7 @@ function setupAuthUI() {
       onOpenActivityLog:  () => openActivityLogModal(),
       onOpenSnapshots:    () => openSnapshotsModal(),
       onOpenPresence:     () => openPresenceModal(),
+      onManageBranches:   () => openManageBranches(),
     },
   });
   subscribeAuth((kind) => {
@@ -862,10 +972,18 @@ function deletePuzzleNode(id) {
 
 function refreshPuzzleViewsInViewer() {
   const lang = getLang();
-  viewer.setHotspots(puzzleViews(state.nodes).map((v) => viewWithLang(v, lang)));
-  viewer.setGroups(groupViews(state.nodes).map((v) => viewWithLang(v, lang)));
+  const applyBranch = (v) => {
+    if (!branchesPanel) return v;
+    const op = branchesPanel.computeFocusOpacity(v.branches || []);
+    if (op !== 1) v.branchOpacity = op;
+    return v;
+  };
+  viewer.setHotspots(puzzleViews(state.nodes).map((v) => applyBranch(viewWithLang(v, lang))));
+  viewer.setGroups(groupViews(state.nodes).map((v) => applyBranch(viewWithLang(v, lang))));
   if (viewer) viewer.notifyNodesChanged();
   if (videoOverlay) videoOverlay.requestDraw();
+  if (audioOverlay) audioOverlay.requestDraw();
+  if (documentOverlay) documentOverlay.requestDraw();
 }
 
 function setupLeftRail() {
@@ -879,6 +997,7 @@ function setupLeftRail() {
       onRedo: () => doRedo(),
       onUploadImage: () => uploader && uploader.openFilePicker(),
       onAddVideo: () => triggerAddVideo(),
+      onUploadAudio: () => triggerAddAudio(),
     },
   });
   leftRail.setActiveMode(state.mode);
@@ -930,6 +1049,7 @@ function setupTouch() {
 function setupEditNodeModal() {
   editNodeModal = new EditNodeModal({
     getNodes: () => state.nodes,
+    getBranches: () => state.branches,
     canEdit: () => isLoggedIn(),
     onSave: (payload) => persistRichEditSave(payload),
     onDelete: (id) => deletePuzzleNode(id),
@@ -1043,9 +1163,40 @@ function buildContextMenuItemsForNode(id) {
     items.push({ label: tr('ctx_crop'), fn: () => doCropImage(id, n.file) });
     items.push({ label: tr('ctx_replace_image'), fn: () => doReplaceImage(id) });
   }
+  const brSub = buildBranchSubmenu(id);
+  if (brSub && brSub.length) {
+    items.push({ kind: 'separator' });
+    items.push({ label: tr('branches_add_to_node'), submenu: brSub });
+  }
   items.push({ kind: 'separator' });
   items.push({ label: tr('ctx_delete'), danger: true, fn: () => deletePuzzleNode(id) });
   return items;
+}
+
+function buildBranchSubmenu(nodeId) {
+  const node = findNode(state.nodes, nodeId);
+  if (!node) return [];
+  const list = state.branches || [];
+  if (!list.length) return [];
+  const cur = new Set(Array.isArray(node.branches) ? node.branches : []);
+  return list.map((b) => ({
+    label: (cur.has(b.id) ? '✓ ' : '   ') + (b.label || b.id),
+    fn: () => toggleNodeBranch(nodeId, b.id),
+  }));
+}
+
+function toggleNodeBranch(nodeId, branchId) {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  const node = findNode(state.nodes, nodeId);
+  if (!node) return;
+  const cur = Array.isArray(node.branches) ? node.branches.slice() : [];
+  const idx = cur.indexOf(branchId);
+  if (idx >= 0) cur.splice(idx, 1);
+  else cur.push(branchId);
+  updatePuzzleNode(state.nodes, nodeId, { branches: cur });
+  refreshPuzzleViewsInViewer();
+  pushNodePatch(nodeId, { branches: cur });
+  scheduleSave();
 }
 
 function buildContextMenuItemsForEmpty() {
@@ -1123,45 +1274,65 @@ function setupUploader() {
     },
     onPlaceNode: async (placement) => placeUploadedImageNode(placement),
     onToast: (msg, kind) => toast(msg, kind),
+    onConfirm: (msg) => confirmAudioOversize(msg),
+  });
+}
+
+function confirmAudioOversize(msg) {
+  return new Promise((resolve) => {
+    const modal = $('confirm-modal'), titleEl = $('confirm-title');
+    const messageEl = $('confirm-message'), actionsEl = $('confirm-actions');
+    const wordIn = $('confirm-word-input');
+    if (!modal || !titleEl || !actionsEl) { resolve(window.confirm(msg)); return; }
+    titleEl.textContent = tr('upload_large_audio_warning', { size: '' });
+    messageEl.textContent = msg;
+    actionsEl.innerHTML = '';
+    if (wordIn) wordIn.style.display = 'none';
+    const close = () => modal.classList.remove('open');
+    const cancel = document.createElement('button');
+    cancel.className = 'modal-btn cancel';
+    cancel.textContent = tr('upload_large_audio_cancel');
+    cancel.addEventListener('click', () => { close(); resolve(false); });
+    const ok = document.createElement('button');
+    ok.className = 'modal-btn primary';
+    ok.textContent = tr('upload_large_audio_continue');
+    ok.addEventListener('click', () => { close(); resolve(true); });
+    actionsEl.appendChild(cancel); actionsEl.appendChild(ok);
+    modal.classList.add('open');
   });
 }
 
 async function placeUploadedImageNode(placement) {
   if (!placement || !placement.file) return null;
   const baseId = placement.name || 'image';
-  const isVideo = placement.kind === 'video' || isVideoMime(placement.mime);
-  const id = uniqueId(state.nodes, isVideo ? `video-${baseId}` : `img-${baseId}`);
+  const placementKind = placement.kind || (isVideoMime(placement.mime) ? 'video' : 'image');
+  const prefixMap = { video: 'video', audio: 'audio', document: 'doc' };
+  const id = uniqueId(state.nodes, `${prefixMap[placementKind] || 'img'}-${baseId}`);
   const parent = nodeAtParentLookup(state.nodes, placement.rect);
   const rect = placement.rect;
-  const node = isVideo
-    ? {
-        id,
-        type: 'file',
-        x: rect.x, y: rect.y, width: rect.w, height: rect.h,
-        file: placement.file,
-        kind: 'video',
-        mime: placement.mime,
-        status: 'no-data',
-        tags: [],
-        slug: id,
-        media: { kind: 'video', url: placement.file, provider: 'local' },
-      }
-    : {
-        id,
-        type: 'file',
-        x: rect.x, y: rect.y, width: rect.w, height: rect.h,
-        file: placement.file,
-        kind: 'block',
-        status: 'no-data',
-        tags: [],
-        slug: id,
-      };
+  const base = {
+    id, type: 'file',
+    x: rect.x, y: rect.y, width: rect.w, height: rect.h,
+    file: placement.file, status: 'no-data', tags: [], slug: id,
+  };
+  let node;
+  if (placementKind === 'video') {
+    node = { ...base, kind: 'video', mime: placement.mime,
+      media: { kind: 'video', url: placement.file, provider: 'local' } };
+  } else if (placementKind === 'audio') {
+    node = { ...base, kind: 'audio', mime: placement.mime, name: placement.name || 'audio',
+      media: { kind: 'audio', url: placement.file, provider: 'local', volume_default: 0.5 } };
+  } else if (placementKind === 'document') {
+    node = { ...base, kind: 'document', mime: placement.mime, name: placement.name || 'document' };
+  } else {
+    node = { ...base, kind: 'block' };
+  }
   if (parent) node.parent = parent;
   state.nodes.set(id, node);
-  if (viewer && !isVideo) await viewer.addBlock({ id, rect, file: placement.file });
+  if (viewer && placementKind === 'image') await viewer.addBlock({ id, rect, file: placement.file });
   refreshPuzzleViewsInViewer();
   if (viewer) viewer.notifyNodesChanged();
-  if (isVideo) renderVideoOverlay();
+  if (placementKind !== 'image') renderVideoOverlay();
   if (state.backendOnline && isLoggedIn()) {
     trackSelfMutation('node_created', id);
     try {
@@ -1637,6 +1808,7 @@ function persistRichEditSave(payload) {
     translations: payload.translations || null,
     text_style: payload.text_style || null,
     media: payload.media || null,
+    branches: Array.isArray(payload.branches) ? payload.branches : [],
   };
   if (isPuzzleNode(n) || isStickyNode(n) || isTextNode(n)) {
     patch.md = payload.md;
@@ -1660,6 +1832,7 @@ function persistRichEditSave(payload) {
     translations: updated.translations || null,
     text_style: updated.text_style || null,
     media: updated.media || null,
+    branches: Array.isArray(updated.branches) ? updated.branches : [],
     kind: updated.kind || null,
   };
   if (updated.type === 'text') wireBody.text = updated.text || '';
@@ -1770,7 +1943,7 @@ function confirmWithWord(opts) {
 }
 
 function exportCanvasSnapshot() {
-  downloadCanvasFile(state.nodes, state.edges, 'canvas.canvas');
+  downloadCanvasFile(state.nodes, state.edges, 'canvas.canvas', state.branches);
   toast(tr('toast_exported'));
 }
 
@@ -1849,6 +2022,7 @@ async function loadInitialData() {
 
   let nodes;
   let edges;
+  let branches = null;
   if (useStored) {
     nodes = new Map();
     for (const n of stored.canvas.nodes) {
@@ -1860,15 +2034,19 @@ async function loadInitialData() {
       const ee = normaliseEdge(e);
       if (ee.id) edges.set(ee.id, ee);
     }
+    if (Array.isArray(stored.canvas.branches)) branches = normaliseBranches(stored.canvas.branches);
     if (stored.puzzles) restoreMarkdownCache(stored.puzzles);
     toast(tr('toast_loaded_local'));
   } else {
     nodes = loaded.nodes;
     edges = loaded.edges;
+    branches = Array.isArray(loaded.branches) ? loaded.branches : null;
   }
 
   state.nodes = nodes;
   state.edges = edges;
+  state.branches = (branches && branches.length) ? branches : defaultBranchSeed();
+  if (branchesPanel) branchesPanel.setBranches();
 
   const blocks = blockViews(nodes);
   await viewer.setBlocks(blocks);
@@ -1902,6 +2080,9 @@ async function ingestCanvasData(data) {
   }
   state.nodes = nodes;
   state.edges = edges;
+  const incomingBranches = normaliseBranches(data.branches);
+  state.branches = incomingBranches.length ? incomingBranches : defaultBranchSeed();
+  if (branchesPanel) branchesPanel.setBranches();
   const blocks = blockViews(nodes);
   await viewer.setBlocks(blocks);
   const sz = viewer.getImageSize();
@@ -2329,6 +2510,11 @@ function applyImportedCanvas(imported) {
   for (const n of imported.nodes) state.nodes.set(n.id, n);
   state.edges = new Map();
   for (const e of imported.edges) state.edges.set(e.id, e);
+  if (Array.isArray(imported.branches)) {
+    const b = normaliseBranches(imported.branches);
+    state.branches = b.length ? b : state.branches;
+  }
+  if (branchesPanel) branchesPanel.setBranches();
   refreshPuzzleViewsInViewer();
   arrowLayer.setEdges(state.edges);
   scheduleSave();
@@ -2338,7 +2524,7 @@ function setupMigrationBanner() {
   const banner = $('migration-banner');
   if (!banner) return;
   $('migration-banner-button').addEventListener('click', () => {
-    downloadCanvasFile(state.nodes, state.edges, 'canvas.canvas');
+    downloadCanvasFile(state.nodes, state.edges, 'canvas.canvas', state.branches);
     toast(tr('toast_exported'));
     hideMigrationBanner();
   });
@@ -2453,6 +2639,7 @@ function setupKeyboard() {
       onRedo: () => { doRedo(); return true; },
       onImageTool: () => { if (uploader) uploader.openFilePicker(); return true; },
       onVideoTool: () => { triggerAddVideo(); return true; },
+      onAudioTool: () => { triggerAddAudio(); return true; },
       onGroupShortcut: () => {
         if (state.selection.size >= 2) {
           groupCurrentSelection();

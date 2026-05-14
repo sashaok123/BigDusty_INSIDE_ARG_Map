@@ -678,3 +678,121 @@ async def test_edge_label_legacy_compat(client, admin_token):
     snap = await client.get("/canvas/main")
     edge = next(e for e in snap.json()["data"]["edges"] if e["id"] == "edge_legacy")
     assert edge["label"] == "plain text label"
+
+
+_TINY_MP3 = b"\xff\xfb\x90\x00" + b"\x00" * 200
+
+
+async def test_audio_upload_accepted(client, admin_token):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    files = {"file": ("clip.mp3", _TINY_MP3, "audio/mpeg")}
+    resp = await client.post("/canvas/main/images", files=files, headers=headers)
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert body["mime"] == "audio/mpeg"
+    assert body["size"] == len(_TINY_MP3)
+    fetched = await client.get(body["url"])
+    assert fetched.status_code == 200
+    assert fetched.headers["content-type"].startswith("audio/mpeg")
+    audit = await client.get("/admin/audit", headers=headers)
+    actions = [r["action"] for r in audit.json()]
+    assert "audio_uploaded" in actions
+
+
+async def test_document_upload_html_and_json(client, admin_token):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    html_body = b"<!doctype html><html><body><h1>hi</h1></body></html>"
+    files_html = {"file": ("page.html", html_body, "text/html")}
+    resp_html = await client.post("/canvas/main/images", files=files_html, headers=headers)
+    assert resp_html.status_code == 201, resp_html.text
+    assert resp_html.json()["mime"] == "text/html"
+    fetched = await client.get(resp_html.json()["url"])
+    assert fetched.content == html_body
+
+    json_body = b'{"hello": "world", "n": 42}'
+    files_json = {"file": ("data.json", json_body, "application/json")}
+    resp_json = await client.post("/canvas/main/images", files=files_json, headers=headers)
+    assert resp_json.status_code == 201, resp_json.text
+    assert resp_json.json()["mime"] == "application/json"
+
+    audit = await client.get("/admin/audit", headers=headers)
+    actions = [r["action"] for r in audit.json()]
+    assert "document_uploaded" in actions
+
+
+async def test_document_upload_size_limit(client, admin_token):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    oversized = b"x" * (6 * 1024 * 1024)
+    files = {"file": ("big.txt", oversized, "text/plain")}
+    resp = await client.post("/canvas/main/images", files=files, headers=headers)
+    assert resp.status_code == 413
+
+
+async def test_audio_node_round_trip(client, admin_token):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    create = await client.post(
+        "/canvas/main/nodes",
+        json={
+            "id": "node_audio",
+            "type": "file",
+            "x": 10, "y": 20, "width": 300, "height": 90,
+            "file": "/canvas/main/images/audio-id",
+            "kind": "audio",
+            "mime": "audio/mpeg",
+            "name": "track.mp3",
+            "media": {"kind": "audio", "url": "/canvas/main/images/audio-id", "volume_default": 0.5},
+        },
+        headers=headers,
+    )
+    assert create.status_code == 201, create.text
+    snap = await client.get("/canvas/main")
+    node = next(n for n in snap.json()["data"]["nodes"] if n["id"] == "node_audio")
+    assert node["kind"] == "audio"
+    assert node["mime"] == "audio/mpeg"
+    assert node["media"]["volume_default"] == 0.5
+
+
+async def test_branches_round_trip(client, admin_token):
+    headers = {"Authorization": f"Bearer {admin_token}", "X-Client-Id": "branches-test"}
+    rev0 = (await client.get("/canvas/main")).json()["revision"]
+    body = {
+        "data": {
+            "nodes": [
+                {
+                    "id": "node_branched",
+                    "type": "text",
+                    "x": 0, "y": 0, "width": 100, "height": 50,
+                    "text": "branched",
+                    "branches": ["stickers", "printer"],
+                }
+            ],
+            "edges": [],
+            "branches": [
+                {"id": "stickers", "label": "Sticker puzzle", "color": "1"},
+                {"id": "printer", "label": "Printer puzzle", "color": "2"},
+            ],
+        },
+        "expected_revision": rev0,
+    }
+    put_resp = await client.put("/canvas/main", json=body, headers=headers)
+    assert put_resp.status_code == 200, put_resp.text
+    snap = await client.get("/canvas/main")
+    data = snap.json()["data"]
+    node = next(n for n in data["nodes"] if n["id"] == "node_branched")
+    assert "stickers" in node["branches"]
+    assert "printer" in node["branches"]
+    assert isinstance(data.get("branches"), list)
+    branch_ids = [b["id"] for b in data["branches"]]
+    assert "stickers" in branch_ids and "printer" in branch_ids
+
+    rev1 = snap.json()["revision"]
+    patch_resp = await client.patch(
+        "/canvas/main/nodes/node_branched",
+        json={"branches": ["printer"]},
+        headers=headers,
+    )
+    assert patch_resp.status_code == 200, patch_resp.text
+    snap2 = await client.get("/canvas/main")
+    node2 = next(n for n in snap2.json()["data"]["nodes"] if n["id"] == "node_branched")
+    assert node2["branches"] == ["printer"]
+    assert snap2.json()["revision"] == rev1 + 1
