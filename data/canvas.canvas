@@ -11,7 +11,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 1"
+      "label": "Block 1",
+      "summary": "Title card for INSIDE (2016) game with boy silhouette and red INSIDE logo",
+      "content_kind": "mixed",
+      "text": "INSIDE (2016)"
     },
     {
       "id": "block_002",
@@ -24,7 +27,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 2"
+      "label": "Block 2",
+      "summary": "Dim screenshot of an in-game sign labeled 03 captioned Rorschach Desgn Noah x200564",
+      "content_kind": "mixed",
+      "text": "Rorschach Desgn\nNoah x200564"
     },
     {
       "id": "block_003",
@@ -37,7 +43,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 3"
+      "label": "Block 3",
+      "summary": "In-game screenshot of the printer scene with boy approaching it",
+      "content_kind": "mixed",
+      "text": "The printer"
     },
     {
       "id": "block_004",
@@ -50,7 +59,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 4"
+      "label": "Block 4",
+      "summary": "Two in-game signs reading A10N7 and L08",
+      "content_kind": "mixed",
+      "text": "A10N7\nL08"
     },
     {
       "id": "block_005",
@@ -63,7 +75,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 5"
+      "label": "Block 5",
+      "summary": "In-game sign showing 03 with caption of two number sequences",
+      "content_kind": "mixed",
+      "text": "14-42-54-55\n54-32-42-44"
     },
     {
       "id": "block_006",
@@ -76,7 +91,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 6"
+      "label": "Block 6",
+      "summary": "In-game sign showing 04 with caption of two number sequences",
+      "content_kind": "mixed",
+      "text": "21-15-44-55\n33-53-43-44-54-51-34"
     },
     {
       "id": "block_007",
@@ -89,7 +107,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 7"
+      "label": "Block 7",
+      "summary": "Close-up of 04 sign with number sequences printed on it",
+      "content_kind": "mixed",
+      "text": "21-15-44-55\n33-53-43-44-54-51-34"
     },
     {
       "id": "block_008",
@@ -102,7 +123,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 8"
+      "label": "Block 8",
+      "summary": "In-game sign showing 4 with caption of two number sequences",
+      "content_kind": "mixed",
+      "text": "33-11-43-15-43\n13-42-43-41"
     },
     {
       "id": "block_009",
@@ -115,7 +139,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 9"
+      "label": "Block 9",
+      "summary": "Composite of 2014 trailer frames showing sign 02 and placeholder text",
+      "content_kind": "mixed",
+      "text": "2014 Trailer\nFordsjh Gjfhdfdjfhd\nUjhdfr B02"
     },
     {
       "id": "block_010",
@@ -128,7 +155,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 10"
+      "label": "Block 10",
+      "summary": "Photo of INSIDE Collector's Edition sticker numbered 154 with a slash symbol",
+      "content_kind": "mixed",
+      "text": "Collector's Edition (2019)\n154"
     },
     {
       "id": "block_011",
@@ -141,7 +171,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 11"
+      "label": "Block 11",
+      "summary": "Fragmented glyph mosaic forming the path dat/534brn9653f9j8mmd",
+      "content_kind": "mixed",
+      "text": "dat/534brn9653f9j8mmd"
     },
     {
       "id": "block_012",
@@ -154,7 +187,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 12"
+      "label": "Block 12",
+      "summary": "Pixel-art grid with legend mapping symbols to colors",
+      "content_kind": "mixed",
+      "text": "/=gray, -=red, dot=yellow"
     },
     {
       "id": "block_013",
@@ -167,7 +203,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 13"
+      "label": "Block 13",
+      "summary": "Screenshot of garbled HTML source code with mojibake characters",
+      "content_kind": "mixed",
+      "text": "41 html tags"
     },
     {
       "id": "block_014",
@@ -180,7 +219,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 14"
+      "label": "Block 14",
+      "summary": "Dense ASCII text wall with URL below",
+      "content_kind": "mixed",
+      "text": "http://terminal41.link/dat/534brn9653f9j8mmd"
     },
     {
       "id": "block_015",
@@ -193,7 +235,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 15"
+      "label": "Block 15",
+      "summary": "Label reading EXIF metadata",
+      "content_kind": "text",
+      "text": "EXIF\nmetadata"
     },
     {
       "id": "block_016",
@@ -206,7 +251,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 16"
+      "label": "Block 16",
+      "summary": "ISO 8601 timestamp boxed in orange",
+      "content_kind": "text",
+      "text": "2016-12-16T14:12:24.351"
     },
     {
       "id": "block_017",
@@ -219,7 +267,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 17"
+      "label": "Block 17",
+      "summary": "EXIF-style datetime boxed in orange",
+      "content_kind": "text",
+      "text": "2016:08:09 14:12:24"
     },
     {
       "id": "block_018",
@@ -232,7 +283,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 18"
+      "label": "Block 18",
+      "summary": "Label reading AnSet",
+      "content_kind": "text",
+      "text": "AnSet"
     },
     {
       "id": "block_019",
@@ -245,7 +299,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 19"
+      "label": "Block 19",
+      "summary": "Name Anthony T. Setrinamaire",
+      "content_kind": "text",
+      "text": "Anthony T. Setrinamaire"
     },
     {
       "id": "block_020",
@@ -258,7 +315,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 20"
+      "label": "Block 20",
+      "summary": "Label reading author",
+      "content_kind": "text",
+      "text": "author"
     },
     {
       "id": "block_021",
@@ -271,7 +331,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 21"
+      "label": "Block 21",
+      "summary": "Label reading image created",
+      "content_kind": "text",
+      "text": "image created"
     },
     {
       "id": "block_022",
@@ -284,7 +347,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 22"
+      "label": "Block 22",
+      "summary": "Label reading last edited",
+      "content_kind": "text",
+      "text": "last edited"
     },
     {
       "id": "block_023",
@@ -297,7 +363,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 23"
+      "label": "Block 23",
+      "summary": "5x5 Polybius cipher square with letters A-Z on blue grid",
+      "content_kind": "image"
     },
     {
       "id": "block_024",
@@ -310,7 +378,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 24"
+      "label": "Block 24",
+      "summary": "Label reading Polybius cipher",
+      "content_kind": "text",
+      "text": "Polybius cipher"
     },
     {
       "id": "block_025",
@@ -323,7 +394,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 25"
+      "label": "Block 25",
+      "summary": "Text reading PITY THIS in monospace font",
+      "content_kind": "text",
+      "text": "PITY THIS"
     },
     {
       "id": "block_026",
@@ -336,7 +410,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 26"
+      "label": "Block 26",
+      "summary": "Text label BUSY MONSTER",
+      "content_kind": "text",
+      "text": "BUSY MONSTER"
     },
     {
       "id": "block_027",
@@ -349,7 +426,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 27"
+      "label": "Block 27",
+      "summary": "Text label MANUN KIND",
+      "content_kind": "text",
+      "text": "MANUN KIND"
     },
     {
       "id": "block_028",
@@ -362,7 +442,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 28"
+      "label": "Block 28",
+      "summary": "Caption referencing E. E. Cummings poem used in 4th passcode decoding",
+      "content_kind": "text",
+      "text": "E. E. Cummings poem"
     },
     {
       "id": "block_029",
@@ -375,7 +458,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 29"
+      "label": "Block 29",
+      "summary": "Platform label macOS (2020)",
+      "content_kind": "text",
+      "text": "macOS (2020)"
     },
     {
       "id": "block_030",
@@ -388,7 +474,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 30"
+      "label": "Block 30",
+      "summary": "Label backgrounds mod 9 with small slash glyph",
+      "content_kind": "text",
+      "text": "backgrounds\nmod 9"
     },
     {
       "id": "block_031",
@@ -401,7 +490,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 31"
+      "label": "Block 31",
+      "summary": "Label symbols mod 108 referencing the 108-cell sticker grid modulus",
+      "content_kind": "text",
+      "text": "symbols\nmod 108"
     },
     {
       "id": "block_032",
@@ -414,7 +506,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 32"
+      "label": "Block 32",
+      "summary": "Filesystem-style path lines including 41/ and [conf.] marker",
+      "content_kind": "text",
+      "text": "sys/\nterminate terminal/\n41/\n[conf.]"
     },
     {
       "id": "block_033",
@@ -427,7 +522,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 33"
+      "label": "Block 33",
+      "summary": "ASCII pattern of dots and dashes captioned 16 strings",
+      "content_kind": "mixed",
+      "text": "16 strings"
     },
     {
       "id": "block_034",
@@ -440,7 +538,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 34"
+      "label": "Block 34",
+      "summary": "Platform label Switch (2018)",
+      "content_kind": "text",
+      "text": "Switch\n(2018)"
     },
     {
       "id": "block_035",
@@ -453,7 +554,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 35"
+      "label": "Block 35",
+      "summary": "Platform label iOS (2017)",
+      "content_kind": "text",
+      "text": "iOS (2017)"
     },
     {
       "id": "block_036",
@@ -466,7 +570,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 36"
+      "label": "Block 36",
+      "summary": "Platform label Xbox",
+      "content_kind": "text",
+      "text": "Xbox"
     },
     {
       "id": "block_037",
@@ -479,7 +586,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 37"
+      "label": "Block 37",
+      "summary": "Platform label PC / PS4",
+      "content_kind": "text",
+      "text": "PC / PS4"
     },
     {
       "id": "block_038",
@@ -492,7 +602,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 38"
+      "label": "Block 38",
+      "summary": "ASCII art captioned 41 strings, the 41-line source",
+      "content_kind": "mixed",
+      "text": "41 strings"
     },
     {
       "id": "block_039",
@@ -505,7 +618,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 39"
+      "label": "Block 39",
+      "summary": "ASCII art captioned 48 strings, the 48-line source",
+      "content_kind": "mixed",
+      "text": "48 strings"
     },
     {
       "id": "block_040",
@@ -518,7 +634,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 40"
+      "label": "Block 40",
+      "summary": "Black-and-white block bitmap caption 24 strings",
+      "content_kind": "mixed",
+      "text": "24 strings"
     },
     {
       "id": "block_041",
@@ -531,7 +650,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 41"
+      "label": "Block 41",
+      "summary": "Single long horizontal row of alternating black/white squares",
+      "content_kind": "image"
     },
     {
       "id": "block_042",
@@ -544,7 +665,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 42"
+      "label": "Block 42",
+      "summary": "Morse code line decoded as CTRL CON DISCON",
+      "content_kind": "text",
+      "text": "-.-. - .-. .-.. / -.-. --- -. / -.. .. ... -.-. --- -.\nCTRL CON DISCON"
     },
     {
       "id": "block_043",
@@ -557,7 +681,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 43"
+      "label": "Block 43",
+      "summary": "Label Morse",
+      "content_kind": "text",
+      "text": "Morse"
     },
     {
       "id": "block_044",
@@ -570,7 +697,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 44"
+      "label": "Block 44",
+      "summary": "Instruction text rearrange lines to 5x5",
+      "content_kind": "text",
+      "text": "rearrange lines to 5x5"
     },
     {
       "id": "block_045",
@@ -583,7 +713,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 45"
+      "label": "Block 45",
+      "summary": "Label controller colors referencing gamepad color mapping",
+      "content_kind": "text",
+      "text": "controller colors"
     },
     {
       "id": "block_046",
@@ -596,7 +729,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 46"
+      "label": "Block 46",
+      "summary": "Horizontal strip of black and white squares, binary-bit row",
+      "content_kind": "image"
     },
     {
       "id": "block_047",
@@ -609,7 +744,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 47"
+      "label": "Block 47",
+      "summary": "Horizontal strip of black and white squares, binary-bit row",
+      "content_kind": "image"
     },
     {
       "id": "block_048",
@@ -622,7 +759,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 48"
+      "label": "Block 48",
+      "summary": "Horizontal strip of black and white squares, binary-bit row",
+      "content_kind": "image"
     },
     {
       "id": "block_049",
@@ -635,7 +774,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 49"
+      "label": "Block 49",
+      "summary": "Horizontal strip of black and white squares, binary-bit row",
+      "content_kind": "image"
     },
     {
       "id": "block_050",
@@ -648,7 +789,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 50"
+      "label": "Block 50",
+      "summary": "Horizontal strip of black and white squares, binary-bit row",
+      "content_kind": "image"
     },
     {
       "id": "block_051",
@@ -661,7 +804,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 51"
+      "label": "Block 51",
+      "summary": "Horizontal strip of black and white squares resembling a binary pattern",
+      "content_kind": "image"
     },
     {
       "id": "block_052",
@@ -674,7 +819,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 52"
+      "label": "Block 52",
+      "summary": "Label reading Morse",
+      "content_kind": "text",
+      "text": "Morse"
     },
     {
       "id": "block_053",
@@ -687,7 +835,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 53"
+      "label": "Block 53",
+      "summary": "List of six RGB-style codes with single-digit channel values",
+      "content_kind": "text",
+      "text": "R2G2B6\nR3G1B1\nR3G3B3\nR5G1B5\nR1G4B1\nR3G3B0"
     },
     {
       "id": "block_054",
@@ -700,7 +851,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 54"
+      "label": "Block 54",
+      "summary": "E. E. Cummings poem pity this busy monster, manunkind interlaced with dashes",
+      "content_kind": "text",
+      "text": "pity this busy monster, manunkind, not. Progress is a comfortable disease: your victim (death and life safely beyond) plays with the bigness of his littleness. electrons deify one razorblade into a mountainrange; lenses extend unwish through curving wherewhen till unwish returns on its unself. A world of made is not a world of born  pity poor flesh and trees, poor stars and stones, but never this fine specimen of hypermagical ultraomnipotence. We doctors know a hopeless case if  listen: there's a hell of a good universe next door; let's go. E. E. Cummings"
     },
     {
       "id": "block_055",
@@ -713,7 +867,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 55"
+      "label": "Block 55",
+      "summary": "All-caps string HIBERNATIONINPROGRESSREBOOTPENDING",
+      "content_kind": "text",
+      "text": "HIBERNATIONINPROGRESSREBOOTPENDING"
     },
     {
       "id": "block_056",
@@ -726,7 +883,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 56"
+      "label": "Block 56",
+      "summary": "Table of SHA-256 hashes paired with names, unsolved hash highlighted",
+      "content_kind": "mixed",
+      "text": "UNSOLVED"
     },
     {
       "id": "block_057",
@@ -739,7 +899,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 57"
+      "label": "Block 57",
+      "summary": "Block of unsolved SHA-256 hexadecimal hashes",
+      "content_kind": "text",
+      "text": "7E5C567883D54DDC743400F39269BEE260DE997C59C9C4DC166BD490B397BD25 A8057C135217AEB7E04A38DEEC17A8D9645B05803BDCB36DB55B2268LF0EF50B 315B4E2197086194A40F704420DB1144208388A0AB35090F78AC1FF1FF9FF[*] 6D90114F64123AFF59BF713E674422C040AE60672C84C956E156D6363C7FCFFD 3323B056F98110AF412CAF582505166E859AF7212F09E662052DF58FF2F6EE49"
     },
     {
       "id": "block_058",
@@ -752,7 +915,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 58"
+      "label": "Block 58",
+      "summary": "Caption SHA-256 hashes",
+      "content_kind": "text",
+      "text": "SHA-256 hashes"
     },
     {
       "id": "block_059",
@@ -765,7 +931,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 59"
+      "label": "Block 59",
+      "summary": "Pixelated 42x42 BMP labeled FOR_ CIPHER showing recovered bitmap art",
+      "content_kind": "mixed",
+      "text": "FOR_ CIPHER"
     },
     {
       "id": "block_060",
@@ -778,7 +947,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 60"
+      "label": "Block 60",
+      "summary": "Recovered pixel bitmap labeled with its 42x42 dimensions",
+      "content_kind": "mixed",
+      "text": "42x42"
     },
     {
       "id": "block_061",
@@ -791,7 +963,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 61"
+      "label": "Block 61",
+      "summary": "Caption explaining red marker indicates a missing pixel location",
+      "content_kind": "text",
+      "text": "red = missing pixel somewhere around there"
     },
     {
       "id": "block_062",
@@ -804,7 +979,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 62"
+      "label": "Block 62",
+      "summary": "Instruction convert it to a valid BMP file",
+      "content_kind": "text",
+      "text": "convert it to a valid BMP file"
     },
     {
       "id": "block_063",
@@ -817,7 +995,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 63"
+      "label": "Block 63",
+      "summary": "Conversion notes UTF-8 to ANSI, space to NUL",
+      "content_kind": "text",
+      "text": "UTF-8 -> ANSI\nspace -> NUL"
     },
     {
       "id": "block_064",
@@ -830,7 +1011,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 64"
+      "label": "Block 64",
+      "summary": "Caption referencing ARG contributors",
+      "content_kind": "text",
+      "text": "people who contributed to solving the ARG"
     },
     {
       "id": "block_065",
@@ -843,7 +1027,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 65"
+      "label": "Block 65",
+      "summary": "Pixel pattern of Game of Life acorn at generation 42",
+      "content_kind": "mixed",
+      "text": "Game of Life seed acorn, generation 42"
     },
     {
       "id": "block_066",
@@ -856,7 +1043,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 66"
+      "label": "Block 66",
+      "summary": "Instruction label invert pixels",
+      "content_kind": "text",
+      "text": "invert pixels"
     },
     {
       "id": "block_067",
@@ -869,7 +1059,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 67"
+      "label": "Block 67",
+      "summary": "Dense block of corrupted mojibake characters and symbols",
+      "content_kind": "image"
     },
     {
       "id": "block_068",
@@ -882,7 +1074,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 68"
+      "label": "Block 68",
+      "summary": "Caption describing a corrupted JPEG with replacement characters",
+      "content_kind": "text",
+      "text": "corrupted JPEG with ? characters"
     },
     {
       "id": "block_069",
@@ -895,7 +1090,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 69"
+      "label": "Block 69",
+      "summary": "Short garbled string fragment, possibly inverted text",
+      "content_kind": "text",
+      "text": "pe^!02un"
     },
     {
       "id": "block_070",
@@ -908,7 +1106,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 70"
+      "label": "Block 70",
+      "summary": "Upside-down unsolved text shown above its mirrored readable form",
+      "content_kind": "mixed",
+      "text": "unz0!ved unsolved"
     },
     {
       "id": "block_071",
@@ -921,7 +1122,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 71"
+      "label": "Block 71",
+      "summary": "URL to terminal41.link terminate path",
+      "content_kind": "text",
+      "text": "http://terminal41.link/sys/terminate_terminal/41/"
     },
     {
       "id": "block_072",
@@ -934,7 +1138,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 72"
+      "label": "Block 72",
+      "summary": "Label redirect",
+      "content_kind": "text",
+      "text": "redirect"
     },
     {
       "id": "block_073",
@@ -947,7 +1154,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 73"
+      "label": "Block 73",
+      "summary": "Terminal-style emergency prompt with yes or no confirmation",
+      "content_kind": "text",
+      "text": "[terminate emergency TERMINAL41][confirm(input)] [/y/].[/n/]"
     },
     {
       "id": "block_074",
@@ -960,7 +1170,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 74"
+      "label": "Block 74",
+      "summary": "URL to the terminate.html page on terminal41.link",
+      "content_kind": "text",
+      "text": "http://terminal41.link/sys/terminate_terminal/41/terminate.html"
     },
     {
       "id": "block_075",
@@ -973,7 +1186,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 75"
+      "label": "Block 75",
+      "summary": "Bracketed yes or no input option label",
+      "content_kind": "text",
+      "text": "[/y/].[/n/]"
     },
     {
       "id": "block_076",
@@ -986,7 +1202,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 76"
+      "label": "Block 76",
+      "summary": "URL for terminate_terminal endpoint on terminal41.link",
+      "content_kind": "text",
+      "text": "http://terminal41.link/sys/terminate_terminal/41/y/"
     },
     {
       "id": "block_077",
@@ -999,7 +1218,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 77"
+      "label": "Block 77",
+      "summary": "Single word redirect",
+      "content_kind": "text",
+      "text": "redirect"
     },
     {
       "id": "block_078",
@@ -1012,7 +1234,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 78"
+      "label": "Block 78",
+      "summary": "Blue progress bar of x characters on black background, nearly full",
+      "content_kind": "image"
     },
     {
       "id": "block_079",
@@ -1025,7 +1249,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 79"
+      "label": "Block 79",
+      "summary": "URL for terminateall.html endpoint on terminal41.link",
+      "content_kind": "text",
+      "text": "http://terminal41.link/sys/terminateall.html"
     },
     {
       "id": "block_080",
@@ -1038,7 +1265,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 80"
+      "label": "Block 80",
+      "summary": "Note all webpages go offline",
+      "content_kind": "text",
+      "text": "all webpages go offline"
     },
     {
       "id": "block_081",
@@ -1051,7 +1281,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 81"
+      "label": "Block 81",
+      "summary": "Screenshot of standard 404 Not Found error page",
+      "content_kind": "text",
+      "text": "Not Found\n\nThe requested URL was not found on this server."
     },
     {
       "id": "block_082",
@@ -1064,7 +1297,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 82"
+      "label": "Block 82",
+      "summary": "Dot-matrix display rendering of MULTIPLEPROBESDISPATCHED",
+      "content_kind": "mixed",
+      "text": "MULTIPLEPROBESDISPATCHED"
     },
     {
       "id": "block_083",
@@ -1077,7 +1313,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 83"
+      "label": "Block 83",
+      "summary": "Block of Morse-like dot-dash short and long strings, twelve lines",
+      "content_kind": "text",
+      "text": ".-..-.-.-.--\n..-.-.-.-...\n..-.-------.-.-\n......-------\n...-.-.-....--\n...-.-.-.-.....\n.-.-.-.-.-...\n.-.-.--..--.---\n.-.---....----..\n.-.-.--..--..-...-.-\n.--..-.-.-..............\n--..-.--.-.-.-..-.--"
     },
     {
       "id": "block_084",
@@ -1090,7 +1329,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 84"
+      "label": "Block 84",
+      "summary": "Label short strings",
+      "content_kind": "text",
+      "text": "short\nstrings"
     },
     {
       "id": "block_085",
@@ -1103,7 +1345,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 85"
+      "label": "Block 85",
+      "summary": "Label rearrange long strings",
+      "content_kind": "text",
+      "text": "rearrange\nlong strings"
     },
     {
       "id": "block_086",
@@ -1116,7 +1361,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 86"
+      "label": "Block 86",
+      "summary": "36x36 pixel art image, orange circle on blue",
+      "content_kind": "mixed",
+      "text": "36x36"
     },
     {
       "id": "block_087",
@@ -1129,7 +1377,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 87"
+      "label": "Block 87",
+      "summary": "Single word Braille",
+      "content_kind": "text",
+      "text": "Braille"
     },
     {
       "id": "block_088",
@@ -1142,7 +1393,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 88"
+      "label": "Block 88",
+      "summary": "Orange question mark with arrow icon",
+      "content_kind": "image"
     },
     {
       "id": "block_089",
@@ -1155,7 +1408,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 89"
+      "label": "Block 89",
+      "summary": "Block of dot-dash-slash glyph strings, nine lines",
+      "content_kind": "text",
+      "text": "/.-.\n--/.\n.-.-\n-.-./\n-------,\n-.-.-.///\n..-.-.-.-.-\n-.-.-.-./// \n.-.--..-.-.-/"
     },
     {
       "id": "block_090",
@@ -1168,7 +1424,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 90"
+      "label": "Block 90",
+      "summary": "Label short strings",
+      "content_kind": "text",
+      "text": "short\nstrings"
     },
     {
       "id": "block_091",
@@ -1181,7 +1440,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 91"
+      "label": "Block 91",
+      "summary": "Label rearrange long strings",
+      "content_kind": "text",
+      "text": "rearrange\nlong strings"
     },
     {
       "id": "block_092",
@@ -1194,7 +1456,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 92"
+      "label": "Block 92",
+      "summary": "Pixel-art image of red figure on blue background",
+      "content_kind": "image"
     },
     {
       "id": "block_093",
@@ -1207,7 +1471,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 93"
+      "label": "Block 93",
+      "summary": "Instruction take orange+white and blue+black color pairs",
+      "content_kind": "text",
+      "text": "take orange+white and blue+black"
     },
     {
       "id": "block_094",
@@ -1220,7 +1487,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 94"
+      "label": "Block 94",
+      "summary": "Pixel pattern of Game of Life acorn seed at generation 41",
+      "content_kind": "mixed",
+      "text": "Game of Life\nseed acorn, generation 41"
     },
     {
       "id": "block_095",
@@ -1233,7 +1503,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 95"
+      "label": "Block 95",
+      "summary": "LIFE DETECTED pixel-art sign in orange on blue",
+      "content_kind": "mixed",
+      "text": "LIFEDETECTED"
     },
     {
       "id": "block_096",
@@ -1246,7 +1519,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 96"
+      "label": "Block 96",
+      "summary": "Single word other",
+      "content_kind": "text",
+      "text": "other"
     },
     {
       "id": "block_097",
@@ -1259,7 +1535,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 97"
+      "label": "Block 97",
+      "summary": "Grid of blue tiles with numbers and letters, scrambled cell layout",
+      "content_kind": "image"
     },
     {
       "id": "block_098",
@@ -1272,7 +1550,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 98"
+      "label": "Block 98",
+      "summary": "Single word letters",
+      "content_kind": "text",
+      "text": "letters"
     },
     {
       "id": "block_099",
@@ -1285,7 +1566,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 99"
+      "label": "Block 99",
+      "summary": "Text NEWPLANETDISCOVERED",
+      "content_kind": "text",
+      "text": "NEWPLANETDISCOVERED"
     },
     {
       "id": "block_100",
@@ -1298,7 +1582,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 100"
+      "label": "Block 100",
+      "summary": "Six lines of digits",
+      "content_kind": "text",
+      "text": "987976308789\n426098179864\n696637997682\n89126789829\n812792412\n432296796"
     },
     {
       "id": "block_101",
@@ -1311,7 +1598,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 101"
+      "label": "Block 101",
+      "summary": "Plain text a valid email address",
+      "content_kind": "text",
+      "text": "a valid email address"
     },
     {
       "id": "block_102",
@@ -1324,7 +1614,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 102"
+      "label": "Block 102",
+      "summary": "Plain text incorrect input",
+      "content_kind": "text",
+      "text": "incorrect input"
     },
     {
       "id": "block_103",
@@ -1337,7 +1630,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 103"
+      "label": "Block 103",
+      "summary": "Playdead site banner with comms gateway status and email field",
+      "content_kind": "mixed",
+      "text": "/-comms gateway established.../\n/-...encryption approved/\n/-...no message received/\nyour email address\n2023 Playdead. All rights reserved. Copenhagen, Denmark - Privacy Policy"
     },
     {
       "id": "block_104",
@@ -1350,7 +1646,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 104"
+      "label": "Block 104",
+      "summary": "Plain text no input",
+      "content_kind": "text",
+      "text": "no input"
     },
     {
       "id": "block_105",
@@ -1363,7 +1662,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 105"
+      "label": "Block 105",
+      "summary": "Two small dark UI icons including a printer-like glyph",
+      "content_kind": "image"
     },
     {
       "id": "block_106",
@@ -1376,7 +1677,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 106"
+      "label": "Block 106",
+      "summary": "Label Printer button (2018) with Playdead URL",
+      "content_kind": "text",
+      "text": "Printer button (2018)\nhttps://playdead.com/"
     },
     {
       "id": "block_107",
@@ -1389,7 +1693,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 107"
+      "label": "Block 107",
+      "summary": "Code fragment mentioning F12 and printCheck function call",
+      "content_kind": "text",
+      "text": "or F12, printCheck("
     },
     {
       "id": "block_108",
@@ -1402,7 +1709,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 108"
+      "label": "Block 108",
+      "summary": "Dark signup banner with email field and Subscribe button",
+      "content_kind": "mixed",
+      "text": "Sign up for updates: your email address Subscribe"
     },
     {
       "id": "block_109",
@@ -1415,7 +1725,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 109"
+      "label": "Block 109",
+      "summary": "Terminal screenshot of breach contribution registry hex dump",
+      "content_kind": "image"
     },
     {
       "id": "block_110",
@@ -1428,7 +1740,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 110"
+      "label": "Block 110",
+      "summary": "URL to terminal41.link breach_contribution_reg.html",
+      "content_kind": "text",
+      "text": "http://terminal41.link/dat/breach_contribution_reg.html"
     },
     {
       "id": "block_111",
@@ -1441,7 +1756,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 111"
+      "label": "Block 111",
+      "summary": "Garbled mojibake/binary dump referencing /repo/dat/breach_contribution_reg",
+      "content_kind": "image"
     },
     {
       "id": "block_112",
@@ -1454,7 +1771,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 112"
+      "label": "Block 112",
+      "summary": "ASCII-art style BMP file dump with characters forming abstract textures",
+      "content_kind": "image"
     },
     {
       "id": "block_113",
@@ -1467,7 +1786,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 113"
+      "label": "Block 113",
+      "summary": "Plain text describing text between two ///////",
+      "content_kind": "text",
+      "text": "text between two ///////"
     },
     {
       "id": "block_114",
@@ -1480,7 +1802,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 114"
+      "label": "Block 114",
+      "summary": "Block of corrupted binary characters and symbols, unreadable mojibake",
+      "content_kind": "image"
     },
     {
       "id": "block_115",
@@ -1493,7 +1817,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 115"
+      "label": "Block 115",
+      "summary": "Column of garbled binary-encoded characters in italic font",
+      "content_kind": "image"
     },
     {
       "id": "block_116",
@@ -1506,7 +1832,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 116"
+      "label": "Block 116",
+      "summary": "22-char token followed by concatenated gibberish string",
+      "content_kind": "text",
+      "text": "gvylmveqwr83409q3i3qpwsl1e+38546uy754j9j6tuk5fi34+2d34243544+56+567+6+41212"
     },
     {
       "id": "block_117",
@@ -1519,7 +1848,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 117"
+      "label": "Block 117",
+      "summary": "Mojibake binary dump containing the substring fsd5t355gf",
+      "content_kind": "image"
     },
     {
       "id": "block_118",
@@ -1532,7 +1863,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 118"
+      "label": "Block 118",
+      "summary": "Text label rest of the data (2 MB)",
+      "content_kind": "text",
+      "text": "rest of the data (2 MB)"
     },
     {
       "id": "block_119",
@@ -1545,7 +1879,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 119"
+      "label": "Block 119",
+      "summary": "Comms gateway status banner with incorrect message received and input what",
+      "content_kind": "mixed",
+      "text": "/-comms gateway established/\n/-...encryption approved/\n/-...incorrect message received/\nwhat"
     },
     {
       "id": "block_120",
@@ -1558,7 +1895,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 120"
+      "label": "Block 120",
+      "summary": "List of three printreqstatus HTML filenames",
+      "content_kind": "text",
+      "text": "printreqstatus_005.html\nprintreqstatus_006.html\nprintreqstatus_007.html"
     },
     {
       "id": "block_121",
@@ -1571,7 +1911,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 121"
+      "label": "Block 121",
+      "summary": "Mostly blank noisy page with colored static bands at top and bottom",
+      "content_kind": "image"
     },
     {
       "id": "block_122",
@@ -1584,7 +1926,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 122"
+      "label": "Block 122",
+      "summary": "Dimension text 2222x2222",
+      "content_kind": "text",
+      "text": "2222x2222"
     },
     {
       "id": "block_123",
@@ -1597,7 +1942,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 123"
+      "label": "Block 123",
+      "summary": "Filename printreqstatus_013.html",
+      "content_kind": "text",
+      "text": "printreqstatus_013.html"
     },
     {
       "id": "block_124",
@@ -1610,7 +1958,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 124"
+      "label": "Block 124",
+      "summary": "Blank page with colored static noise bands at top and bottom",
+      "content_kind": "image"
     },
     {
       "id": "block_125",
@@ -1623,7 +1973,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 125"
+      "label": "Block 125",
+      "summary": "Dimension text 2222x2222",
+      "content_kind": "text",
+      "text": "2222x2222"
     },
     {
       "id": "block_126",
@@ -1636,7 +1989,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 126"
+      "label": "Block 126",
+      "summary": "Filename printreqstatus_015.html in monospace",
+      "content_kind": "text",
+      "text": "printreqstatus_015.html"
     },
     {
       "id": "block_127",
@@ -1649,7 +2005,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 127"
+      "label": "Block 127",
+      "summary": "Rotated photo of a dark dumpster in fog, captioned 6656x6656",
+      "content_kind": "image"
     },
     {
       "id": "block_128",
@@ -1662,7 +2020,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 128"
+      "label": "Block 128",
+      "summary": "Two-line label alpha channel",
+      "content_kind": "text",
+      "text": "alpha\nchannel"
     },
     {
       "id": "block_129",
@@ -1675,7 +2036,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 129"
+      "label": "Block 129",
+      "summary": "Numbered list marker 1",
+      "content_kind": "text",
+      "text": "1."
     },
     {
       "id": "block_130",
@@ -1688,7 +2052,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 130"
+      "label": "Block 130",
+      "summary": "Numbered list marker 2",
+      "content_kind": "text",
+      "text": "2."
     },
     {
       "id": "block_131",
@@ -1701,7 +2068,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 131"
+      "label": "Block 131",
+      "summary": "Numbered list marker 3",
+      "content_kind": "text",
+      "text": "3."
     },
     {
       "id": "block_132",
@@ -1714,7 +2084,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 132"
+      "label": "Block 132",
+      "summary": "List of five printreqstatus HTML filenames 008-012",
+      "content_kind": "text",
+      "text": "printreqstatus_008.html\nprintreqstatus_009.html\nprintreqstatus_010.html\nprintreqstatus_011.html\nprintreqstatus_012.html"
     },
     {
       "id": "block_133",
@@ -1727,7 +2100,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 133"
+      "label": "Block 133",
+      "summary": "Screenshot of two Gmail emails titled Gateway status report",
+      "content_kind": "mixed",
+      "text": "Gateway status report\nAnthony T. Setrinamaire <qpzympradd@jjnymblns@gmail.com>\nan.mch\n4. Juni"
     },
     {
       "id": "block_134",
@@ -1740,7 +2116,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 134"
+      "label": "Block 134",
+      "summary": "Single word label address",
+      "content_kind": "text",
+      "text": "address"
     },
     {
       "id": "block_135",
@@ -1753,7 +2132,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 135"
+      "label": "Block 135",
+      "summary": "Single word label binary",
+      "content_kind": "text",
+      "text": "binary"
     },
     {
       "id": "block_136",
@@ -1766,7 +2148,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 136"
+      "label": "Block 136",
+      "summary": "Single word label attachment",
+      "content_kind": "text",
+      "text": "attachment"
     },
     {
       "id": "block_137",
@@ -1779,7 +2164,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 137"
+      "label": "Block 137",
+      "summary": "Single word label binary",
+      "content_kind": "text",
+      "text": "binary"
     },
     {
       "id": "block_138",
@@ -1792,7 +2180,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 138"
+      "label": "Block 138",
+      "summary": "Gmail address qpzympraddjjnymblns@gmail.com",
+      "content_kind": "text",
+      "text": "qpzympraddjjnymblns@gmail.com"
     },
     {
       "id": "block_139",
@@ -1805,7 +2196,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 139"
+      "label": "Block 139",
+      "summary": "ASCII gateway auth log with rejection reason comms handle input",
+      "content_kind": "text",
+      "text": "gateway: playdead.com\n////////////////////\ngateway auth.:______\n___required/////////\n////////////////////\ngateway auth.:______\n______rejected//////\n////////////////////\nrejection reason:____\n_comms handle input//"
     },
     {
       "id": "block_140",
@@ -1818,7 +2212,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 140"
+      "label": "Block 140",
+      "summary": "Small printer icon with caption printer.jpg 29x29",
+      "content_kind": "mixed",
+      "text": "printer.jpg\n29x29"
     },
     {
       "id": "block_141",
@@ -1831,7 +2228,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 141"
+      "label": "Block 141",
+      "summary": "ASCII gateway auth log with rejection reason overload",
+      "content_kind": "text",
+      "text": "gateway: playdead.com\n////////////////////\ngateway auth.:______\n___required/////////\n////////////////////\ngateway auth.:______\n______rejected//////\n////////////////////\nrejection reason:____\n_overload___________//"
     },
     {
       "id": "block_142",
@@ -1844,7 +2244,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 142"
+      "label": "Block 142",
+      "summary": "Person name Anthony T. Setrinamaire",
+      "content_kind": "text",
+      "text": "Anthony T. Setrinamaire"
     },
     {
       "id": "block_143",
@@ -1857,7 +2260,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 143"
+      "label": "Block 143",
+      "summary": "Photo of a beige dot-matrix printer",
+      "content_kind": "image"
     },
     {
       "id": "block_144",
@@ -1870,7 +2275,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 144"
+      "label": "Block 144",
+      "summary": "Label reading profile picture",
+      "content_kind": "text",
+      "text": "profile picture"
     },
     {
       "id": "block_145",
@@ -1883,7 +2291,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 145"
+      "label": "Block 145",
+      "summary": "YouTube video card for Terminal41 emergency comms transmission",
+      "content_kind": "mixed",
+      "text": "Terminal41 emergency comms transmission [DATA STREAM]\nAnthony T. Setrinamaire\n745 subscribers\nhttps://www.youtube.com/watch?v=dWhmPSjOybI"
     },
     {
       "id": "block_146",
@@ -1896,7 +2307,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 146"
+      "label": "Block 146",
+      "summary": "Search query Google: Terminal41",
+      "content_kind": "text",
+      "text": "Google: Terminal41"
     },
     {
       "id": "block_147",
@@ -1909,7 +2323,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 147"
+      "label": "Block 147",
+      "summary": "Single word label redirect",
+      "content_kind": "text",
+      "text": "redirect"
     },
     {
       "id": "block_148",
@@ -1922,7 +2339,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 148"
+      "label": "Block 148",
+      "summary": "Progression of terminal41.link loadSys URLs ending in LOAD_COMPLETE.html",
+      "content_kind": "text",
+      "text": "http://terminal41.link/\nhttp://terminal41.link/loadSys/\nhttp://terminal41.link/loadSys/_.html\nhttp://terminal41.link/loadSys/__DONE.html\nhttp://terminal41.link/loadSys/LOAD_COM.html\nhttp://terminal41.link/loadSys/LOAD_COMPLETE.html"
     },
     {
       "id": "block_149",
@@ -1935,7 +2355,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 149"
+      "label": "Block 149",
+      "summary": "Single word label redirect",
+      "content_kind": "text",
+      "text": "redirect"
     },
     {
       "id": "block_150",
@@ -1948,7 +2371,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 150"
+      "label": "Block 150",
+      "summary": "Bracketed label aux. dirs lookup dirs HIDDEN",
+      "content_kind": "text",
+      "text": "[aux. dirs - lookup dirs:][HIDDEN]"
     },
     {
       "id": "block_151",
@@ -1961,7 +2387,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 151"
+      "label": "Block 151",
+      "summary": "Aux dirs lookup with Morse-like dashes ending in error",
+      "content_kind": "text",
+      "text": "[aux. dirs lookup:][HI_:.-.-./-./-.....................................error]"
     },
     {
       "id": "block_152",
@@ -1974,7 +2403,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 152"
+      "label": "Block 152",
+      "summary": "Aux dirs lookup output with HIDDEN pattern and dir sys/dat error",
+      "content_kind": "text",
+      "text": "[aux. dirs lookup:][HIDDE---..--./-./.-/././///\n[error:[dirs exp.][dir sys][dir dat]"
     },
     {
       "id": "block_153",
@@ -1987,7 +2419,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 153"
+      "label": "Block 153",
+      "summary": "URL pointing to terminal41.link sys directory",
+      "content_kind": "text",
+      "text": "http://terminal41.link/sys/"
     },
     {
       "id": "block_154",
@@ -2000,7 +2435,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 154"
+      "label": "Block 154",
+      "summary": "URL pointing to terminal41.link dat directory",
+      "content_kind": "text",
+      "text": "http://terminal41.link/dat/"
     },
     {
       "id": "block_155",
@@ -2013,7 +2451,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 155"
+      "label": "Block 155",
+      "summary": "URL to printreqstatus_004.html page",
+      "content_kind": "text",
+      "text": "http://terminal41.link/sys/printreqstatus_004.html"
     },
     {
       "id": "block_156",
@@ -2026,7 +2467,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 156"
+      "label": "Block 156",
+      "summary": "Comms auth req schematics with status, indexes, and security percentages",
+      "content_kind": "text",
+      "text": "+-<Comms. auth. req. schem.[all]\n|...upd. intel[d] [|DONE|]\n+-<Comms. status... [intel updated]\n+-<Comms. auth. req. schem.[0..3] ..."
     },
     {
       "id": "block_157",
@@ -2039,7 +2483,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 157"
+      "label": "Block 157",
+      "summary": "List of four repo paths for printreqstatus pages",
+      "content_kind": "text",
+      "text": "repo[/sys/printreqstatus]\nrepo[/sys/printreqstatus_002]\nrepo[/sys/printreqstatus_003]\nrepo[/sys/printreqstatus_004]"
     },
     {
       "id": "block_158",
@@ -2052,7 +2499,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 158"
+      "label": "Block 158",
+      "summary": "Gateway breach and success log with intel tags PROBE/PLANET/LIFE/CONNECTION",
+      "content_kind": "text",
+      "text": "[gateway breach log]\n...gateway success status[1] >PROBE<\n...gateway success status[2] >PLANET<\n...gateway success status[3] >LIFE<\n...shutdown protocol init[4] >CONNECTION<"
     },
     {
       "id": "block_159",
@@ -2065,7 +2515,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 159"
+      "label": "Block 159",
+      "summary": "URL to breachlog.html page",
+      "content_kind": "text",
+      "text": "http://terminal41.link/dat/breachlog.html"
     },
     {
       "id": "block_160",
@@ -2078,7 +2531,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 160"
+      "label": "Block 160",
+      "summary": "Repo path for dat breachlog",
+      "content_kind": "text",
+      "text": "repo[/dat/breachlog]"
     },
     {
       "id": "block_161",
@@ -2091,7 +2547,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 161"
+      "label": "Block 161",
+      "summary": "Terminal comms panel with ASCII diagrams of facility schem and input prompt",
+      "content_kind": "mixed",
+      "text": "terminal link established[secure comm.]...\n[Draw comm. schem.] [success]\n[Diag. ac.time.[]    |Diag. ac. time DELTA[]]\n[Facility 89B(7hg553)]\ninput:[ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ]"
     },
     {
       "id": "block_162",
@@ -2104,7 +2563,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 162"
+      "label": "Block 162",
+      "summary": "URL to comms_main_viewgate_002.html page",
+      "content_kind": "text",
+      "text": "http://terminal41.link/comms_main_viewgate_002.html"
     },
     {
       "id": "block_163",
@@ -2117,7 +2579,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 163"
+      "label": "Block 163",
+      "summary": "Decorative dotted line with central run of zeros",
+      "content_kind": "text",
+      "text": "..,.,.--00000000000000000000000000000000000000---..,.,."
     },
     {
       "id": "block_164",
@@ -2130,7 +2595,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 164"
+      "label": "Block 164",
+      "summary": "Anonymous comms input prompt with 22 underscore slots",
+      "content_kind": "text",
+      "text": "[Anon. comms. active. req. req.]\nInput:[ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ]"
     },
     {
       "id": "block_165",
@@ -2143,7 +2611,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 165"
+      "label": "Block 165",
+      "summary": "ASCII chart Draw non-conf schem with two diagonal line graphs",
+      "content_kind": "image"
     },
     {
       "id": "block_166",
@@ -2156,7 +2626,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 166"
+      "label": "Block 166",
+      "summary": "ASCII isometric drawing of Facility 89B(7hg553) schematic",
+      "content_kind": "image"
     },
     {
       "id": "block_167",
@@ -2169,7 +2641,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 167"
+      "label": "Block 167",
+      "summary": "Single bracketed label module hibernating",
+      "content_kind": "text",
+      "text": "[module hibernating]"
     },
     {
       "id": "block_168",
@@ -2182,7 +2657,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 168"
+      "label": "Block 168",
+      "summary": "URL to activate_shutdown_protocol commit ERROR page",
+      "content_kind": "text",
+      "text": "http://terminal41.link/sys/activate_shutdown_protocol/commit/____________ERROR.html"
     },
     {
       "id": "block_169",
@@ -2195,7 +2673,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 169"
+      "label": "Block 169",
+      "summary": "Thin horizontal strip of green, blue, and red colored vertical bars",
+      "content_kind": "image"
     },
     {
       "id": "block_170",
@@ -2208,7 +2688,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 170"
+      "label": "Block 170",
+      "summary": "Single word binary",
+      "content_kind": "text",
+      "text": "binary"
     },
     {
       "id": "block_171",
@@ -2221,7 +2704,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 171"
+      "label": "Block 171",
+      "summary": "Color-to-binary legend mapping green, blue, red to 1, 0, space",
+      "content_kind": "text",
+      "text": "green = 1,  blue = 0,  red = space"
     },
     {
       "id": "block_172",
@@ -2234,7 +2720,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 172"
+      "label": "Block 172",
+      "summary": "Warning banner stating factor 1 security passed",
+      "content_kind": "text",
+      "text": "warning |factor 1 security passed| - |[] factors remaining| warning"
     },
     {
       "id": "block_173",
@@ -2247,7 +2736,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 173"
+      "label": "Block 173",
+      "summary": "Caption TacticalLettuce sends an email to Playdead",
+      "content_kind": "text",
+      "text": "TacticalLettuce sends an email to Playdead"
     },
     {
       "id": "block_174",
@@ -2260,7 +2752,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 174"
+      "label": "Block 174",
+      "summary": "Short plea text just give us a sign",
+      "content_kind": "text",
+      "text": "just give us a sign."
     },
     {
       "id": "block_175",
@@ -2273,7 +2768,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 175"
+      "label": "Block 175",
+      "summary": "Filename printreqstatus_014.html",
+      "content_kind": "text",
+      "text": "printreqstatus_014.html"
     },
     {
       "id": "block_176",
@@ -2286,7 +2784,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 176"
+      "label": "Block 176",
+      "summary": "Horizontal strip of densely packed green and blue colored pixels",
+      "content_kind": "image"
     },
     {
       "id": "block_177",
@@ -2299,7 +2799,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 177"
+      "label": "Block 177",
+      "summary": "Single word label binary",
+      "content_kind": "text",
+      "text": "binary"
     },
     {
       "id": "block_178",
@@ -2312,7 +2815,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 178"
+      "label": "Block 178",
+      "summary": "Color-to-symbol legend mapping green, blue, and red",
+      "content_kind": "text",
+      "text": "green = 0,  blue = 1,  red = space"
     },
     {
       "id": "block_179",
@@ -2325,7 +2831,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 179"
+      "label": "Block 179",
+      "summary": "System warning string about a passed security factor",
+      "content_kind": "text",
+      "text": "warning |factor 2 security passed| | [error] factors remaining| warning"
     },
     {
       "id": "block_180",
@@ -2338,7 +2847,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 180"
+      "label": "Block 180",
+      "summary": "Tall faint document image with many lines of unreadable light gray text",
+      "content_kind": "image"
     },
     {
       "id": "block_181",
@@ -2351,7 +2862,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 181"
+      "label": "Block 181",
+      "summary": "Single word label Photosounder",
+      "content_kind": "text",
+      "text": "Photosounder"
     },
     {
       "id": "block_182",
@@ -2364,7 +2878,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 182"
+      "label": "Block 182",
+      "summary": "System log listing breach, safety, mission, and shutdown status messages",
+      "content_kind": "text",
+      "text": "all system req breached\nall system check\nsafety check\nsystems check - all systems ok\nbreach status\nbreach success\ndamage status 0\nmission status unknown\ntemporary shutdown procedure required\nautostart shutdown procedure connect to repo-comms-gate-98-connect"
     },
     {
       "id": "block_183",
@@ -2377,7 +2894,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 183"
+      "label": "Block 183",
+      "summary": "Label reading audio file",
+      "content_kind": "text",
+      "text": "audio file"
     },
     {
       "id": "block_184",
@@ -2390,7 +2910,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 184"
+      "label": "Block 184",
+      "summary": "URL to terminal41.link comms gate 98 connect page",
+      "content_kind": "text",
+      "text": "http://terminal41.link/comms/gate/98/connect.html"
     },
     {
       "id": "block_185",
@@ -2403,7 +2926,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 185"
+      "label": "Block 185",
+      "summary": "Single word label filename",
+      "content_kind": "text",
+      "text": "filename"
     },
     {
       "id": "block_186",
@@ -2416,7 +2942,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 186"
+      "label": "Block 186",
+      "summary": "Glitchy noisy grayscale image with horizontal scanlines and faint color artifacts",
+      "content_kind": "image"
     },
     {
       "id": "block_187",
@@ -2429,7 +2957,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 187"
+      "label": "Block 187",
+      "summary": "Image dimensions label 2048 by 4096",
+      "content_kind": "text",
+      "text": "2048x4096"
     },
     {
       "id": "block_188",
@@ -2442,7 +2973,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 188"
+      "label": "Block 188",
+      "summary": "Hex color code for pure black",
+      "content_kind": "text",
+      "text": "#000000"
     },
     {
       "id": "block_189",
@@ -2455,7 +2989,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 189"
+      "label": "Block 189",
+      "summary": "Black field densely speckled with white pixels",
+      "content_kind": "image"
     },
     {
       "id": "block_190",
@@ -2468,7 +3004,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 190"
+      "label": "Block 190",
+      "summary": "Label describing filtering for black pixels only",
+      "content_kind": "text",
+      "text": "black pixels only"
     },
     {
       "id": "block_191",
@@ -2481,7 +3020,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 191"
+      "label": "Block 191",
+      "summary": "Long PNG filename string containing transmission identifier",
+      "content_kind": "text",
+      "text": "transmission_id41786174541g1f561f4186454544fdrfd5324309809800000000000000000k.png"
     },
     {
       "id": "block_192",
@@ -2494,7 +3036,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 192"
+      "label": "Block 192",
+      "summary": "Circular multicolored pixel-art disk over a black background",
+      "content_kind": "image"
     },
     {
       "id": "block_193",
@@ -2507,7 +3051,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 193"
+      "label": "Block 193",
+      "summary": "Image dimensions label 48 by 48",
+      "content_kind": "text",
+      "text": "48x48"
     },
     {
       "id": "block_194",
@@ -2520,7 +3067,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 194"
+      "label": "Block 194",
+      "summary": "Dotted square frame with path string REPO/SYS/ACTIVATE_SHUTDOWN_PROTOCOL",
+      "content_kind": "mixed",
+      "text": "REPO/SYS/ACTIVATE_SHUTDOWN_PROTOCOL/PROT6y723g90ty9r80234"
     },
     {
       "id": "block_195",
@@ -2533,7 +3083,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 195"
+      "label": "Block 195",
+      "summary": "Repository system path activating shutdown protocol with token",
+      "content_kind": "text",
+      "text": "REPO/SYS/ACTIVATE_SHUTDOWN_PROTOCOL/PROT6y723g90ty9r80234"
     },
     {
       "id": "block_196",
@@ -2546,7 +3099,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 196"
+      "label": "Block 196",
+      "summary": "Label noting only every 16th pixel is used",
+      "content_kind": "text",
+      "text": "every 16th pixel only"
     },
     {
       "id": "block_197",
@@ -2559,7 +3115,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 197"
+      "label": "Block 197",
+      "summary": "Short label all pixels",
+      "content_kind": "text",
+      "text": "all pixels"
     },
     {
       "id": "block_198",
@@ -2572,7 +3131,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 198"
+      "label": "Block 198",
+      "summary": "Hex color code near-black #020206",
+      "content_kind": "text",
+      "text": "#020206"
     },
     {
       "id": "block_199",
@@ -2585,7 +3147,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 199"
+      "label": "Block 199",
+      "summary": "Hex color code very dark red #030101",
+      "content_kind": "text",
+      "text": "#030101"
     },
     {
       "id": "block_200",
@@ -2598,7 +3163,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 200"
+      "label": "Block 200",
+      "summary": "Hex color code very dark gray #030303",
+      "content_kind": "text",
+      "text": "#030303"
     },
     {
       "id": "block_201",
@@ -2611,7 +3179,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 201"
+      "label": "Block 201",
+      "summary": "Hex color code in red on dark background",
+      "content_kind": "text",
+      "text": "#050105"
     },
     {
       "id": "block_202",
@@ -2624,7 +3195,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 202"
+      "label": "Block 202",
+      "summary": "Hex color code in green on dark background",
+      "content_kind": "text",
+      "text": "#010401"
     },
     {
       "id": "block_203",
@@ -2637,7 +3211,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 203"
+      "label": "Block 203",
+      "summary": "Hex color code in yellow on dark background",
+      "content_kind": "text",
+      "text": "#030300"
     },
     {
       "id": "block_204",
@@ -2650,7 +3227,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 204"
+      "label": "Block 204",
+      "summary": "Blue circular emblem with small dots on dark vertical canvas",
+      "content_kind": "image"
     },
     {
       "id": "block_205",
@@ -2663,7 +3242,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 205"
+      "label": "Block 205",
+      "summary": "Small red dotted circular emblem on dark vertical canvas",
+      "content_kind": "image"
     },
     {
       "id": "block_206",
@@ -2676,7 +3257,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 206"
+      "label": "Block 206",
+      "summary": "Faint white technical diagram in upper portion of dark canvas",
+      "content_kind": "image"
     },
     {
       "id": "block_207",
@@ -2689,7 +3272,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 207"
+      "label": "Block 207",
+      "summary": "Purple circular emblem amid scattered noise on dark canvas",
+      "content_kind": "image"
     },
     {
       "id": "block_208",
@@ -2702,7 +3287,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 208"
+      "label": "Block 208",
+      "summary": "Green dotted circular emblem at top of dark vertical canvas",
+      "content_kind": "image"
     },
     {
       "id": "block_209",
@@ -2715,7 +3302,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 209"
+      "label": "Block 209",
+      "summary": "Yellow dotted circular emblem amid scattered noise on dark canvas",
+      "content_kind": "image"
     },
     {
       "id": "block_210",
@@ -2728,7 +3317,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 210"
+      "label": "Block 210",
+      "summary": "Yellow terminal banner confirming shutdown protocol",
+      "content_kind": "text",
+      "text": "[!]SD PROTOCOL CONFIRMED[!]"
     },
     {
       "id": "block_211",
@@ -2741,7 +3333,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 211"
+      "label": "Block 211",
+      "summary": "URL link to confirm shutdown routine page",
+      "content_kind": "text",
+      "text": "http://terminal41.link/sys/activate_shutdown_protocol/opts/confirm_shutdown_routine.html"
     },
     {
       "id": "block_212",
@@ -2754,7 +3349,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 212"
+      "label": "Block 212",
+      "summary": "Single word redirect",
+      "content_kind": "text",
+      "text": "redirect"
     },
     {
       "id": "block_213",
@@ -2767,7 +3365,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 213"
+      "label": "Block 213",
+      "summary": "Path string for confirm shutdown routine",
+      "content_kind": "text",
+      "text": "/opts/confirm_shutdown_routine"
     },
     {
       "id": "block_214",
@@ -2780,7 +3381,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 214"
+      "label": "Block 214",
+      "summary": "ASCII terminal warning panel listing breached systems",
+      "content_kind": "text",
+      "text": "[WARNING][status(all systems)] det. done\n[Comms.] BREACHED\n[Prim. sys.] BREACHED\n[Aux. sys.] BREACHED\n[Key integrity] 00\n[Device security] fail\n[gw.] BREACHED\n[auth.] WARNING\n[Safety prot.] none\n!SAFETY MEASURES ADVISED!"
     },
     {
       "id": "block_215",
@@ -2793,7 +3397,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 215"
+      "label": "Block 215",
+      "summary": "URL link to shutdown protocol page with token",
+      "content_kind": "text",
+      "text": "http://terminal41.link/sys/activate_shutdown_protocol/PROT6y723g90ty9r80234.html"
     },
     {
       "id": "block_216",
@@ -2806,7 +3413,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 216"
+      "label": "Block 216",
+      "summary": "Grid of repeated URL paths with commit links and redirect arrow",
+      "content_kind": "image"
     },
     {
       "id": "block_217",
@@ -2819,7 +3428,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 217"
+      "label": "Block 217",
+      "summary": "Single word redirect",
+      "content_kind": "text",
+      "text": "redirect"
     },
     {
       "id": "block_218",
@@ -2832,7 +3444,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 218"
+      "label": "Block 218",
+      "summary": "Status text indicating all systems hibernating",
+      "content_kind": "text",
+      "text": "[all systems hibernating]"
     },
     {
       "id": "block_219",
@@ -2845,7 +3460,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 219"
+      "label": "Block 219",
+      "summary": "URL link to error page on terminal41.link",
+      "content_kind": "text",
+      "text": "http://terminal41.link/error.html"
     },
     {
       "id": "block_220",
@@ -2858,7 +3476,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 220"
+      "label": "Block 220",
+      "summary": "Note that all webpages go offline except breach contribution registry",
+      "content_kind": "text",
+      "text": "all webpages go offline\n(except breach_contribution_reg.html)"
     },
     {
       "id": "block_221",
@@ -2871,7 +3492,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 221"
+      "label": "Block 221",
+      "summary": "Status text module hibernating",
+      "content_kind": "text",
+      "text": "[module hibernating]"
     },
     {
       "id": "block_222",
@@ -2884,7 +3508,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 222"
+      "label": "Block 222",
+      "summary": "Caption indicating event timing after countdown ends",
+      "content_kind": "text",
+      "text": "after countdown ends"
     },
     {
       "id": "block_223",
@@ -2897,7 +3524,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 223"
+      "label": "Block 223",
+      "summary": "Single word redirect",
+      "content_kind": "text",
+      "text": "redirect"
     },
     {
       "id": "block_224",
@@ -2910,7 +3540,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 224"
+      "label": "Block 224",
+      "summary": "Single word breachlog",
+      "content_kind": "text",
+      "text": "breachlog"
     },
     {
       "id": "block_225",
@@ -2923,7 +3556,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 225"
+      "label": "Block 225",
+      "summary": "Repository path reference to saf_dat_col data file",
+      "content_kind": "text",
+      "text": "repo[/dat/saf_dat_col]"
     },
     {
       "id": "block_226",
@@ -2936,7 +3572,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 226"
+      "label": "Block 226",
+      "summary": "ASCII art terminal showing comms auth requests with WARNING COMMS BREACHED messages",
+      "content_kind": "image"
     },
     {
       "id": "block_227",
@@ -2949,7 +3587,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 227"
+      "label": "Block 227",
+      "summary": "Terminal41 URL for printreqstatus_SD page",
+      "content_kind": "text",
+      "text": "http://terminal41.link/sys/printreqstatus_SD.html"
     },
     {
       "id": "block_228",
@@ -2962,7 +3603,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 228"
+      "label": "Block 228",
+      "summary": "Terminal41 URL for shutdown protocol confirmation page",
+      "content_kind": "text",
+      "text": "http://terminal41.link/sys/activate_shutdown_protocol/PROT6y723g90ty9r80234_confirmed_0385729128474.html"
     },
     {
       "id": "block_229",
@@ -2975,7 +3619,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 229"
+      "label": "Block 229",
+      "summary": "Filename reference for printreqstatus_016 HTML page",
+      "content_kind": "text",
+      "text": "printreqstatus_016.html"
     },
     {
       "id": "block_230",
@@ -2988,7 +3635,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 230"
+      "label": "Block 230",
+      "summary": "Terminal log showing shutdown routine confirmation",
+      "content_kind": "text",
+      "text": "[Shutdown routine confirmed]\n[override(src)] [via gate 98]\n[auth.(g. 98)] [auth. confirmed]\n[status] [SD init.]\n[ALL SYSTEMS SHUTDOWN] [routine init.]\n[status(SD)] [pending]\n[10]"
     },
     {
       "id": "block_231",
@@ -3001,7 +3651,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 231"
+      "label": "Block 231",
+      "summary": "Horizontal band of small dots and dashes forming a faint ASCII pattern",
+      "content_kind": "image"
     },
     {
       "id": "block_232",
@@ -3014,7 +3666,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 232"
+      "label": "Block 232",
+      "summary": "Short row of dashes and dots resembling Morse-like ASCII fragments",
+      "content_kind": "image"
     },
     {
       "id": "block_233",
@@ -3027,7 +3681,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 233"
+      "label": "Block 233",
+      "summary": "Right-angle of dots forming an L-shape along top and left edges of a frame",
+      "content_kind": "image"
     },
     {
       "id": "block_234",
@@ -3040,7 +3696,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 234"
+      "label": "Block 234",
+      "summary": "Triangular pattern of forward slashes filling the upper-left corner",
+      "content_kind": "image"
     },
     {
       "id": "block_235",
@@ -3053,7 +3711,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 235"
+      "label": "Block 235",
+      "summary": "Smaller triangular pattern of forward slashes in the upper-left corner",
+      "content_kind": "image"
     },
     {
       "id": "block_236",
@@ -3066,7 +3726,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 236"
+      "label": "Block 236",
+      "summary": "Terminal41 URL for the saf_dat_col data page",
+      "content_kind": "text",
+      "text": "http://terminal41.link/dat/saf_dat_col.html"
     },
     {
       "id": "block_237",
@@ -3079,7 +3742,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 237"
+      "label": "Block 237",
+      "summary": "Dense ASCII art block in blue and white text, mostly illegible",
+      "content_kind": "image"
     },
     {
       "id": "block_238",
@@ -3092,7 +3757,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 238"
+      "label": "Block 238",
+      "summary": "Terminal log line showing comms check at gate 81 with FAIL status",
+      "content_kind": "text",
+      "text": "///[comms chk. [GATE/81/connect[chk]] chk stat. [FAIL[1]]]///"
     },
     {
       "id": "block_239",
@@ -3105,7 +3773,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 239"
+      "label": "Block 239",
+      "summary": "Caption label for an iam8bit tweet from 2019",
+      "content_kind": "text",
+      "text": "iam8bit tweet (2019)"
     },
     {
       "id": "block_240",
@@ -3118,7 +3789,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 240"
+      "label": "Block 240",
+      "summary": "Screenshot of iam8bit tweet replying about Collector's Edition with hidden clue",
+      "content_kind": "image"
     },
     {
       "id": "block_241",
@@ -3131,7 +3804,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 241"
+      "label": "Block 241",
+      "summary": "Photos of INSIDE PS4 Collector's Edition cover art",
+      "content_kind": "image"
     },
     {
       "id": "block_242",
@@ -3144,7 +3819,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 242"
+      "label": "Block 242",
+      "summary": "Close-up photo of a small framed picture on a dark surface",
+      "content_kind": "image"
     },
     {
       "id": "block_243",
@@ -3157,7 +3834,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 243"
+      "label": "Block 243",
+      "summary": "Close-up photo of an analog clock face from the INSIDE cover artwork",
+      "content_kind": "image"
     },
     {
       "id": "block_244",
@@ -3170,7 +3849,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 244"
+      "label": "Block 244",
+      "summary": "Close-up photo of a framed image on a stand from the INSIDE cover artwork",
+      "content_kind": "image"
     },
     {
       "id": "block_245",
@@ -3183,7 +3864,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 245"
+      "label": "Block 245",
+      "summary": "Close-up photo of a small chip or component with a dark rectangular center",
+      "content_kind": "image"
     },
     {
       "id": "block_246",
@@ -3196,7 +3879,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 246"
+      "label": "Block 246",
+      "summary": "Close-up photo of a brown rectangular sticker or label with faint markings",
+      "content_kind": "image"
     },
     {
       "id": "block_247",
@@ -3209,7 +3894,9 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 247"
+      "label": "Block 247",
+      "summary": "Dark photo showing fragmented light shapes and rectangles against black background",
+      "content_kind": "image"
     },
     {
       "id": "block_248",
@@ -3222,7 +3909,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 248"
+      "label": "Block 248",
+      "summary": "Red UNSOLVED text label",
+      "content_kind": "text",
+      "text": "UNSOLVED"
     },
     {
       "id": "block_249",
@@ -3235,7 +3925,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 249"
+      "label": "Block 249",
+      "summary": "Red UNSOLVED text label",
+      "content_kind": "text",
+      "text": "UNSOLVED"
     },
     {
       "id": "block_250",
@@ -3248,7 +3941,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 250"
+      "label": "Block 250",
+      "summary": "Red UNSOLVED text label",
+      "content_kind": "text",
+      "text": "UNSOLVED"
     },
     {
       "id": "block_251",
@@ -3261,7 +3957,10 @@
       "status": "no-data",
       "tags": [],
       "kind": "block",
-      "label": "Block 251"
+      "label": "Block 251",
+      "summary": "Red UNSOLVED text label",
+      "content_kind": "text",
+      "text": "UNSOLVED"
     }
   ],
   "edges": []
