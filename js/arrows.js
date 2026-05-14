@@ -92,6 +92,7 @@ export class ArrowLayer {
     this.selectedId = null;
     this.hoverId = null;
     this.hoverHandle = null;
+    this._hoverNodeId = null;
     this.dragState = null;
     this.contextMenu = new EdgeContextMenu();
     this.popover = new EdgePropsPopover({ layer: this });
@@ -784,9 +785,12 @@ export class ArrowLayer {
   }
 
   _renderEditorOverlay(nodes, scale) {
-    for (const n of nodes.values()) {
-      if (!isBlockNode(n)) continue;
-      renderAnchorHandles(this.handlesGroup, n, scale, (ev, nodeId, side) => this._beginDrawEdge(ev, nodeId, side));
+    const targetId = this._hoverNodeId;
+    if (targetId) {
+      const n = nodes.get(targetId);
+      if (n && isBlockNode(n)) {
+        renderAnchorHandles(this.handlesGroup, n, scale, (ev, nodeId, side) => this._beginDrawEdge(ev, nodeId, side));
+      }
     }
     if (this.hoverHandle && this.dragState) {
       const c = document.createElementNS(SVG_NS, 'circle');
@@ -1001,6 +1005,22 @@ export class ArrowLayer {
       return;
     }
     if (this.mode !== 'editor') return;
+    const himg = this._imgPointFromClient(ev.clientX, ev.clientY);
+    let newHoverId = null;
+    if (himg) {
+      for (const n of this.getNodes().values()) {
+        if (!isBlockNode(n)) continue;
+        const r = { x: n.x, y: n.y, w: n.width, h: n.height };
+        if (himg.x >= r.x && himg.x <= r.x + r.w && himg.y >= r.y && himg.y <= r.y + r.h) {
+          newHoverId = n.id;
+          break;
+        }
+      }
+    }
+    if (newHoverId !== this._hoverNodeId) {
+      this._hoverNodeId = newHoverId;
+      this.requestDraw();
+    }
     if (this.hoverHandle) {
       this.hoverHandle = null;
       this.requestDraw();
