@@ -1029,25 +1029,6 @@ export class Viewer {
 
       if (tool === 'select') {
         if (hover) {
-          const t = this.getTransform ? this.getTransform() : { scale: this.scale || 1 };
-          const sc = (t && t.scale) || this.scale || 1;
-          const anchorRadiusImg = 14 / sc;
-          const r = hover.rect;
-          const anchors = [
-            { side: 'left',   x: r.x,             y: r.y + r.h / 2 },
-            { side: 'right',  x: r.x + r.w,       y: r.y + r.h / 2 },
-            { side: 'top',    x: r.x + r.w / 2,   y: r.y           },
-            { side: 'bottom', x: r.x + r.w / 2,   y: r.y + r.h     },
-          ];
-          for (const a of anchors) {
-            const dx = img.x - a.x, dy = img.y - a.y;
-            if (dx*dx + dy*dy <= anchorRadiusImg * anchorRadiusImg) {
-              if (typeof this.onAnchorMouseDown === 'function') {
-                this.onAnchorMouseDown(ev, hover.id, a.side);
-                return;
-              }
-            }
-          }
           const locked = this._isLocked(hover.id);
           const handle = !locked ? this.handleAtImagePoint(hover, img) : null;
           if (handle && !ev.shiftKey) {
@@ -1063,6 +1044,22 @@ export class Viewer {
             };
             return;
           }
+          let anchorSide = null;
+          if (!locked) {
+            const sc = (this.getTransform && this.getTransform().scale) || 1;
+            const ar = 12 / sc;
+            const rr = hover.rect;
+            const pts = [
+              { side: 'left',   x: rr.x,                y: rr.y + rr.h / 2 },
+              { side: 'right',  x: rr.x + rr.w,         y: rr.y + rr.h / 2 },
+              { side: 'top',    x: rr.x + rr.w / 2,     y: rr.y            },
+              { side: 'bottom', x: rr.x + rr.w / 2,     y: rr.y + rr.h     },
+            ];
+            for (const pt of pts) {
+              const dx = img.x - pt.x, dy = img.y - pt.y;
+              if (dx*dx + dy*dy <= ar * ar) { anchorSide = pt.side; break; }
+            }
+          }
           this.dragState = {
             kind: 'edit-click',
             id: hover.id,
@@ -1072,6 +1069,7 @@ export class Viewer {
             startScreen: screen,
             startImg: img,
             moved: false,
+            anchorSide,
           };
           return;
         }
@@ -1269,6 +1267,12 @@ export class Viewer {
     }
     if (d.kind === 'edit-click') {
       if (d.locked) return;
+      if (d.moved && d.anchorSide && typeof this.onAnchorMouseDown === 'function') {
+        const startEv = { button: 0, clientX: d.startScreen.x, clientY: d.startScreen.y, preventDefault: () => {}, stopPropagation: () => {} };
+        this.dragState = null;
+        this.onAnchorMouseDown(startEv, d.id, d.anchorSide);
+        return;
+      }
       if (d.moved && !d.shiftKey) {
         const ids = this.selection.has(d.id)
           ? Array.from(this.selection)
