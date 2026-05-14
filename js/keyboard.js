@@ -1,20 +1,28 @@
 /* Global keyboard handler. Skips when focus is inside an input, textarea, or
    contenteditable. Owns the shortcut overlay (the `?` help screen). The
    actions themselves live in the host (app.js) and are passed in as
-   callbacks. */
+   callbacks. Tool shortcuts route through tools.js via the host's handlers. */
 
 import { tr } from './i18n.js';
+import { setActiveTool, getActiveTool, setSpaceHeld } from './tools.js';
 
 export class KeyboardShortcuts {
   constructor(opts) {
     this.handlers = opts.handlers || {};
     this.overlayContainer = opts.overlayContainer || document.body;
+    this.editModeActive = false;
     this._buildOverlay();
     this._install();
   }
 
+  setEditMode(active) {
+    this.editModeActive = !!active;
+  }
+
   _install() {
     document.addEventListener('keydown', (ev) => this._onKey(ev));
+    document.addEventListener('keyup', (ev) => this._onKeyUp(ev));
+    window.addEventListener('blur', () => setSpaceHeld(false));
   }
 
   _shouldSkip(ev) {
@@ -24,6 +32,12 @@ export class KeyboardShortcuts {
     if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
     if (t.isContentEditable) return true;
     return false;
+  }
+
+  _onKeyUp(ev) {
+    if (ev.code === 'Space' || ev.key === ' ') {
+      setSpaceHeld(false);
+    }
   }
 
   _onKey(ev) {
@@ -40,6 +54,13 @@ export class KeyboardShortcuts {
     if (this._shouldSkip(ev)) return;
     const meta = ev.metaKey || ev.ctrlKey;
     const k = ev.key;
+
+    if ((ev.code === 'Space' || k === ' ') && !meta) {
+      ev.preventDefault();
+      setSpaceHeld(true);
+      return;
+    }
+
     if (meta && (k === 'k' || k === 'K')) {
       ev.preventDefault();
       this._call('onCommandPalette', ev);
@@ -65,6 +86,11 @@ export class KeyboardShortcuts {
       this._call('onRedo', ev);
       return;
     }
+    if (meta && (k === 'a' || k === 'A')) {
+      ev.preventDefault();
+      this._call('onSelectAll', ev);
+      return;
+    }
     if (meta && (k === 'g' || k === 'G')) {
       ev.preventDefault();
       if (ev.shiftKey) this._call('onUngroupSelection', ev);
@@ -81,10 +107,41 @@ export class KeyboardShortcuts {
       this._call('onPaste', ev);
       return;
     }
+    if (meta && (k === 'x' || k === 'X')) {
+      ev.preventDefault();
+      this._call('onCut', ev);
+      return;
+    }
     if (meta && (k === 'd' || k === 'D')) {
       ev.preventDefault();
       this._call('onDuplicate', ev);
       return;
+    }
+    if (this.editModeActive && !meta) {
+      if (k === 's' || k === 'S') { ev.preventDefault(); setActiveTool('select'); return; }
+      if (k === 'h' || k === 'H') { ev.preventDefault(); setActiveTool('pan'); return; }
+      if (k === 'b' || k === 'B') { ev.preventDefault(); setActiveTool('block'); return; }
+      if (k === 'n' || k === 'N') { ev.preventDefault(); setActiveTool('sticky'); return; }
+      if (k === 't' || k === 'T') { ev.preventDefault(); setActiveTool('text'); return; }
+      if (k === 'i' || k === 'I') {
+        ev.preventDefault();
+        setActiveTool('image');
+        this._call('onImageTool', ev);
+        return;
+      }
+      if (k === 'v' || k === 'V') {
+        ev.preventDefault();
+        setActiveTool('video');
+        this._call('onVideoTool', ev);
+        return;
+      }
+      if (k === 'a' || k === 'A') { ev.preventDefault(); setActiveTool('arrow'); return; }
+      if (k === 'g' || k === 'G') {
+        ev.preventDefault();
+        if (this._call('onGroupShortcut', ev)) return;
+        setActiveTool('group');
+        return;
+      }
     }
     if (k === 'm' || k === 'M') {
       if (meta) return;
@@ -186,6 +243,17 @@ export class KeyboardShortcuts {
         { keys: ['?'],           descKey: 'shortcut_desc_shortcuts' },
         { keys: ['Esc'],         descKey: 'shortcut_desc_escape' },
       ]},
+      { titleKey: 'shortcut_section_tools', rows: [
+        { keys: ['S'],           descKey: 'shortcut_desc_select' },
+        { keys: ['H', 'Space'],  descKey: 'shortcut_desc_pan' },
+        { keys: ['B'],           descKey: 'shortcut_desc_block' },
+        { keys: ['N'],           descKey: 'shortcut_desc_sticky' },
+        { keys: ['G'],           descKey: 'shortcut_desc_group_tool' },
+        { keys: ['T'],           descKey: 'shortcut_desc_text' },
+        { keys: ['I'],           descKey: 'shortcut_desc_image' },
+        { keys: ['V'],           descKey: 'shortcut_desc_video' },
+        { keys: ['A'],           descKey: 'shortcut_desc_arrow' },
+      ]},
       { titleKey: 'shortcut_section_navigation', rows: [
         { keys: ['M'],           descKey: 'shortcut_desc_minimap' },
         { keys: ['+', '-', '0'], descKey: 'shortcut_desc_zoom' },
@@ -195,11 +263,15 @@ export class KeyboardShortcuts {
         { keys: ['Tab'],         descKey: 'shortcut_desc_child' },
         { keys: ['Enter'],       descKey: 'shortcut_desc_sibling' },
         { keys: ['Del'],         descKey: 'shortcut_desc_delete' },
+        { keys: ['Ctrl', 'A'],   descKey: 'shortcut_desc_select_all' },
         { keys: ['Ctrl', 'C'],   descKey: 'shortcut_desc_copy' },
         { keys: ['Ctrl', 'V'],   descKey: 'shortcut_desc_paste' },
+        { keys: ['Ctrl', 'X'],   descKey: 'shortcut_desc_cut' },
         { keys: ['Ctrl', 'D'],   descKey: 'shortcut_desc_duplicate' },
         { keys: ['Ctrl', 'Z'],   descKey: 'shortcut_desc_undo' },
-        { keys: ['Ctrl', 'Shift', 'Z'], descKey: 'shortcut_desc_redo' },
+        { keys: ['Ctrl', 'Y'],   descKey: 'shortcut_desc_redo' },
+        { keys: ['Ctrl', 'G'],   descKey: 'shortcut_desc_group_sel' },
+        { keys: ['Ctrl', 'Shift', 'G'], descKey: 'shortcut_desc_ungroup' },
       ]},
       { titleKey: 'shortcut_section_filters', rows: [
         { keys: ['F'],           descKey: 'shortcut_desc_filter_cycle' },
@@ -222,3 +294,5 @@ export class KeyboardShortcuts {
     if (closeBtn) closeBtn.addEventListener('click', () => this.hideOverlay());
   }
 }
+
+export { getActiveTool };

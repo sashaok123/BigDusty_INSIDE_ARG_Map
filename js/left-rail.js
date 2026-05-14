@@ -1,45 +1,32 @@
-/* Left-side primary navigation rail. 60-px fixed column with grouped icon
-   buttons: app logo, Modes (Browse/Edit), Tools (only in editor mode and
-   when authed: Block / Sticky / Group / Text / Image upload / Video / Arrow
-   style picker / Group / Ungroup / Delete / Undo / Redo). */
+/* Left-side primary navigation rail. Labelled by default (200 px wide),
+   collapses to icon-only (60 px) via a toggle. Tools route through the
+   shared tools.js activeTool state machine. Modes section (Browse / Edit)
+   is always visible to authed users; tool stack only in Edit mode. */
 
 import { tr } from './i18n.js';
+import { setActiveTool, getActiveTool, onActiveToolChange } from './tools.js';
 
-const STORAGE_KEY = 'arg.editorTools';
-const CREATE_MODES = ['block', 'sticky', 'group', 'text'];
-const ROUTINGS = ['straight', 'orthogonal', 'manhattan', 'smooth'];
-const VIDEO_ICON = '<rect x="3.5" y="6.5" width="13" height="11" rx="1.5"/><path d="M16.5 10 L21 7.5 L21 16.5 L16.5 14 Z"/>';
+const STORAGE_KEY = 'arg.editorRail';
 
 const SVG_PATHS = {
   browse:     '<circle cx="11" cy="11" r="7"/><path d="M16.2 16.2L21 21"/>',
   edit:       '<path d="M14 4l6 6L9 21H3v-6L14 4z"/><path d="M13 5l6 6"/>',
+  select:     '<path d="M5 4l8 16 2-7 7-2L5 4z"/>',
+  pan:        '<path d="M9 11V5a2 2 0 1 1 4 0v6"/><path d="M9 11V8a2 2 0 1 0-4 0v6a8 8 0 0 0 8 8h0a8 8 0 0 0 8-8v-2a2 2 0 1 0-4 0"/><path d="M13 11V4a2 2 0 1 1 4 0v8"/>',
   block:      '<rect x="3.5" y="5.5" width="17" height="13" rx="1.5"/>',
   sticky:     '<path d="M4.5 4.5h12l3.5 3.5v11.5a0.5 0.5 0 0 1 -0.5 0.5H4.5a0.5 0.5 0 0 1 -0.5 -0.5v-15a0.5 0.5 0 0 1 0.5 -0.5z"/><path d="M16.5 4.5v3.5h3.5"/>',
   group:      '<rect x="3.5" y="5.5" width="17" height="13" rx="1.5" stroke-dasharray="3 2"/>',
   text:       '<path d="M5 6h14"/><path d="M12 6v14"/><path d="M9 20h6"/>',
-  image_add:  '<rect x="3.5" y="4.5" width="13" height="13" rx="1.5"/><path d="M3.5 14L7 11l3 3l3-3l3 3"/><circle cx="13" cy="8.5" r="1.4"/><path d="M18 17v4M16 19h4"/>',
+  image:      '<rect x="3.5" y="4.5" width="17" height="13" rx="1.5"/><path d="M3.5 14L8 10l3 3l3-3l4 4"/><circle cx="14.5" cy="8.5" r="1.4"/>',
+  video:      '<rect x="3.5" y="6.5" width="13" height="11" rx="1.5"/><path d="M16.5 10 L21 7.5 L21 16.5 L16.5 14 Z"/>',
   arrow:      '<path d="M4 12h14"/><path d="M13 7l5 5l-5 5"/>',
-  straight:   '<path d="M4 19 L20 5"/>',
-  orthogonal: '<path d="M4 19 L4 12 L20 12 L20 5"/>',
-  manhattan:  '<path d="M4 19 L4 15 L12 15 L12 9 L20 9 L20 5"/>',
-  smooth:     '<path d="M4 19 C 10 19, 14 5, 20 5"/>',
   group_sel:  '<rect x="3.5" y="5.5" width="17" height="13" rx="1.5" stroke-dasharray="3 2"/><rect x="7" y="9" width="4" height="3"/><rect x="13" y="12" width="4" height="3"/>',
   ungroup:    '<rect x="3.5" y="5.5" width="17" height="13" rx="1.5" stroke-dasharray="3 2"/><path d="M7 9 L17 15"/><path d="M17 9 L7 15"/>',
   trash:      '<path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1 -13"/>',
   undo:       '<path d="M9 6L4 11l5 5"/><path d="M4 11h11a4 4 0 0 1 0 8H10"/>',
   redo:       '<path d="M15 6l5 5l-5 5"/><path d="M20 11H9a4 4 0 0 0 0 8h5"/>',
-  search:     '<circle cx="11" cy="11" r="7"/><path d="M16.2 16.2L21 21"/>',
-  outline:    '<path d="M5 6h14"/><path d="M5 12h14"/><path d="M5 18h14"/>',
-  minimap:    '<rect x="3.5" y="3.5" width="17" height="13" rx="1.5"/><rect x="6.5" y="6.5" width="6" height="4"/>',
-  theme_sun:  '<circle cx="12" cy="12" r="4.2"/><path d="M12 3v2.4M12 18.6V21M3 12h2.4M18.6 12H21M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7"/>',
-  theme_moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
-  theme_graphite: '<circle cx="12" cy="12" r="8"/><path d="M12 4v16"/>',
-  theme_auto: '<rect x="3" y="4" width="18" height="13" rx="1.5"/><path d="M8 21h8M12 17v4"/>',
-  lang:       '<path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18"/><path d="M12 3a14 14 0 0 0 0 18"/><circle cx="12" cy="12" r="9"/>',
-  signin:     '<path d="M10 17l5-5l-5-5"/><path d="M15 12H3"/><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/>',
-  video:      VIDEO_ICON,
-  align:      '<path d="M3 5h18"/><path d="M3 9h12"/><path d="M3 13h18"/><path d="M3 17h9"/>',
-  comment:    '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  collapse:   '<path d="M15 6l-6 6 6 6"/>',
+  expand:     '<path d="M9 6l6 6-6 6"/>',
 };
 
 function svgIcon(name, size) {
@@ -54,7 +41,7 @@ function svgIcon(name, size) {
   return s;
 }
 
-function loadToolState() {
+function loadRailState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
@@ -64,21 +51,22 @@ function loadToolState() {
   return null;
 }
 
-function persistToolState(state) {
+function persistRailState(state) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { void e; }
 }
 
 export class LeftRail {
   constructor(opts) {
     this.handlers = opts.handlers || {};
-    const stored = loadToolState();
+    const stored = loadRailState();
     this.state = {
-      create:  (stored && CREATE_MODES.includes(stored.create))  ? stored.create  : 'block',
-      routing: (stored && ROUTINGS.includes(stored.routing))     ? stored.routing : 'orthogonal',
+      collapsed: !!(stored && stored.collapsed),
     };
     this._buttons = {};
     this._build();
-    this._applyButtonStates();
+    this._applyCollapsed();
+    this._applyActiveTool(getActiveTool());
+    onActiveToolChange((t) => this._applyActiveTool(t));
     document.addEventListener('i18n:changed', () => this._retranslate());
   }
 
@@ -87,80 +75,115 @@ export class LeftRail {
     rail.id = 'left-rail';
     rail.className = 'left-rail';
 
-    const top = this._makeSection('rail-top');
-    const logo = document.createElement('div');
-    logo.className = 'rail-logo';
-    logo.textContent = 'INSIDE';
-    top.appendChild(logo);
-    rail.appendChild(top);
-
     const modes = this._makeSection('rail-modes');
-    modes.appendChild(this._makeIconBtn({
+    modes.appendChild(this._makeLabelBtn({
       id: 'rail-mode-viewer', icon: 'browse', i18n: 'mode_viewer',
       onClick: () => this.handlers.onModeChange && this.handlers.onModeChange('viewer'),
     }));
-    modes.appendChild(this._makeIconBtn({
+    modes.appendChild(this._makeLabelBtn({
       id: 'rail-mode-editor', icon: 'edit', i18n: 'mode_editor',
       onClick: () => this.handlers.onModeChange && this.handlers.onModeChange('editor'),
     }));
     rail.appendChild(modes);
 
     const tools = this._makeSection('rail-tools');
-    tools.appendChild(this._makeIconBtn({
-      id: 'rail-tool-block', icon: 'block', i18n: 'editor_tools_block',
-      onClick: () => this._setCreate('block'),
+
+    tools.appendChild(this._makeLabelBtn({
+      id: 'rail-tool-select', icon: 'select', i18n: 'tool_select', tool: 'select', shortcut: 'S',
+      onClick: () => setActiveTool('select'),
     }));
-    tools.appendChild(this._makeIconBtn({
-      id: 'rail-tool-sticky', icon: 'sticky', i18n: 'editor_tools_sticky',
-      onClick: () => this._setCreate('sticky'),
+    tools.appendChild(this._makeLabelBtn({
+      id: 'rail-tool-pan', icon: 'pan', i18n: 'tool_pan', tool: 'pan', shortcut: 'H',
+      onClick: () => setActiveTool('pan'),
     }));
-    tools.appendChild(this._makeIconBtn({
-      id: 'rail-tool-group', icon: 'group', i18n: 'editor_tools_group',
-      onClick: () => this._setCreate('group'),
+
+    tools.appendChild(this._sep());
+
+    tools.appendChild(this._makeLabelBtn({
+      id: 'rail-tool-block', icon: 'block', i18n: 'editor_tools_block', tool: 'block', shortcut: 'B',
+      onClick: () => setActiveTool('block'),
     }));
-    tools.appendChild(this._makeIconBtn({
-      id: 'rail-tool-text', icon: 'text', i18n: 'tool_add_text',
-      onClick: () => this._setCreate('text'),
+    tools.appendChild(this._makeLabelBtn({
+      id: 'rail-tool-sticky', icon: 'sticky', i18n: 'editor_tools_sticky', tool: 'sticky', shortcut: 'N',
+      onClick: () => setActiveTool('sticky'),
     }));
-    tools.appendChild(this._makeIconBtn({
-      id: 'rail-tool-upload', icon: 'image_add', i18n: 'upload_image_button',
-      onClick: () => this.handlers.onUploadImage && this.handlers.onUploadImage(),
+    tools.appendChild(this._makeLabelBtn({
+      id: 'rail-tool-group', icon: 'group', i18n: 'editor_tools_group', tool: 'group', shortcut: 'G',
+      onClick: () => setActiveTool('group'),
     }));
-    tools.appendChild(this._makeIconBtn({
-      id: 'rail-tool-video', icon: 'video', i18n: 'tool_add_video',
-      onClick: () => this.handlers.onAddVideo && this.handlers.onAddVideo(),
+    tools.appendChild(this._makeLabelBtn({
+      id: 'rail-tool-text', icon: 'text', i18n: 'tool_add_text', tool: 'text', shortcut: 'T',
+      onClick: () => setActiveTool('text'),
     }));
-    tools.appendChild(this._makeIconBtn({
-      id: 'rail-tool-comment', icon: 'comment', i18n: 'tool_add_comment',
-      onClick: () => this.handlers.onAddComment && this.handlers.onAddComment(),
+    tools.appendChild(this._makeLabelBtn({
+      id: 'rail-tool-image', icon: 'image', i18n: 'tool_image', tool: 'image', shortcut: 'I',
+      onClick: () => {
+        setActiveTool('image');
+        if (this.handlers.onUploadImage) this.handlers.onUploadImage();
+      },
     }));
-    tools.appendChild(this._makeArrowSubmenu());
-    tools.appendChild(this._makeIconBtn({
-      id: 'rail-tool-group-sel', icon: 'group_sel', i18n: 'editor_tools_group_selection',
+    tools.appendChild(this._makeLabelBtn({
+      id: 'rail-tool-video', icon: 'video', i18n: 'tool_add_video', tool: 'video', shortcut: 'V',
+      onClick: () => {
+        setActiveTool('video');
+        if (this.handlers.onAddVideo) this.handlers.onAddVideo();
+      },
+    }));
+    tools.appendChild(this._makeLabelBtn({
+      id: 'rail-tool-arrow', icon: 'arrow', i18n: 'tool_arrow', tool: 'arrow', shortcut: 'A',
+      onClick: () => setActiveTool('arrow'),
+    }));
+
+    tools.appendChild(this._sep());
+
+    tools.appendChild(this._makeLabelBtn({
+      id: 'rail-tool-group-sel', icon: 'group_sel', i18n: 'editor_tools_group_selection', shortcut: 'Ctrl+G',
       onClick: () => this.handlers.onGroupSelection && this.handlers.onGroupSelection(),
     }));
-    tools.appendChild(this._makeIconBtn({
-      id: 'rail-tool-ungroup', icon: 'ungroup', i18n: 'editor_tools_ungroup',
+    tools.appendChild(this._makeLabelBtn({
+      id: 'rail-tool-ungroup', icon: 'ungroup', i18n: 'editor_tools_ungroup', shortcut: 'Ctrl+Shift+G',
       onClick: () => this.handlers.onUngroup && this.handlers.onUngroup(),
     }));
-    tools.appendChild(this._makeIconBtn({
-      id: 'rail-tool-delete', icon: 'trash', i18n: 'editor_tools_delete',
+    tools.appendChild(this._makeLabelBtn({
+      id: 'rail-tool-delete', icon: 'trash', i18n: 'editor_tools_delete', shortcut: 'Del',
       danger: true,
       onClick: () => this.handlers.onDeleteSelection && this.handlers.onDeleteSelection(),
     }));
-    const sep = document.createElement('div');
-    sep.className = 'rail-separator';
-    tools.appendChild(sep);
-    tools.appendChild(this._makeIconBtn({
-      id: 'rail-tool-undo', icon: 'undo', i18n: 'editor_tools_undo',
+
+    tools.appendChild(this._sep());
+
+    tools.appendChild(this._makeLabelBtn({
+      id: 'rail-tool-undo', icon: 'undo', i18n: 'editor_tools_undo', shortcut: 'Ctrl+Z',
       onClick: () => this.handlers.onUndo && this.handlers.onUndo(),
     }));
-    tools.appendChild(this._makeIconBtn({
-      id: 'rail-tool-redo', icon: 'redo', i18n: 'editor_tools_redo',
+    tools.appendChild(this._makeLabelBtn({
+      id: 'rail-tool-redo', icon: 'redo', i18n: 'editor_tools_redo', shortcut: 'Ctrl+Y',
       onClick: () => this.handlers.onRedo && this.handlers.onRedo(),
     }));
     rail.appendChild(tools);
     this.toolsEl = tools;
+
+    const footer = this._makeSection('rail-footer');
+    const collapseBtn = document.createElement('button');
+    collapseBtn.type = 'button';
+    collapseBtn.id = 'rail-collapse-btn';
+    collapseBtn.className = 'rail-collapse-btn';
+    collapseBtn.dataset.i18n = 'rail_collapse';
+    collapseBtn.title = tr('rail_collapse');
+    collapseBtn.setAttribute('aria-label', tr('rail_collapse'));
+    const collapseIcon = svgIcon('collapse', 18);
+    const collapseLabel = document.createElement('span');
+    collapseLabel.className = 'rail-btn-label';
+    collapseLabel.textContent = tr('rail_collapse');
+    collapseBtn.appendChild(collapseIcon);
+    collapseBtn.appendChild(collapseLabel);
+    collapseBtn.addEventListener('click', (e) => { e.preventDefault(); this._toggleCollapsed(); });
+    this._buttons['rail-collapse-btn'] = collapseBtn;
+    this._collapseLabelEl = collapseLabel;
+    this._collapseIconEl = collapseIcon;
+    footer.appendChild(collapseBtn);
+    rail.appendChild(footer);
+    this.footerEl = footer;
 
     document.body.appendChild(rail);
     this.railEl = rail;
@@ -172,93 +195,67 @@ export class LeftRail {
     return s;
   }
 
-  _makeIconBtn(opts) {
+  _sep() {
+    const sep = document.createElement('div');
+    sep.className = 'rail-separator';
+    return sep;
+  }
+
+  _makeLabelBtn(opts) {
     const b = document.createElement('button');
     b.type = 'button';
     b.id = opts.id;
-    b.className = 'rail-btn';
+    b.className = 'rail-btn rail-btn-labelled';
     if (opts.danger) b.classList.add('danger');
     b.dataset.i18n = opts.i18n;
-    b.title = tr(opts.i18n);
-    b.setAttribute('aria-label', tr(opts.i18n));
+    if (opts.tool) b.dataset.tool = opts.tool;
+    const aria = opts.shortcut ? `${tr(opts.i18n)} (${opts.shortcut})` : tr(opts.i18n);
+    b.title = aria;
+    b.setAttribute('aria-label', aria);
     b.appendChild(svgIcon(opts.icon));
+    const lab = document.createElement('span');
+    lab.className = 'rail-btn-label';
+    lab.textContent = tr(opts.i18n);
+    b.appendChild(lab);
+    if (opts.shortcut) {
+      const sc = document.createElement('span');
+      sc.className = 'rail-btn-shortcut';
+      sc.textContent = opts.shortcut;
+      b.appendChild(sc);
+    }
     b.addEventListener('click', (e) => { e.preventDefault(); opts.onClick && opts.onClick(); });
     this._buttons[opts.id] = b;
     return b;
   }
 
-  _makeArrowSubmenu() {
-    const wrap = document.createElement('div');
-    wrap.className = 'rail-submenu-wrap';
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'rail-btn rail-submenu-trigger';
-    btn.dataset.i18n = 'rail_arrow_style';
-    btn.title = tr('rail_arrow_style');
-    btn.setAttribute('aria-label', tr('rail_arrow_style'));
-    btn.appendChild(svgIcon(this.state.routing));
-    this._buttons['rail-tool-arrow'] = btn;
-    btn.dataset.routing = this.state.routing;
-    const flyout = document.createElement('div');
-    flyout.className = 'rail-flyout';
-    for (const r of ROUTINGS) {
-      const ob = document.createElement('button');
-      ob.type = 'button';
-      ob.className = 'rail-btn';
-      ob.title = tr(`editor_tools_arrow_${r}`);
-      ob.dataset.i18n = `editor_tools_arrow_${r}`;
-      ob.appendChild(svgIcon(r));
-      ob.addEventListener('click', (e) => {
-        e.preventDefault();
-        this._setRouting(r);
-        flyout.classList.remove('open');
-      });
-      flyout.appendChild(ob);
+  _toggleCollapsed() {
+    this.state.collapsed = !this.state.collapsed;
+    persistRailState(this.state);
+    this._applyCollapsed();
+  }
+
+  _applyCollapsed() {
+    if (!this.railEl) return;
+    this.railEl.classList.toggle('collapsed', this.state.collapsed);
+    if (this._collapseIconEl) {
+      this._collapseIconEl.innerHTML = SVG_PATHS[this.state.collapsed ? 'expand' : 'collapse'];
     }
-    btn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      flyout.classList.toggle('open');
+    const key = this.state.collapsed ? 'rail_expand' : 'rail_collapse';
+    if (this._collapseLabelEl) this._collapseLabelEl.textContent = tr(key);
+    const btn = this._buttons['rail-collapse-btn'];
+    if (btn) {
+      btn.dataset.i18n = key;
+      btn.title = tr(key);
+      btn.setAttribute('aria-label', tr(key));
+    }
+  }
+
+  _applyActiveTool(tool) {
+    if (!this.railEl) return;
+    const buttons = this.railEl.querySelectorAll('button[data-tool]');
+    buttons.forEach((b) => {
+      b.classList.toggle('active', b.dataset.tool === tool);
     });
-    document.addEventListener('mousedown', (e) => {
-      if (!wrap.contains(e.target)) flyout.classList.remove('open');
-    });
-    wrap.appendChild(btn);
-    wrap.appendChild(flyout);
-    return wrap;
-  }
-
-  _setCreate(v) {
-    if (!CREATE_MODES.includes(v)) return;
-    this.state.create = v;
-    persistToolState(this.state);
-    this._applyButtonStates();
-    if (this.handlers.onCreateModeChange) this.handlers.onCreateModeChange(v);
-  }
-
-  _setRouting(v) {
-    if (!ROUTINGS.includes(v)) return;
-    this.state.routing = v;
-    persistToolState(this.state);
-    const trigger = this._buttons['rail-tool-arrow'];
-    if (trigger) {
-      while (trigger.firstChild) trigger.removeChild(trigger.firstChild);
-      trigger.appendChild(svgIcon(v));
-    }
-    if (this.handlers.onRoutingChange) this.handlers.onRoutingChange(v);
-  }
-
-  _applyButtonStates() {
-    const map = [
-      ['block',  'rail-tool-block'],
-      ['sticky', 'rail-tool-sticky'],
-      ['group',  'rail-tool-group'],
-      ['text',   'rail-tool-text'],
-    ];
-    for (const [k, id] of map) {
-      const b = this._buttons[id];
-      if (b) b.classList.toggle('active', this.state.create === k);
-    }
   }
 
   setActiveMode(mode) {
@@ -279,16 +276,21 @@ export class LeftRail {
     }
   }
 
-  getCreateMode() { return this.state.create; }
-  getRouting() { return this.state.routing; }
+  isCollapsed() { return !!this.state.collapsed; }
 
   _retranslate() {
     if (!this.railEl) return;
     this.railEl.querySelectorAll('button[data-i18n]').forEach((b) => {
       const key = b.dataset.i18n;
       const text = tr(key);
+      const lab = b.querySelector('.rail-btn-label');
+      if (lab) lab.textContent = text;
       b.title = text;
       b.setAttribute('aria-label', text);
     });
+    if (this._collapseLabelEl) {
+      const key = this.state.collapsed ? 'rail_expand' : 'rail_collapse';
+      this._collapseLabelEl.textContent = tr(key);
+    }
   }
 }

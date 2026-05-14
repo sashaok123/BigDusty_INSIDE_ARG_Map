@@ -4,6 +4,7 @@
 
 import { lodFor } from './lod.js';
 import { pickTextColor, pickTextStroke, bgFromTheme } from './contrast.js';
+import { getActiveTool, isSpaceHeld, setActiveTool } from './tools.js';
 
 const COLOR_PRESET_BG = {
   '':  null,
@@ -330,7 +331,31 @@ export class Viewer {
   setMode(mode) {
     this.mode = mode;
     this.canvas.parentElement.classList.toggle('editor', mode === 'editor');
+    this._updateCursor();
     this.requestDraw();
+  }
+
+  refreshCursor() { this._updateCursor(); }
+
+  _updateCursor() {
+    if (!this.canvas) return;
+    if (this.mode !== 'editor') {
+      this.canvas.style.cursor = this.hoverId ? 'pointer' : 'grab';
+      return;
+    }
+    if (isSpaceHeld()) {
+      this.canvas.style.cursor = 'grab';
+      return;
+    }
+    const t = getActiveTool();
+    if (t === 'pan') { this.canvas.style.cursor = 'grab'; return; }
+    if (t === 'arrow') { this.canvas.style.cursor = 'crosshair'; return; }
+    if (t === 'block' || t === 'sticky' || t === 'text' || t === 'group') {
+      this.canvas.style.cursor = 'crosshair';
+      return;
+    }
+    if (this.hoverId) { this.canvas.style.cursor = 'move'; return; }
+    this.canvas.style.cursor = 'default';
   }
 
   fitToScreen() {
@@ -835,70 +860,144 @@ export class Viewer {
   }
 
   _onMouseDown(ev) {
-    if (ev.button !== 0) return;
     const screen = { x: ev.clientX, y: ev.clientY };
     const img = this.imagePointFromClient(ev.clientX, ev.clientY);
 
+    if (ev.button === 1) {
+      ev.preventDefault();
+      this.dragState = {
+        kind: 'pan',
+        startScreen: screen,
+        startPan: { x: this.panX, y: this.panY },
+        candidateHotspot: null,
+        moved: false,
+      };
+      this.canvas.parentElement.classList.add('grabbing');
+      return;
+    }
+    if (ev.button !== 0) return;
+
     if (this.mode === 'editor') {
+      const tool = getActiveTool();
+
+      if (isSpaceHeld() || tool === 'pan') {
+        this.dragState = {
+          kind: 'pan',
+          startScreen: screen,
+          startPan: { x: this.panX, y: this.panY },
+          candidateHotspot: null,
+          moved: false,
+        };
+        this.canvas.parentElement.classList.add('grabbing');
+        return;
+      }
+
       const hover = this.hotspotAtImagePoint(img);
-      if (hover) {
-        const handle = this.handleAtImagePoint(hover, img);
-        if (handle && !ev.shiftKey) {
+      const grp = hover ? null : this.groupAtImagePoint(img);
+
+      if (tool === 'select') {
+        if (hover) {
+          const handle = this.handleAtImagePoint(hover, img);
+          if (handle && !ev.shiftKey) {
+            this.dragState = {
+              kind: 'resize',
+              handle,
+              id: hover.id,
+              origRect: { ...hover.rect },
+              startImg: img,
+              startScreen: screen,
+              shiftKey: !!ev.shiftKey,
+              moved: false,
+            };
+            return;
+          }
           this.dragState = {
-            kind: 'resize',
-            handle,
+            kind: 'edit-click',
             id: hover.id,
-            origRect: { ...hover.rect },
+            kindOfTarget: 'hotspot',
+            shiftKey: !!ev.shiftKey,
+            startScreen: screen,
+            startImg: img,
+            moved: false,
+          };
+          return;
+        }
+        if (grp) {
+          this.dragState = {
+            kind: 'edit-click',
+            id: grp.id,
+            kindOfTarget: 'group',
+            shiftKey: !!ev.shiftKey,
+            startScreen: screen,
             startImg: img,
             moved: false,
           };
           return;
         }
         this.dragState = {
-          kind: 'edit-click',
-          id: hover.id,
-          kindOfTarget: 'hotspot',
-          shiftKey: !!ev.shiftKey,
-          startScreen: screen,
-          startImg: img,
-          moved: false,
-        };
-        return;
-      }
-      const grp = this.groupAtImagePoint(img);
-      if (grp) {
-        this.dragState = {
-          kind: 'edit-click',
-          id: grp.id,
-          kindOfTarget: 'group',
-          shiftKey: !!ev.shiftKey,
-          startScreen: screen,
-          startImg: img,
-          moved: false,
-        };
-        return;
-      }
-      if (ev.shiftKey) {
-        this.dragState = {
           kind: 'marquee',
           start: img,
           current: img,
           startScreen: screen,
-          shiftKey: true,
+          shiftKey: !!ev.shiftKey,
           moved: false,
         };
         return;
       }
-      this.dragState = {
-        kind: 'draw',
-        start: img,
-        current: img,
-        startScreen: screen,
-        moved: false,
-      };
+
+      if (tool === 'block' || tool === 'sticky' || tool === 'text') {
+        this.dragState = {
+          kind: 'tool-click',
+          tool,
+          start: img,
+          current: img,
+          startScreen: screen,
+          moved: false,
+        };
+        return;
+      }
+
+      if (tool === 'group') {
+        this.dragState = {
+          kind: 'draw',
+          createMode: 'group',
+          start: img,
+          current: img,
+          startScreen: screen,
+          moved: false,
+        };
+        return;
+      }
+
+      if (tool === 'arrow') {
+        this.dragState = {
+          kind: 'arrow-draw',
+          start: img,
+          current: img,
+          startScreen: screen,
+          fromHover: hover ? hover.id : (grp ? grp.id : null),
+          moved: false,
+        };
+        if (this.editorOptions.onArrowDrawBegin) {
+          this.editorOptions.onArrowDrawBegin(img, hover || grp || null);
+        }
+        return;
+      }
+
       return;
     }
 
+    if (isSpaceHeld()) {
+      this.dragState = {
+        kind: 'pan',
+        startScreen: screen,
+        startPan: { x: this.panX, y: this.panY },
+        candidateHotspot: null,
+        moved: false,
+      };
+      this.canvas.parentElement.classList.add('grabbing');
+      return;
+    }
     const hover = this.hotspotAtImagePoint(img);
     this.dragState = {
       kind: 'pan',
@@ -920,7 +1019,7 @@ export class Viewer {
       const newHover = hover ? hover.id : null;
       if (newHover !== this.hoverId) {
         this.hoverId = newHover;
-        this.canvas.style.cursor = newHover ? 'pointer' : (this.mode === 'editor' ? 'crosshair' : 'grab');
+        this._updateCursor();
         this.requestDraw();
       } else {
         this._updateTooltip();
@@ -942,8 +1041,13 @@ export class Viewer {
       this.requestDraw();
       return;
     }
-    if (d.kind === 'draw' || d.kind === 'marquee') {
+    if (d.kind === 'draw' || d.kind === 'marquee' || d.kind === 'tool-click' || d.kind === 'arrow-draw') {
       d.current = this.imagePointFromClient(ev.clientX, ev.clientY);
+      if (d.kind === 'arrow-draw' && this.editorOptions.onArrowDrawMove) {
+        const targetHover = this.hotspotAtImagePoint(d.current);
+        const targetGroup = targetHover ? null : this.groupAtImagePoint(d.current);
+        this.editorOptions.onArrowDrawMove({ fromPt: d.start, toPt: d.current, target: targetHover || targetGroup });
+      }
       this.requestDraw();
       return;
     }
@@ -964,8 +1068,33 @@ export class Viewer {
       if (d.handle.includes('s')) { rect.h = d.origRect.h + dyImg; }
       if (d.handle.includes('w')) { rect.x = d.origRect.x + dxImg; rect.w = d.origRect.w - dxImg; }
       if (d.handle.includes('e')) { rect.w = d.origRect.w + dxImg; }
-      if (rect.w < 8) { rect.w = 8; rect.x = d.origRect.x + d.origRect.w - 8; }
-      if (rect.h < 8) { rect.h = 8; rect.y = d.origRect.y + d.origRect.h - 8; }
+      const MIN_SIDE = 40;
+      if (rect.w < MIN_SIDE) {
+        if (d.handle.includes('w')) rect.x = d.origRect.x + d.origRect.w - MIN_SIDE;
+        rect.w = MIN_SIDE;
+      }
+      if (rect.h < MIN_SIDE) {
+        if (d.handle.includes('n')) rect.y = d.origRect.y + d.origRect.h - MIN_SIDE;
+        rect.h = MIN_SIDE;
+      }
+      if (ev.shiftKey && d.origRect.w > 0 && d.origRect.h > 0) {
+        const aspect = d.origRect.w / d.origRect.h;
+        const horizHandle = d.handle === 'e' || d.handle === 'w';
+        const vertHandle = d.handle === 'n' || d.handle === 's';
+        if (horizHandle) {
+          const newH = rect.w / aspect;
+          if (d.handle === 'w') rect.y = d.origRect.y + (d.origRect.h - newH) / 2;
+          rect.h = newH;
+        } else if (vertHandle) {
+          const newW = rect.h * aspect;
+          if (d.handle === 'n') rect.x = d.origRect.x + (d.origRect.w - newW) / 2;
+          rect.w = newW;
+        } else {
+          const adjustH = rect.w / aspect;
+          if (d.handle.includes('n')) rect.y = d.origRect.y + d.origRect.h - adjustH;
+          rect.h = adjustH;
+        }
+      }
       const idx = this.hotspots.findIndex((h) => h.id === d.id);
       if (idx >= 0) {
         this.hotspots[idx] = { ...this.hotspots[idx], rect };
@@ -1006,6 +1135,36 @@ export class Viewer {
       }
       return;
     }
+    if (d.kind === 'tool-click') {
+      const tool = d.tool;
+      const pt = d.current || this.imagePointFromClient(ev.clientX, ev.clientY);
+      this.onCanvasDrawRect({
+        x: pt.x, y: pt.y, w: 0, h: 0,
+        mode: tool,
+        clickOnly: true,
+      });
+      setActiveTool('select');
+      this.requestDraw();
+      return;
+    }
+    if (d.kind === 'arrow-draw') {
+      const cur = d.current || this.imagePointFromClient(ev.clientX, ev.clientY);
+      const targetHover = this.hotspotAtImagePoint(cur);
+      const targetGroup = targetHover ? null : this.groupAtImagePoint(cur);
+      const target = targetHover || targetGroup;
+      if (this.editorOptions.onArrowDrawEnd) {
+        this.editorOptions.onArrowDrawEnd({
+          fromId: d.fromHover,
+          fromPt: d.start,
+          toId: target ? target.id : null,
+          toPt: cur,
+          moved: d.moved,
+        });
+      }
+      setActiveTool('select');
+      this.requestDraw();
+      return;
+    }
     if (d.kind === 'draw') {
       const start = d.start;
       const cur = d.current || this.imagePointFromClient(ev.clientX, ev.clientY);
@@ -1017,7 +1176,8 @@ export class Viewer {
       const w = Math.abs(cur.x - start.x);
       const h = Math.abs(cur.y - start.y);
       if (w < 10 || h < 10) return;
-      this.onCanvasDrawRect({ x, y, w, h, mode: this.createMode });
+      this.onCanvasDrawRect({ x, y, w, h, mode: d.createMode || this.createMode });
+      if (d.createMode === 'group') setActiveTool('select');
       this.requestDraw();
       return;
     }

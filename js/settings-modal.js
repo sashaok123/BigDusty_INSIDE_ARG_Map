@@ -48,7 +48,7 @@ export class SettingsModal {
 
     const providerLabel = el('label', { text: tr('settings_translation_provider') });
     const providerSel = el('select');
-    for (const v of ['none', 'libretranslate', 'deepl', 'openai']) {
+    for (const v of ['none', 'libretranslate', 'deepl', 'openai', 'anthropic']) {
       const o = document.createElement('option');
       o.value = v; o.textContent = v === 'none' ? tr('settings_provider_none') : v;
       providerSel.appendChild(o);
@@ -68,16 +68,23 @@ export class SettingsModal {
     const openaiModelIn = el('input', { type: 'text', placeholder: 'gpt-4o-mini', spellcheck: 'false' });
     const openaiField = el('div', { class: 'auth-settings-field' }, [openaiLabel, openaiIn, openaiModelLabel, openaiModelIn]);
 
+    const anthropicLabel = el('label', { text: tr('settings_anthropic_key') });
+    const anthropicIn = el('input', { type: 'password', autocomplete: 'off', spellcheck: 'false' });
+    const anthropicModelLabel = el('label', { text: tr('settings_anthropic_model') });
+    const anthropicModelIn = el('input', { type: 'text', placeholder: 'claude-opus-4-7-20251001', spellcheck: 'false' });
+    const anthropicField = el('div', { class: 'auth-settings-field' }, [anthropicLabel, anthropicIn, anthropicModelLabel, anthropicModelIn]);
+
     const refreshVisibility = () => {
       const v = providerSel.value;
       ltField.style.display = v === 'libretranslate' ? 'flex' : 'none';
       deeplField.style.display = v === 'deepl' ? 'flex' : 'none';
       openaiField.style.display = v === 'openai' ? 'flex' : 'none';
+      anthropicField.style.display = v === 'anthropic' ? 'flex' : 'none';
     };
 
     providerSel.addEventListener('change', refreshVisibility);
     body.appendChild(providerLabel); body.appendChild(providerSel);
-    body.appendChild(ltField); body.appendChild(deeplField); body.appendChild(openaiField);
+    body.appendChild(ltField); body.appendChild(deeplField); body.appendChild(openaiField); body.appendChild(anthropicField);
 
     const testRow = el('div', { class: 'auth-settings-test' });
     const testBtn = el('button', { type: 'button', class: 'modal-btn', text: tr('settings_translation_test') });
@@ -101,6 +108,8 @@ export class SettingsModal {
         deeplApiKey: deeplIn.value,
         openaiApiKey: openaiIn.value,
         openaiModel: openaiModelIn.value.trim() || 'gpt-4o-mini',
+        anthropicApiKey: anthropicIn.value,
+        anthropicModel: anthropicModelIn.value.trim() || 'claude-opus-4-7-20251001',
       });
       this.close();
     });
@@ -113,6 +122,8 @@ export class SettingsModal {
         deeplApiKey: deeplIn.value,
         openaiApiKey: openaiIn.value,
         openaiModel: openaiModelIn.value.trim() || 'gpt-4o-mini',
+        anthropicApiKey: anthropicIn.value,
+        anthropicModel: anthropicModelIn.value.trim() || 'claude-opus-4-7-20251001',
       };
       try {
         const result = await translateOne('Hello, world.', 'en', 'ru', provider);
@@ -132,6 +143,8 @@ export class SettingsModal {
     this.deeplIn = deeplIn;
     this.openaiIn = openaiIn;
     this.openaiModelIn = openaiModelIn;
+    this.anthropicIn = anthropicIn;
+    this.anthropicModelIn = anthropicModelIn;
     this.langSelEl = langSel;
     this.titleEl = title;
     this.saveBtnEl = saveBtn;
@@ -148,6 +161,8 @@ export class SettingsModal {
     this.deeplIn.value = s.deeplApiKey || '';
     this.openaiIn.value = s.openaiApiKey || '';
     this.openaiModelIn.value = s.openaiModel || 'gpt-4o-mini';
+    this.anthropicIn.value = s.anthropicApiKey || '';
+    this.anthropicModelIn.value = s.anthropicModel || 'claude-opus-4-7-20251001';
     this.langSelEl.value = getLang();
     this._refreshVisibility();
     this.modalEl.classList.add('open');

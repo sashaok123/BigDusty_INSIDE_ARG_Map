@@ -32,6 +32,7 @@ export class Uploader {
     this.onUpload = opts.onUpload || (() => Promise.resolve(null));
     this.onPlaceNode = opts.onPlaceNode || (() => {});
     this.onToast = opts.onToast || (() => {});
+    this.onPickerCancel = opts.onPickerCancel || null;
     this._build();
     this._bind();
     this._setupHidden();
@@ -77,6 +78,10 @@ export class Uploader {
   openFilePicker() {
     if (!this.pickerEl) return;
     this.pickerEl.click();
+    if (this.onPickerCancel && 'oncancel' in this.pickerEl) {
+      const onCancel = () => { try { this.onPickerCancel(); } catch (e) { void e; } };
+      this.pickerEl.addEventListener('cancel', onCancel, { once: true });
+    }
   }
 
   _bind() {

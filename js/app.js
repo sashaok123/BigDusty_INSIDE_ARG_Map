@@ -71,6 +71,7 @@ import { AuthUI } from './auth-ui.js';
 import { Realtime } from './realtime.js';
 import { PresencePanel } from './presence.js';
 import { openActivityLog, openSnapshots, openPresence } from './admin-modals.js';
+import { getActiveTool, setActiveTool, onActiveToolChange, onSpaceHeldChange, isSpaceHeld } from './tools.js';
 import {
   isLoggedIn, getCurrentUser, subscribeAuth,
   getCanvas as apiGetCanvas,
@@ -307,7 +308,10 @@ function setupBeforeUnload() {
 function setupSettingsModal() {
   settingsModal = new SettingsModal();
   const btn = $('btn-settings');
-  if (btn) btn.addEventListener('click', () => settingsModal.open());
+  if (btn) {
+    btn.style.display = 'none';
+    btn.addEventListener('click', () => settingsModal.open());
+  }
 }
 
 function setupSnapGuides() {
@@ -421,10 +425,11 @@ function renderVideoOverlay() {
 async function triggerAddVideo() {
   if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
   const info = await openVideoUrlDialog();
-  if (!info) return;
+  if (!info) { setActiveTool('select'); return; }
   const pt = viewer.imagePointFromClient(window.innerWidth / 2, window.innerHeight / 2);
   const rect = { x: Math.round(pt.x - 280), y: Math.round(pt.y - 160), w: 560, h: 320 };
   createVideoNode(rect, info);
+  setActiveTool('select');
 }
 
 function triggerAddComment() {
@@ -545,6 +550,8 @@ function applyAuthState() {
   if (!authed && state.mode === 'editor') setMode('viewer');
   if (leftRail) leftRail.setAuthState(authed, isAdmin);
   if (authUI) authUI.refreshAdmin();
+  const settingsBtn = $('btn-settings');
+  if (settingsBtn) settingsBtn.style.display = isAdmin ? '' : 'none';
 }
 
 function setupRealtime() {
@@ -579,6 +586,11 @@ function setupViewer() {
     onCanvasDrawRect: (rect) => {
       handleDrawRect(rect);
     },
+    onArrowDrawBegin: () => {},
+    onArrowDrawMove: () => {},
+    onArrowDrawEnd: (info) => {
+      handleArrowDrawEnd(info);
+    },
     onHotspotResize: (id, rect) => {
       updatePuzzleNode(state.nodes, id, { rect });
       if (arrowLayer) arrowLayer.invalidateNode(id);
@@ -609,6 +621,24 @@ function setupViewer() {
     },
   });
   viewer.attachTooltip($('hotspot-tooltip'));
+  onActiveToolChange(() => { if (viewer) viewer.refreshCursor(); });
+  onSpaceHeldChange((held) => {
+    document.body.classList.toggle('space-held', !!held);
+    if (viewer) viewer.refreshCursor();
+  });
+}
+
+function handleArrowDrawEnd(info) {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  if (!info) return;
+  if (!info.moved && !info.toId) return;
+  if (!arrowLayer) return;
+  arrowLayer.createEdgeFromPoints({
+    fromId: info.fromId || null,
+    fromPt: info.fromPt,
+    toId: info.toId || null,
+    toPt: info.toPt,
+  });
 }
 
 function setupArrowLayer() {
@@ -842,11 +872,6 @@ function setupLeftRail() {
   leftRail = new LeftRail({
     handlers: {
       onModeChange: (m) => setMode(m),
-      onCreateModeChange: (mode) => {
-        if (viewer) viewer.setCreateMode(mode);
-        pendingTextClick = mode === 'text';
-      },
-      onRoutingChange: () => {},
       onGroupSelection: () => groupCurrentSelection(),
       onUngroup: () => ungroupCurrentSelection(),
       onDeleteSelection: () => deleteCurrentSelection(),
@@ -854,27 +879,23 @@ function setupLeftRail() {
       onRedo: () => doRedo(),
       onUploadImage: () => uploader && uploader.openFilePicker(),
       onAddVideo: () => triggerAddVideo(),
-      onAddComment: () => triggerAddComment(),
-      onFocusSearch: () => {
-        const s = $('search');
-        if (s) { s.focus(); s.select(); }
-      },
-      onToggleMinimap: () => minimap && minimap.toggle(),
-      onThemeChange: (choice) => {
-        try { localStorage.setItem(THEME_KEY, choice); } catch (e) { void e; }
-        applyTheme(choice);
-      },
-      onLangChange: (l) => {
-        if (LANGS.includes(l)) setLang(l);
-      },
-      onOpenLogin: () => { if (authUI) authUI.openLogin(); },
     },
   });
-  if (viewer) viewer.setCreateMode(leftRail.getCreateMode());
   leftRail.setActiveMode(state.mode);
   leftRail.setLang(getLang());
   const stored = readStoredThemeChoice();
   leftRail.setThemeChoice(stored);
+  document.body.classList.toggle('rail-collapsed', leftRail.isCollapsed());
+  document.addEventListener('rail:toggle', () => {
+    document.body.classList.toggle('rail-collapsed', leftRail.isCollapsed());
+  });
+  const railEl = document.getElementById('left-rail');
+  if (railEl) {
+    const obs = new MutationObserver(() => {
+      document.body.classList.toggle('rail-collapsed', railEl.classList.contains('collapsed'));
+    });
+    obs.observe(railEl, { attributes: true, attributeFilter: ['class'] });
+  }
 }
 
 function setupTouch() {
@@ -1092,6 +1113,7 @@ function setupUploader() {
     canvasEl: $('map-canvas'),
     isEnabled: () => isLoggedIn() && state.backendOnline,
     toClientToImage: (cx, cy) => viewer ? viewer.imagePointFromClient(cx, cy) : null,
+    onPickerCancel: () => setActiveTool('select'),
     onUpload: async (file) => {
       if (!isLoggedIn()) {
         if (authUI) authUI.openLogin();
@@ -1150,6 +1172,7 @@ async function placeUploadedImageNode(placement) {
     }
   }
   scheduleSave();
+  setActiveTool('select');
   return id;
 }
 
@@ -1246,7 +1269,25 @@ async function replaceImageForNode(nodeId, newUrl) {
 
 function handleDrawRect(rect) {
   if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
-  const createMode = (leftRail && leftRail.getCreateMode()) || 'block';
+  const createMode = rect.mode || getActiveTool() || 'block';
+  if (rect.clickOnly) {
+    if (createMode === 'block') {
+      const placed = { x: Math.round(rect.x), y: Math.round(rect.y), w: 220, h: 140 };
+      createBlockAtPoint(placed);
+      return;
+    }
+    if (createMode === 'sticky') {
+      const placed = { x: Math.round(rect.x - 100), y: Math.round(rect.y - 70), w: 200, h: 140 };
+      createStickyFromRect(placed);
+      return;
+    }
+    if (createMode === 'text') {
+      const placed = { x: Math.round(rect.x), y: Math.round(rect.y), w: 280, h: 80 };
+      createTextFromRect(placed);
+      return;
+    }
+    return;
+  }
   if (createMode === 'group') {
     createGroupFromRect(rect);
     return;
@@ -1262,6 +1303,29 @@ function handleDrawRect(rect) {
   editorModal.openCreate(rect, {
     md: '# New puzzle\n\n## Status\nunsolved\n\n## TLDR\n\n## Background\n\n## Current state\n\n## Techniques tried\n\n## References\n\n## Open questions\n',
   });
+}
+
+function createBlockAtPoint(rect) {
+  pushHistory();
+  const id = uniqueId(state.nodes, 'block');
+  const title = `Block ${state.nodes.size + 1}`;
+  const parent = nodeAtParentLookup(state.nodes, rect);
+  addPuzzleNode(state.nodes, {
+    id,
+    title,
+    slug: id,
+    status: 'unsolved',
+    tags: [],
+    rect,
+    md: `# ${title}\n`,
+    parent,
+  });
+  setCachedMarkdown(id, `# ${title}\n`);
+  refreshPuzzleViewsInViewer();
+  const newNode = findNode(state.nodes, id);
+  if (newNode) pushNodeCreate(toViewShape(newNode), `# ${title}\n`);
+  scheduleSave();
+  toast(tr('node_created'));
 }
 
 function createTextFromRect(rect) {
@@ -1474,6 +1538,25 @@ function deleteGroupKeepChildren(groupId) {
 function deleteCurrentSelection() {
   if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
   if (state.selection.size === 0) return;
+  const n = state.selection.size;
+  if (n > 1) {
+    editorModal.showConfirm({
+      title: tr('editor_delete_title'),
+      message: tr('delete_selection_prompt', { n }),
+      actions: [
+        { label: tr('editor_cancel_button'), kind: 'cancel', fn: () => editorModal.hideConfirm() },
+        { label: tr('editor_delete_button'), kind: 'danger', fn: () => {
+          editorModal.hideConfirm();
+          _performDeleteSelection();
+        } },
+      ],
+    });
+    return;
+  }
+  _performDeleteSelection();
+}
+
+function _performDeleteSelection() {
   pushHistory();
   for (const id of Array.from(state.selection)) {
     const n = findNode(state.nodes, id);
@@ -1719,7 +1802,10 @@ function setMode(mode) {
   if (arrowLayer) arrowLayer.setMode(mode);
   document.body.classList.toggle('editor-mode', mode === 'editor');
   if (leftRail) leftRail.setActiveMode(mode);
-  if (mode !== 'editor') {
+  if (keyboard) keyboard.setEditMode(mode === 'editor');
+  if (mode === 'editor') {
+    setActiveTool('select');
+  } else {
     state.selection = new Set();
     if (viewer) viewer.setSelection(new Set());
     refreshSelectionStatus();
@@ -2312,10 +2398,16 @@ function setupKeyboard() {
       },
       onCopy: () => doCopy(),
       onPaste: () => doPaste(),
+      onCut: () => doCut(),
       onDuplicate: () => doDuplicate(),
+      onSelectAll: () => doSelectAll(),
       onEscape: () => {
         if (sidePanel && sidePanel.isOpen()) {
           sidePanel.requestClose();
+          return;
+        }
+        if (getActiveTool() !== 'select') {
+          setActiveTool('select');
           return;
         }
         if (state.selection.size > 0) {
@@ -2359,8 +2451,43 @@ function setupKeyboard() {
       onUngroupSelection: () => { ungroupCurrentSelection(); return true; },
       onUndo: () => { doUndo(); return true; },
       onRedo: () => { doRedo(); return true; },
+      onImageTool: () => { if (uploader) uploader.openFilePicker(); return true; },
+      onVideoTool: () => { triggerAddVideo(); return true; },
+      onGroupShortcut: () => {
+        if (state.selection.size >= 2) {
+          groupCurrentSelection();
+          return true;
+        }
+        return false;
+      },
     },
   });
+  keyboard.setEditMode(state.mode === 'editor');
+}
+
+function doSelectAll() {
+  if (state.mode !== 'editor') return;
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  const ids = new Set();
+  for (const n of state.nodes.values()) {
+    if (isBlockNode_local(n)) continue;
+    ids.add(n.id);
+  }
+  state.selection = ids;
+  if (viewer) viewer.setSelection(ids);
+  refreshSelectionStatus();
+}
+
+function isBlockNode_local(n) {
+  return n && n.kind === 'block' && n.type === 'file';
+}
+
+async function doCut() {
+  if (state.mode !== 'editor') return;
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  if (state.selection.size === 0) return;
+  await doCopy();
+  deleteCurrentSelection();
 }
 
 function resetZoom() {
