@@ -195,8 +195,19 @@ export class Minimap {
   requestDraw() {
     if (!this.isOpen()) return;
     if (this._raf) return;
+    const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    if (this._lastDraw && (now - this._lastDraw) < 32) {
+      if (this._throttleTimer) return;
+      this._throttleTimer = setTimeout(() => {
+        this._throttleTimer = null;
+        this._lastDraw = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        this._draw();
+      }, 32 - (now - this._lastDraw));
+      return;
+    }
     this._raf = requestAnimationFrame(() => {
       this._raf = null;
+      this._lastDraw = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
       this._draw();
     });
   }
