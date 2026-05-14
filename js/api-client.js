@@ -285,3 +285,39 @@ export async function setAdmin(id, isAdmin) {
     body: { is_admin: !!isAdmin },
   });
 }
+
+export async function listInvitations() {
+  return _request('/admin/invitations', { auth: true });
+}
+
+export async function createInvitation(username, isAdmin) {
+  return _request('/admin/invitations', {
+    method: 'POST',
+    auth: true,
+    body: { username, is_admin: !!isAdmin },
+  });
+}
+
+export async function deleteInvitation(id) {
+  return _request(`/admin/invitations/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    auth: true,
+  });
+}
+
+export async function checkInvitation(token) {
+  return _request(`/auth/invitation/${encodeURIComponent(token)}`);
+}
+
+export async function setupAccount(token, password) {
+  const data = await _request('/auth/setup', {
+    method: 'POST',
+    body: { token, password },
+  });
+  if (!data || !data.access_token || !data.refresh_token || !data.user) {
+    throw new Error('bad_response');
+  }
+  _persist({ access: data.access_token, refresh: data.refresh_token, user: data.user });
+  _notify('login');
+  return data.user;
+}

@@ -76,6 +76,7 @@ export class Viewer {
     this.panY = 0;
 
     this.hotspots = [];
+    this.groups = [];
     this.statusFilter = new Set(['solved', 'partial', 'unsolved', 'no-data', 'dead-end']);
     this.activeFilter = 'all';
     this.fadeNonMatching = true;
@@ -85,13 +86,20 @@ export class Viewer {
     this.activeId = null;
     this.outlineHighlightId = null;
     this.tooltip = null;
+    this.selection = new Set();
 
     this.mode = 'viewer';
+    this.createMode = 'block';
     this.editorOptions = options || {};
     this.onHotspotClick = options.onHotspotClick || (() => {});
+    this.onHotspotDoubleClick = options.onHotspotDoubleClick || (() => {});
     this.onHotspotRightClick = options.onHotspotRightClick || (() => {});
     this.onCanvasDrawRect = options.onCanvasDrawRect || (() => {});
     this.onTransformChange = options.onTransformChange || (() => {});
+    this.onSelectionChange = options.onSelectionChange || (() => {});
+    this.onMarqueeSelect = options.onMarqueeSelect || (() => {});
+    this.onDragSelection = options.onDragSelection || (() => {});
+    this.onDragSelectionEnd = options.onDragSelectionEnd || (() => {});
 
     this.dragState = null;
     this.drawPreviewEl = options.drawPreviewEl || null;
@@ -195,6 +203,22 @@ export class Viewer {
     this.requestDraw();
   }
 
+  setGroups(groups) {
+    this.groups = groups;
+    this.requestDraw();
+  }
+
+  setSelection(ids) {
+    if (ids instanceof Set) this.selection = new Set(ids);
+    else if (Array.isArray(ids)) this.selection = new Set(ids);
+    else this.selection = new Set();
+    this.requestDraw();
+  }
+
+  setCreateMode(mode) {
+    this.createMode = mode || 'block';
+  }
+
   setStatusFilter(filterSet, opts) {
     this.statusFilter = filterSet instanceof Set ? filterSet : new Set(filterSet);
     const o = opts || {};
@@ -283,6 +307,39 @@ export class Viewer {
     return null;
   }
 
+  groupAtImagePoint(pt) {
+    let best = null;
+    let bestArea = Infinity;
+    for (const g of this.groups) {
+      const { x, y, w, h } = g.rect;
+      if (pt.x >= x && pt.x <= x + w && pt.y >= y && pt.y <= y + h) {
+        const area = w * h;
+        if (area < bestArea) {
+          bestArea = area;
+          best = g;
+        }
+      }
+    }
+    return best;
+  }
+
+  selectableAtImagePoint(pt) {
+    const h = this.hotspotAtImagePoint(pt);
+    if (h) return h;
+    return this.groupAtImagePoint(pt);
+  }
+
+  nodesInsideRect(rect) {
+    const out = [];
+    const r = { x: Math.min(rect.x, rect.x + rect.w), y: Math.min(rect.y, rect.y + rect.h),
+                w: Math.abs(rect.w), h: Math.abs(rect.h) };
+    const inside = (n) => n.rect.x >= r.x && n.rect.y >= r.y
+      && n.rect.x + n.rect.w <= r.x + r.w && n.rect.y + n.rect.h <= r.y + r.h;
+    for (const h of this.hotspots) if (inside(h)) out.push(h.id);
+    for (const g of this.groups) if (inside(g)) out.push(g.id);
+    return out;
+  }
+
   handleAtImagePoint(h, pt) {
     if (!h) return null;
     const { x, y, w, h: hh } = h.rect;
@@ -363,6 +420,10 @@ export class Viewer {
 
     const lod = this.getLod();
 
+    for (const g of this.groups) {
+      this._drawGroup(ctx, g);
+    }
+
     if (lod.thumbnailsVisible) {
       for (const b of this.blocks) {
         const img = this.blockImages.get(b.id);
@@ -378,7 +439,8 @@ export class Viewer {
 
     for (const h of this.hotspots) {
       if (!this._isVisible(h)) continue;
-      this._drawHotspot(ctx, h, lod);
+      if (h.kind === 'sticky') this._drawSticky(ctx, h, lod);
+      else this._drawHotspot(ctx, h, lod);
     }
 
     if (this.dragState && this.dragState.kind === 'draw' && this.dragState.current) {
@@ -397,9 +459,98 @@ export class Viewer {
       ctx.setLineDash([]);
     }
 
+    if (this.dragState && this.dragState.kind === 'marquee' && this.dragState.current) {
+      const s = this.dragState.start;
+      const cur = this.dragState.current;
+      const x = Math.min(s.x, cur.x);
+      const y = Math.min(s.y, cur.y);
+      const w = Math.abs(cur.x - s.x);
+      const h = Math.abs(cur.y - s.y);
+      ctx.lineWidth = 1.6 / this.scale;
+      ctx.strokeStyle = this.accentColour;
+      ctx.fillStyle = rgba(this.accentColour, 0.08);
+      ctx.setLineDash([6 / this.scale, 4 / this.scale]);
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeRect(x, y, w, h);
+      ctx.setLineDash([]);
+    }
+
     ctx.restore();
 
     this._updateTooltip();
+  }
+
+  _drawGroup(ctx, g) {
+    const { x, y, w, h } = g.rect;
+    ctx.save();
+    ctx.fillStyle = rgba(this.accentColour, 0.06);
+    ctx.fillRect(x, y, w, h);
+    ctx.lineWidth = 1.6 / this.scale;
+    ctx.strokeStyle = rgba(this.accentColour, 0.55);
+    ctx.setLineDash([8 / this.scale, 5 / this.scale]);
+    ctx.strokeRect(x, y, w, h);
+    ctx.setLineDash([]);
+    if (this.selection.has(g.id) || this.activeId === g.id) {
+      ctx.lineWidth = 2.4 / this.scale;
+      ctx.strokeStyle = this.accentColour;
+      ctx.setLineDash([]);
+      ctx.strokeRect(x, y, w, h);
+    }
+    if (g.label && this.scale > 0.25) {
+      const fontPx = Math.max(11, Math.min(18, 13 / this.scale));
+      ctx.font = `600 ${fontPx}px var(--font-mono)`;
+      ctx.fillStyle = this.accentColour;
+      ctx.textBaseline = 'top';
+      ctx.fillText(g.label, x + 8 / this.scale, y + 6 / this.scale);
+    }
+    ctx.restore();
+  }
+
+  _drawSticky(ctx, h, lod) {
+    const { x, y, w, h: hh } = h.rect;
+    const hash = this._stickyAngleHash(h.id);
+    const angleDeg = ((hash % 41) - 20) * 0.18;
+    const angleRad = angleDeg * Math.PI / 180;
+    const cx = x + w / 2;
+    const cy = y + hh / 2;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(angleRad);
+    ctx.translate(-cx, -cy);
+    const isHover = this.hoverId === h.id || this.activeId === h.id || this.selection.has(h.id);
+    const stickyFill = '#fff3b0';
+    const stickyEdge = '#d6b65a';
+    ctx.shadowColor = 'rgba(0,0,0,0.18)';
+    ctx.shadowBlur = 6 / this.scale;
+    ctx.shadowOffsetY = 2 / this.scale;
+    ctx.fillStyle = stickyFill;
+    ctx.fillRect(x, y, w, hh);
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+    ctx.strokeStyle = isHover ? this.accentColour : stickyEdge;
+    ctx.lineWidth = (isHover ? 2.4 : 1.4) / this.scale;
+    ctx.strokeRect(x, y, w, hh);
+    if (this.scale > 0.4 && lod && lod.edgeLabelsVisible) {
+      const fontPx = Math.max(11, Math.min(20, 14 / this.scale));
+      ctx.font = `500 ${fontPx}px var(--font-ui)`;
+      ctx.fillStyle = '#3a2a06';
+      ctx.textBaseline = 'top';
+      const padding = 8 / this.scale;
+      const text = h.title || '';
+      const maxChars = Math.max(8, Math.floor(w / (fontPx * 0.55)));
+      const shown = text.length > maxChars ? text.slice(0, maxChars - 1) + '…' : text;
+      ctx.fillText(shown, x + padding, y + padding);
+    }
+    ctx.restore();
+  }
+
+  _stickyAngleHash(id) {
+    let h = 0;
+    const s = String(id || '');
+    for (let i = 0; i < s.length; i++) {
+      h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    }
+    return h;
   }
 
   _drawHotspot(ctx, h, lod) {
@@ -408,25 +559,26 @@ export class Viewer {
     const filterDim = this.fadeNonMatching && !this._matchesFilter(h);
     const isHover = this.hoverId === h.id || this.activeId === h.id;
     const isOutlineHL = this.outlineHighlightId === h.id;
+    const isSelected = this.selection.has(h.id);
     const { x, y, w, h: hh } = h.rect;
 
     let alpha = 1;
     if (filterDim) alpha = 0.1;
     else if (searchDim) alpha = 0.3;
 
-    ctx.lineWidth = (isHover || isOutlineHL ? 2.5 : 1.6) / this.scale;
+    ctx.lineWidth = (isHover || isOutlineHL || isSelected ? 2.5 : 1.6) / this.scale;
     ctx.globalAlpha = alpha;
     ctx.strokeStyle = c.stroke;
     ctx.fillStyle = isHover ? c.fillHover : c.fill;
     ctx.fillRect(x, y, w, hh);
     ctx.strokeRect(x, y, w, hh);
 
-    if (isOutlineHL) {
+    if (isOutlineHL || isSelected) {
       ctx.save();
-      ctx.lineWidth = 4 / this.scale;
+      ctx.lineWidth = 3 / this.scale;
       ctx.strokeStyle = this.accentColour;
       ctx.globalAlpha = alpha;
-      const pad = 4 / this.scale;
+      const pad = 3 / this.scale;
       ctx.strokeRect(x - pad, y - pad, w + pad * 2, hh + pad * 2);
       ctx.restore();
     }
@@ -477,6 +629,15 @@ export class Viewer {
       this.requestDraw();
     });
     c.addEventListener('contextmenu', this._onContextMenu.bind(this));
+    c.addEventListener('dblclick', this._onDoubleClick.bind(this));
+  }
+
+  _onDoubleClick(ev) {
+    const img = this.imagePointFromClient(ev.clientX, ev.clientY);
+    const target = this.selectableAtImagePoint(img);
+    if (!target) return;
+    ev.preventDefault();
+    this.onHotspotDoubleClick(target.id, ev);
   }
 
   _installResize() {
@@ -501,7 +662,7 @@ export class Viewer {
       const hover = this.hotspotAtImagePoint(img);
       if (hover) {
         const handle = this.handleAtImagePoint(hover, img);
-        if (handle) {
+        if (handle && !ev.shiftKey) {
           this.dragState = {
             kind: 'resize',
             handle,
@@ -515,7 +676,34 @@ export class Viewer {
         this.dragState = {
           kind: 'edit-click',
           id: hover.id,
+          kindOfTarget: 'hotspot',
+          shiftKey: !!ev.shiftKey,
           startScreen: screen,
+          startImg: img,
+          moved: false,
+        };
+        return;
+      }
+      const grp = this.groupAtImagePoint(img);
+      if (grp) {
+        this.dragState = {
+          kind: 'edit-click',
+          id: grp.id,
+          kindOfTarget: 'group',
+          shiftKey: !!ev.shiftKey,
+          startScreen: screen,
+          startImg: img,
+          moved: false,
+        };
+        return;
+      }
+      if (ev.shiftKey) {
+        this.dragState = {
+          kind: 'marquee',
+          start: img,
+          current: img,
+          startScreen: screen,
+          shiftKey: true,
           moved: false,
         };
         return;
@@ -573,8 +761,16 @@ export class Viewer {
       this.requestDraw();
       return;
     }
-    if (d.kind === 'draw') {
+    if (d.kind === 'draw' || d.kind === 'marquee') {
       d.current = this.imagePointFromClient(ev.clientX, ev.clientY);
+      this.requestDraw();
+      return;
+    }
+    if (d.kind === 'drag-selection') {
+      const img = this.imagePointFromClient(ev.clientX, ev.clientY);
+      const dxImg = img.x - d.startImg.x;
+      const dyImg = img.y - d.startImg.y;
+      this.onDragSelection({ ids: d.ids, dx: dxImg, dy: dyImg });
       this.requestDraw();
       return;
     }
@@ -600,6 +796,19 @@ export class Viewer {
       return;
     }
     if (d.kind === 'edit-click') {
+      if (d.moved && !d.shiftKey) {
+        const ids = this.selection.has(d.id)
+          ? Array.from(this.selection)
+          : [d.id];
+        if (!this.selection.has(d.id)) {
+          this.setSelection(new Set([d.id]));
+          this.onSelectionChange({ ids });
+        }
+        d.kind = 'drag-selection';
+        d.ids = ids;
+        d.startImg = this.imagePointFromClient(d.startScreen.x, d.startScreen.y);
+        d.lastImg = this.imagePointFromClient(ev.clientX, ev.clientY);
+      }
       return;
     }
   }
@@ -627,13 +836,56 @@ export class Viewer {
       const w = Math.abs(cur.x - start.x);
       const h = Math.abs(cur.y - start.y);
       if (w < 10 || h < 10) return;
-      this.onCanvasDrawRect({ x, y, w, h });
+      this.onCanvasDrawRect({ x, y, w, h, mode: this.createMode });
       this.requestDraw();
+      return;
+    }
+    if (d.kind === 'marquee') {
+      if (!d.moved) {
+        if (!d.shiftKey) {
+          this.setSelection(new Set());
+          this.onSelectionChange({ ids: [] });
+        }
+        return;
+      }
+      const cur = d.current || this.imagePointFromClient(ev.clientX, ev.clientY);
+      const rect = {
+        x: Math.min(d.start.x, cur.x),
+        y: Math.min(d.start.y, cur.y),
+        w: Math.abs(cur.x - d.start.x),
+        h: Math.abs(cur.y - d.start.y),
+      };
+      if (rect.w < 5 || rect.h < 5) return;
+      const ids = this.nodesInsideRect(rect);
+      const next = d.shiftKey ? new Set(this.selection) : new Set();
+      for (const id of ids) next.add(id);
+      this.setSelection(next);
+      this.onMarqueeSelect({ rect, ids: Array.from(next), shiftKey: !!d.shiftKey });
+      this.onSelectionChange({ ids: Array.from(next) });
+      return;
+    }
+    if (d.kind === 'drag-selection') {
+      const img = this.imagePointFromClient(ev.clientX, ev.clientY);
+      const dxImg = img.x - d.startImg.x;
+      const dyImg = img.y - d.startImg.y;
+      this.onDragSelectionEnd({ ids: d.ids, dx: dxImg, dy: dyImg });
       return;
     }
     if (d.kind === 'edit-click') {
       if (!d.moved) {
-        this.onHotspotClick(d.id, ev);
+        if (d.shiftKey) {
+          const next = new Set(this.selection);
+          if (next.has(d.id)) next.delete(d.id);
+          else next.add(d.id);
+          this.setSelection(next);
+          this.onSelectionChange({ ids: Array.from(next) });
+          return;
+        }
+        this.setSelection(new Set([d.id]));
+        this.onSelectionChange({ ids: [d.id] });
+        if (d.kindOfTarget !== 'group') {
+          this.onHotspotClick(d.id, ev);
+        }
       }
       return;
     }

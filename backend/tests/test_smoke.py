@@ -103,3 +103,76 @@ async def test_refresh_and_me(client):
     me = await client.get("/auth/me", headers={"Authorization": f"Bearer {new_access}"})
     assert me.status_code == 200
     assert me.json()["username"] == "admin"
+
+
+async def test_invitation_create_and_setup(client, admin_token):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    create = await client.post(
+        "/admin/invitations",
+        json={"username": "teammate", "is_admin": False},
+        headers=headers,
+    )
+    assert create.status_code == 201, create.text
+    body = create.json()
+    assert body["token"]
+    assert body["setup_url"].endswith(f"invite={body['token']}")
+    assert body["username"] == "teammate"
+    assert body["is_admin_initial"] is False
+
+    check = await client.get(f"/auth/invitation/{body['token']}")
+    assert check.status_code == 200
+    assert check.json()["valid"] is True
+    assert check.json()["username"] == "teammate"
+
+    setup = await client.post(
+        "/auth/setup",
+        json={"token": body["token"], "password": "fresh-pw-12345"},
+    )
+    assert setup.status_code == 200, setup.text
+    pair = setup.json()
+    assert pair["access_token"]
+    assert pair["user"]["username"] == "teammate"
+
+    again = await client.post(
+        "/auth/setup",
+        json={"token": body["token"], "password": "fresh-pw-12345"},
+    )
+    assert again.status_code == 410
+
+
+async def test_invitation_duplicate_pending_rejected(client, admin_token):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    first = await client.post(
+        "/admin/invitations",
+        json={"username": "dup-user", "is_admin": False},
+        headers=headers,
+    )
+    assert first.status_code == 201, first.text
+    second = await client.post(
+        "/admin/invitations",
+        json={"username": "dup-user", "is_admin": False},
+        headers=headers,
+    )
+    assert second.status_code == 409
+
+
+async def test_invitation_list_and_revoke(client, admin_token):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    created = await client.post(
+        "/admin/invitations",
+        json={"username": "to-revoke", "is_admin": False},
+        headers=headers,
+    )
+    assert created.status_code == 201
+    inv_id = created.json()["id"]
+    listed = await client.get("/admin/invitations", headers=headers)
+    assert listed.status_code == 200
+    ids = [row["id"] for row in listed.json()]
+    assert inv_id in ids
+    revoke = await client.delete(f"/admin/invitations/{inv_id}", headers=headers)
+    assert revoke.status_code == 204
+
+
+async def test_invitation_invalid_token(client):
+    check = await client.get("/auth/invitation/does-not-exist-token")
+    assert check.status_code == 404

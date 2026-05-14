@@ -1,0 +1,281 @@
+/* Rich edit-node modal styles. Tabbed body editor, status segmented control,
+   tag chip input, color palette, caption side picker, group parent select. */
+
+#edit-node-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.36);
+  z-index: 2300;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+#edit-node-modal.open { display: flex; }
+
+#edit-node-box {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  width: 640px;
+  max-width: 96vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-modal);
+  border-radius: var(--radius);
+}
+
+#edit-node-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--panel-border);
+  flex-shrink: 0;
+}
+#edit-node-head h2 {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+#edit-node-close {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 22px;
+  cursor: pointer;
+  padding: 0 4px;
+  border-radius: var(--radius);
+}
+#edit-node-close:hover { color: var(--text); background: var(--hover); }
+
+#edit-node-body {
+  overflow-y: auto;
+  padding: 18px 22px;
+  flex: 1;
+}
+
+.em-field {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 14px;
+}
+.em-field > label {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+.em-field input[type="text"],
+.em-field input[type="number"],
+.em-field select,
+.em-field textarea {
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 8px 10px;
+  outline: none;
+  border-radius: var(--radius);
+  transition: border-color .2s;
+}
+.em-field input:focus,
+.em-field select:focus,
+.em-field textarea:focus { border-color: var(--accent); }
+.em-field textarea { min-height: 160px; resize: vertical; }
+
+.em-row {
+  display: flex;
+  gap: 10px;
+}
+.em-row > .em-field { flex: 1; }
+
+.em-segmented {
+  display: inline-flex;
+  border: 1px solid var(--field-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--field-bg);
+}
+.em-segmented button {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.em-segmented button + button { border-left: 1px solid var(--field-border); }
+.em-segmented button:hover { background: var(--hover); color: var(--text); }
+.em-segmented button.active {
+  background: var(--accent-soft-bg-strong);
+  color: var(--accent);
+}
+.em-segmented .em-status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.em-chip-input {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+  min-height: 34px;
+  align-items: center;
+}
+.em-chip {
+  display: inline-flex;
+  align-items: center;
+  background: var(--accent-soft-bg);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  padding: 2px 4px 2px 8px;
+  border-radius: 10px;
+}
+.em-chip button {
+  margin-left: 4px;
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 4px;
+}
+.em-chip-input input {
+  flex: 1;
+  min-width: 90px;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text);
+}
+
+.em-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.em-tabs button {
+  background: transparent;
+  border: 1px solid var(--field-border);
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 5px 12px;
+  cursor: pointer;
+  border-radius: var(--radius) var(--radius) 0 0;
+  border-bottom: none;
+}
+.em-tabs button.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft-bg);
+}
+
+.em-preview {
+  padding: 12px 14px;
+  border: 1px solid var(--field-border);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  min-height: 160px;
+  max-height: 320px;
+  overflow-y: auto;
+  font-family: var(--font-ui);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.em-colors {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.em-color {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.em-color.active { border-color: var(--accent); }
+.em-color.em-color-none {
+  background: var(--field-bg);
+  position: relative;
+}
+.em-color.em-color-none::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: linear-gradient(45deg, transparent 45%, var(--unsolved) 45%, var(--unsolved) 55%, transparent 55%);
+}
+
+.em-caption-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.em-caption-row .em-segmented { flex-shrink: 0; }
+.em-caption-row input[type="range"] {
+  flex: 1;
+  min-width: 140px;
+}
+.em-caption-row .em-offset-value {
+  min-width: 36px;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+#edit-node-foot {
+  border-top: 1px solid var(--panel-border);
+  padding: 12px 20px;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+  flex-shrink: 0;
+}
+#edit-node-foot .em-spacer { flex: 1; }
+
+.em-readonly .em-segmented button,
+.em-readonly input,
+.em-readonly select,
+.em-readonly textarea,
+.em-readonly .em-color,
+.em-readonly .em-chip-input,
+.em-readonly .em-tabs button {
+  pointer-events: none;
+  opacity: 0.7;
+}

@@ -1,4 +1,5 @@
-"""Authentication endpoints: login, refresh, logout, change password, whoami."""
+"""Authentication endpoints: login, refresh, logout, change password, whoami,
+invitation check and setup."""
 
 import uuid
 from datetime import datetime, timezone
@@ -6,17 +7,20 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
 from ..deps import get_current_user
-from ..models import RefreshToken, User
+from ..models import Invitation, RefreshToken, User
 from ..schemas import (
     AccessToken,
     ChangePasswordRequest,
+    InvitationCheckOut,
     LoginRequest,
     LogoutRequest,
     RefreshRequest,
+    SetupAccountRequest,
     TokenPair,
     UserOut,
 )
@@ -109,3 +113,64 @@ async def change_password(
 @router.get("/me", response_model=UserOut)
 async def whoami(user: Annotated[User, Depends(get_current_user)]) -> UserOut:
     return UserOut.model_validate(user)
+
+
+def _normalize_expires(value: datetime) -> datetime:
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+
+
+@router.get("/invitation/{token}", response_model=InvitationCheckOut)
+async def check_invitation(
+    token: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> InvitationCheckOut:
+    inv = await db.scalar(select(Invitation).where(Invitation.token == token))
+    if inv is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found")
+    if inv.used_at is not None:
+        raise HTTPException(status_code=status.HTTP_410_GONE, detail="Invitation already used")
+    if _normalize_expires(inv.expires_at) < datetime.now(timezone.utc):
+        raise HTTPException(status_code=status.HTTP_410_GONE, detail="Invitation expired")
+    return InvitationCheckOut(
+        valid=True,
+        username=inv.username_display,
+        expires_at=inv.expires_at,
+        is_admin_initial=inv.is_admin_initial,
+    )
+
+
+@router.post("/setup", response_model=TokenPair)
+async def setup_account(
+    payload: SetupAccountRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> TokenPair:
+    inv = await db.scalar(select(Invitation).where(Invitation.token == payload.token))
+    if inv is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found")
+    if inv.used_at is not None:
+        raise HTTPException(status_code=status.HTTP_410_GONE, detail="Invitation already used")
+    if _normalize_expires(inv.expires_at) < datetime.now(timezone.utc):
+        raise HTTPException(status_code=status.HTTP_410_GONE, detail="Invitation expired")
+    existing = await db.scalar(select(User).where(User.username == inv.username))
+    if existing is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already taken")
+    user = User(
+        username=inv.username,
+        username_display=inv.username_display,
+        password_hash=hash_password(payload.password),
+        is_admin=inv.is_admin_initial,
+    )
+    db.add(user)
+    inv.used_at = datetime.now(timezone.utc)
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already taken")
+    await db.refresh(user)
+    access = create_access_token(user.id, user.is_admin)
+    jti = make_jti()
+    refresh, exp_at = create_refresh_token(user.id, jti)
+    db.add(RefreshToken(jti=jti, user_id=user.id, expires_at=exp_at, revoked=False))
+    await db.commit()
+    return TokenPair(access_token=access, refresh_token=refresh, user=UserOut.model_validate(user))

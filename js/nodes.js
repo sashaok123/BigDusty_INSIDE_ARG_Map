@@ -44,11 +44,24 @@ export function isBlockNode(n) {
   return n && n.kind === 'block' && n.type === 'file';
 }
 
+export function isStickyNode(n) {
+  return n && n.kind === 'sticky';
+}
+
+export function isGroupNode(n) {
+  return n && (n.type === 'group' || n.kind === 'group');
+}
+
+export function isEditableNode(n) {
+  return n && (isPuzzleNode(n) || isStickyNode(n) || isGroupNode(n));
+}
+
 export function nodeRect(n) {
   return { x: n.x, y: n.y, w: n.width, h: n.height };
 }
 
 export function nodeTitle(n) {
+  if (n.type === 'group') return (n.label || n.slug || n.id || '').trim();
   if (n.type === 'text' && typeof n.text === 'string') {
     const first = n.text.split('\n').find((line) => /^#{1,6}\s+/.test(line));
     if (first) return first.replace(/^#{1,6}\s+/, '').trim();
@@ -70,16 +83,27 @@ export function toViewShape(n) {
     tags: Array.isArray(n.tags) ? [...n.tags] : [],
     rect: nodeRect(n),
     parent: n.parent || null,
-    kind: n.kind || (n.type === 'file' ? 'block' : 'puzzle'),
+    kind: n.kind || (n.type === 'file' ? 'block' : (n.type === 'group' ? 'group' : 'puzzle')),
     type: n.type,
     file: n.file || null,
+    color: n.color || '',
+    caption: n.caption ? { ...n.caption } : null,
+    label: typeof n.label === 'string' ? n.label : '',
   };
 }
 
 export function puzzleViews(nodes) {
   const out = [];
   for (const n of nodes.values()) {
-    if (isPuzzleNode(n)) out.push(toViewShape(n));
+    if (isPuzzleNode(n) || isStickyNode(n)) out.push(toViewShape(n));
+  }
+  return out;
+}
+
+export function groupViews(nodes) {
+  const out = [];
+  for (const n of nodes.values()) {
+    if (isGroupNode(n)) out.push(toViewShape(n));
   }
   return out;
 }
@@ -109,10 +133,39 @@ export function addPuzzleNode(nodes, payload) {
     text: payload.md || '',
     status: normaliseStatus(payload.status || 'unsolved'),
     tags: Array.isArray(payload.tags) ? [...payload.tags] : [],
-    kind: 'puzzle',
+    kind: payload.kind === 'sticky' ? 'sticky' : 'puzzle',
     slug: payload.slug || id,
   };
   if (payload.parent) node.parent = payload.parent;
+  if (payload.color) node.color = payload.color;
+  if (payload.caption) node.caption = { ...payload.caption };
+  nodes.set(id, node);
+  return node;
+}
+
+export function addStickyNode(nodes, payload) {
+  return addPuzzleNode(nodes, { ...payload, kind: 'sticky', color: payload.color || '3' });
+}
+
+export function addGroupNode(nodes, payload) {
+  const id = payload.id;
+  if (!id || nodes.has(id)) return null;
+  const node = {
+    id,
+    type: 'group',
+    x: payload.rect.x,
+    y: payload.rect.y,
+    width: payload.rect.w,
+    height: payload.rect.h,
+    kind: 'group',
+    label: payload.label || '',
+    status: normaliseStatus(payload.status || 'no-data'),
+    tags: Array.isArray(payload.tags) ? [...payload.tags] : [],
+  };
+  if (payload.parent) node.parent = payload.parent;
+  if (payload.color) node.color = payload.color;
+  if (payload.background) node.background = payload.background;
+  if (payload.backgroundStyle) node.backgroundStyle = payload.backgroundStyle;
   nodes.set(id, node);
   return node;
 }
@@ -120,8 +173,9 @@ export function addPuzzleNode(nodes, payload) {
 export function updatePuzzleNode(nodes, id, patch) {
   const n = nodes.get(id);
   if (!n) return false;
-  if (patch.title !== undefined && n.type === 'text') {
-    n.text = rewriteTitleInMarkdown(n.text || '', patch.title);
+  if (patch.title !== undefined) {
+    if (n.type === 'group') n.label = patch.title;
+    else if (n.type === 'text') n.text = rewriteTitleInMarkdown(n.text || '', patch.title);
   }
   if (patch.slug !== undefined) n.slug = patch.slug;
   if (patch.status !== undefined) n.status = normaliseStatus(patch.status);
@@ -137,7 +191,51 @@ export function updatePuzzleNode(nodes, id, patch) {
     if (patch.parent) n.parent = patch.parent;
     else delete n.parent;
   }
+  if (patch.color !== undefined) {
+    if (patch.color) n.color = patch.color;
+    else delete n.color;
+  }
+  if (patch.caption !== undefined) {
+    if (patch.caption) n.caption = { ...patch.caption };
+    else delete n.caption;
+  }
+  if (patch.label !== undefined && n.type === 'group') n.label = patch.label;
+  if (patch.background !== undefined && n.type === 'group') {
+    if (patch.background) n.background = patch.background;
+    else delete n.background;
+  }
+  if (patch.backgroundStyle !== undefined && n.type === 'group') {
+    n.backgroundStyle = patch.backgroundStyle;
+  }
   return true;
+}
+
+export function groupDescendantIds(nodes, groupId) {
+  const out = new Set();
+  const direct = [];
+  for (const n of nodes.values()) if (n.parent === groupId) direct.push(n.id);
+  for (const cid of direct) {
+    out.add(cid);
+    const child = nodes.get(cid);
+    if (child && isGroupNode(child)) {
+      const sub = groupDescendantIds(nodes, cid);
+      for (const sid of sub) out.add(sid);
+    }
+  }
+  return out;
+}
+
+export function nextGroupLabel(nodes) {
+  let n = 1;
+  const seen = new Set();
+  for (const node of nodes.values()) {
+    if (isGroupNode(node) && typeof node.label === 'string') {
+      const m = /^Group\s+(\d+)$/.exec(node.label);
+      if (m) seen.add(parseInt(m[1], 10));
+    }
+  }
+  while (seen.has(n)) n += 1;
+  return n;
 }
 
 export function removeNode(nodes, id) {
