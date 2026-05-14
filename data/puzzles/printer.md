@@ -7,7 +7,7 @@
 ## TLDR
 
 - The INSIDE printer (in-game) is a keypad / button puzzle that, when fed a passcode, prints an Easter Egg note.
-- Russell_Lylas published a 5-platform binary audit on r/PlaydeadsInside (`/comments/1sqij1h/`) tracing the passcode and decoder logic in each port.
+- A community member published a 5-platform binary audit on r/PlaydeadsInside tracing the passcode and decoder logic in each port.
 - Three of the five ports share the iOS-derived encoder. The Switch port is a fork of the iOS encoder with a re-mapped keypad. The macOS Cutout port appears to have no decoder at all in its binary.
 - All printer dispatches lead to a server endpoint that no longer accepts the 5th passcode (or maybe never did - status ambiguous).
 
@@ -17,7 +17,7 @@
 - **Switch** - structurally an iOS fork. The keypad mapping uses `rrlrll-is-physical-attach` for left-right keys (physical attach order is preserved, label order is not).
 - **PS4** - same logic as iOS, different mach-O layout. Confirmed via UABEA dump.
 - **PC (Steam)** - same logic as iOS, x86-64 Mach-O fork.
-- **macOS Cutout** - the official Mac port. Russell_Lylas reports `no decoder is reachable in the macOS binary`. The Easter Egg behaviour seen on Mac comes from the server endpoint, not from any local decode step.
+- **macOS Cutout** - the official Mac port. the audit reports `no decoder is reachable in the macOS binary`. The Easter Egg behaviour seen on Mac comes from the server endpoint, not from any local decode step.
 
 The four documented passcodes:
 
@@ -30,7 +30,7 @@ The fifth (community-derived, *not* verified):
 
 5. `HIBERNATIONINPROGRESSREBOOTPENDING`
 
-Russell_Lylas' binary offsets (verbatim from the Reddit audit):
+Binary offsets from the audit:
 
 | Port | Binary | Decoder offset |
 |---|---|---|
@@ -56,9 +56,9 @@ Russell_Lylas' binary offsets (verbatim from the Reddit audit):
 
 ## Techniques tried
 
-- **Mach-O cross-reference** between iOS / PS4 / PC binaries. Decoder strings match byte-for-byte at the offsets above (Russell_Lylas).
+- **Mach-O cross-reference** between iOS / PS4 / PC binaries. Decoder strings match byte-for-byte at the offsets above (per the audit).
 - **NSO unpack + disassembly** on Switch binary. Same decoder, different key map.
-- **macOS Cutout linkable search** for the decoder string. Not found (Russell_Lylas).
+- **macOS Cutout linkable search** for the decoder string. Not found (per the audit).
 - **Network capture** of the printer endpoint while submitting the 4 known passcodes - response confirmed.
 - **Brute-force submission** of `HIBERNATIONINPROGRESSREBOOTPENDING` and its case / separator variants - 1189 attempts, all `false`.
 - **E. E. Cummings overlay** as an annotation - manually transcribed `pity this busy monster, manunkind` from the in-game text, matched the rhythm of dot/dash overlay (community consensus, not code-verified).
@@ -66,7 +66,7 @@ Russell_Lylas' binary offsets (verbatim from the Reddit audit):
 
 ## References
 
-- Russell_Lylas Reddit audit: https://www.reddit.com/r/PlaydeadsInside/comments/1sqij1h/
+- Binary audit thread: https://www.reddit.com/r/PlaydeadsInside/comments/1sqij1h/
 - DarkMatter's printer-art canonical assembly: `D:\INSIDE_RE\ARG\arg_graph_tiles\CANONICAL_PUZZLE.png`
 - The 22-char viewgate token (potential related artefact): see `viewgate-22char` hotspot
 - E. E. Cummings, "pity this busy monster, manunkind" - 1944
