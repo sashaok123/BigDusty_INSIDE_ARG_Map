@@ -16,3 +16,7 @@ _local/
 
 # Local task notes, never published
 tasks/
+
+.pytest_cache/
+__pycache__/
+*.pyc
