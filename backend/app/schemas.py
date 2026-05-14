@@ -1,0 +1,104 @@
+"""Pydantic request and response schemas."""
+
+import uuid
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    username: str = Field(..., validation_alias="username_display")
+    is_admin: bool
+
+
+class LoginRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=64)
+    password: str = Field(..., min_length=1, max_length=256)
+
+
+class TokenPair(BaseModel):
+    access_token: str
+    refresh_token: str
+    user: UserOut
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
+class AccessToken(BaseModel):
+    access_token: str
+
+
+class LogoutRequest(BaseModel):
+    refresh_token: str
+
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=8, max_length=256)
+
+
+class CreateUserRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=64)
+    password: str = Field(..., min_length=8, max_length=256)
+    is_admin: bool = False
+
+
+class ResetPasswordRequest(BaseModel):
+    new_password: str = Field(..., min_length=8, max_length=256)
+
+
+class PatchUserRequest(BaseModel):
+    is_admin: bool | None = None
+
+
+class CanvasOut(BaseModel):
+    revision: int
+    data: dict[str, Any]
+
+
+class CanvasRevisionOut(BaseModel):
+    revision: int
+
+
+class CanvasReplaceRequest(BaseModel):
+    data: dict[str, Any]
+    expected_revision: int
+
+
+class NodeCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    id: str = Field(..., min_length=1, max_length=128)
+
+
+class NodePatchRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+
+class EdgeCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    id: str = Field(..., min_length=1, max_length=128)
+
+
+class EdgePatchRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+
+ChangeKind = Literal[
+    "node_created",
+    "node_updated",
+    "node_deleted",
+    "edge_created",
+    "edge_updated",
+    "edge_deleted",
+    "canvas_replaced",
+]
+
+
+class CanvasChange(BaseModel):
+    kind: ChangeKind
+    id: str | None = None
+    data: dict[str, Any] | None = None

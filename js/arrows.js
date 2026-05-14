@@ -33,6 +33,7 @@ export class ArrowLayer {
     this.getTransform = opts.getTransform;
     this.onEdgesChange = opts.onEdgesChange || (() => {});
     this.onScheduleSave = opts.onScheduleSave || (() => {});
+    this.onEdgeMutation = opts.onEdgeMutation || (() => {});
 
     this.edges = new Map();
     this.boundEdges = new Map();
@@ -187,6 +188,7 @@ export class ArrowLayer {
     if (!opts || !opts.silent) {
       this.onEdgesChange();
       this.onScheduleSave();
+      this.onEdgeMutation('update', id, e);
     }
   }
 
@@ -202,6 +204,7 @@ export class ArrowLayer {
     this._rebuildBoundIndex();
     this.onEdgesChange();
     this.onScheduleSave();
+    this.onEdgeMutation('delete', id, null);
     this.requestDraw();
   }
 
@@ -588,6 +591,7 @@ export class ArrowLayer {
     if (!e.waypoints.length) delete e.waypoints;
     this.onEdgesChange();
     this.onScheduleSave();
+    this.onEdgeMutation('update', edgeId, e);
     this.requestDraw();
   }
 
@@ -598,6 +602,7 @@ export class ArrowLayer {
     e.waypoints.push({ x: point.x, y: point.y });
     this.onEdgesChange();
     this.onScheduleSave();
+    this.onEdgeMutation('update', edgeId, e);
     this.requestDraw();
   }
 
@@ -676,10 +681,13 @@ export class ArrowLayer {
         this._rebuildBoundIndex();
         this.onEdgesChange();
         this.onScheduleSave();
+        this.onEdgeMutation('update', d.edgeId, e);
       }
     } else if (d.kind === 'drag-waypoint' || d.kind === 'drag-junction') {
       this.onEdgesChange();
       this.onScheduleSave();
+      const e = this.edges.get(d.edgeId);
+      if (e) this.onEdgeMutation('update', d.edgeId, e);
     } else if (d.kind === 'draw-branch') {
       if (d.snapped) {
         this._addBranchFromDrag(d);
@@ -717,6 +725,7 @@ export class ArrowLayer {
     this._selectEdge(id, null);
     this.onEdgesChange();
     this.onScheduleSave();
+    this.onEdgeMutation('create', id, newEdge);
   }
 
   _addBranchFromDrag(d) {
@@ -742,6 +751,7 @@ export class ArrowLayer {
     this._rebuildBoundIndex();
     this.onEdgesChange();
     this.onScheduleSave();
+    this.onEdgeMutation('update', d.edgeId, e);
     this._selectEdge(d.edgeId, null);
   }
 
