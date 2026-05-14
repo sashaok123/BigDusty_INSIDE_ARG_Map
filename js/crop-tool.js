@@ -116,7 +116,7 @@ export function openCropper(imageUrl) {
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(imageEl, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
-      out.toBlob((blob) => finish(blob || null), 'image/png');
+      out.toBlob((blob) => finish(blob || null), 'image/webp', 0.9);
     };
 
     cancelBtn.addEventListener('click', cancel);

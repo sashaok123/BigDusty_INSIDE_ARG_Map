@@ -1,0 +1,196 @@
+/* Left-side primary navigation rail. Fixed 60-px column with grouped
+   icon buttons. Replaces the second-row editor toolbar. */
+
+#left-rail {
+  position: fixed;
+  top: var(--toolbar-h);
+  bottom: 0;
+  left: 0;
+  width: var(--rail-w);
+  background: var(--rail-bg);
+  border-right: 1px solid var(--rail-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0;
+  gap: 6px;
+  z-index: 1100;
+  font-family: var(--font-mono);
+}
+
+#left-rail .rail-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 4px 0;
+}
+
+#left-rail .rail-section + .rail-section {
+  border-top: 1px solid var(--rail-border);
+  padding-top: 8px;
+  margin-top: 4px;
+}
+
+#left-rail .rail-bottom {
+  margin-top: auto;
+  border-top: 1px solid var(--rail-border);
+  padding-top: 8px;
+}
+
+#left-rail .rail-logo {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 1.4px;
+  color: var(--accent);
+  text-align: center;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-soft-bg);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  font-weight: 700;
+}
+
+#left-rail .rail-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  width: 40px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 6px;
+  transition: background .15s, color .15s, border-color .15s;
+}
+
+#left-rail .rail-btn:hover {
+  background: var(--hover);
+  color: var(--text);
+  border-color: var(--panel-border);
+}
+
+#left-rail .rail-btn.active {
+  background: var(--accent-soft-bg-strong);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+#left-rail .rail-btn.danger:hover {
+  background: var(--unsolved-soft-bg);
+  color: var(--unsolved);
+  border-color: var(--unsolved);
+}
+
+#left-rail .rail-btn svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+#left-rail .rail-submenu-wrap {
+  position: relative;
+}
+
+#left-rail .rail-flyout {
+  display: none;
+  position: absolute;
+  left: calc(100% + 6px);
+  top: 0;
+  flex-direction: row;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  padding: 4px;
+  gap: 2px;
+  box-shadow: var(--shadow-soft);
+  z-index: 1300;
+}
+
+#left-rail .rail-flyout.open { display: inline-flex; }
+
+#left-rail .rail-flyout-lang { flex-wrap: wrap; max-width: 280px; }
+
+#left-rail .rail-flyout .rail-btn {
+  width: 32px;
+  height: 32px;
+}
+
+#left-rail .rail-flyout .rail-lang-pick {
+  font-size: 10px;
+  letter-spacing: 1px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+#left-rail .rail-flyout .rail-lang-pick.active {
+  background: var(--accent-soft-bg-strong);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Tools section visibility: only shown when authed AND editor mode */
+#left-rail .rail-tools { display: none; }
+body.authed.editor-mode #left-rail .rail-tools { display: flex; }
+
+#left-rail.authed .rail-signin-btn { display: none; }
+body.authed #left-rail .rail-signin-btn { display: none; }
+
+/* Push the main viewport over by the rail width */
+body { padding-left: var(--rail-w); }
+#toolbar { left: var(--rail-w); }
+#viewport { left: var(--rail-w); }
+#zoom-controls { left: calc(var(--rail-w) + 14px); }
+#offline-banner { left: calc(var(--rail-w) + 8px); }
+#selection-status { left: calc(var(--rail-w) + 14px); }
+
+/* Mobile: collapse rail to bottom strip on narrow screens */
+@media (max-width: 720px) {
+  body { padding-left: 0; padding-bottom: 56px; }
+  #left-rail {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: auto;
+    height: 56px;
+    flex-direction: row;
+    border-right: none;
+    border-top: 1px solid var(--rail-border);
+    overflow-x: auto;
+    padding: 4px 8px;
+    z-index: 1200;
+  }
+  #left-rail .rail-section {
+    flex-direction: row;
+    border-top: none !important;
+    border-left: 1px solid var(--rail-border);
+    padding: 0 8px !important;
+    margin: 0 !important;
+    height: 100%;
+  }
+  #left-rail .rail-section:first-child { border-left: none; }
+  #left-rail .rail-logo { width: 36px; height: 36px; font-size: 7px; }
+  #left-rail .rail-flyout {
+    left: 0;
+    top: auto;
+    bottom: calc(100% + 6px);
+    flex-direction: row;
+  }
+  #toolbar { left: 0; }
+  #viewport { left: 0; bottom: 56px; }
+  #zoom-controls { bottom: 72px; left: 14px; }
+  #offline-banner { left: 8px; bottom: 64px; }
+  #selection-status { left: 14px; bottom: 64px; }
+}

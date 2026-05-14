@@ -106,6 +106,18 @@ export function normaliseNode(raw) {
   if (typeof raw.parent === 'string') node.parent = raw.parent;
   if (typeof raw.kind === 'string') node.kind = raw.kind;
   if (typeof raw.slug === 'string') node.slug = raw.slug;
+  if (raw.translations && typeof raw.translations === 'object') {
+    node.translations = {};
+    for (const [lang, payload] of Object.entries(raw.translations)) {
+      if (!payload || typeof payload !== 'object') continue;
+      const slot = {};
+      if (typeof payload.label === 'string') slot.label = payload.label;
+      if (typeof payload.body === 'string')  slot.body  = payload.body;
+      if (payload.caption && typeof payload.caption === 'object') slot.caption = { ...payload.caption };
+      if (typeof payload.summary === 'string') slot.summary = payload.summary;
+      node.translations[lang] = slot;
+    }
+  }
   return node;
 }
 

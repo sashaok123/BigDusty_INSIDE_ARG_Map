@@ -110,8 +110,13 @@ export class SidePanel {
     this.bodyEl.innerHTML = `<p style="color:var(--text-muted);font-family:var(--font-mono);font-size:12px">${tr('side_panel_loading')}</p>`;
     this.panelEl.classList.add('open');
 
+    if (view.text && typeof view.text === 'string') {
+      this.currentMd = view.text;
+      this._renderBody();
+      return;
+    }
     const node = this.getNode(view.id);
-    if (node && isPuzzleNode(node)) {
+    if (node && (isPuzzleNode(node) || (node.kind === 'text') || (node.kind === 'sticky'))) {
       const inline = nodeMarkdown(node);
       if (inline) {
         this.currentMd = inline;

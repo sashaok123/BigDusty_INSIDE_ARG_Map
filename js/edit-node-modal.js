@@ -5,7 +5,7 @@
    parent-group dropdown, Save / Cancel / Delete. For image file-nodes
    also shows a preview with Crop / Replace buttons. */
 
-import { tr } from './i18n.js';
+import { tr, LANGS } from './i18n.js';
 import { STATUSES, statusVarName, isGroupNode } from './nodes.js';
 import { renderMarkdown } from './markdown.js';
 
@@ -166,6 +166,34 @@ export class EditNodeModal {
     const parentSel = el('select');
     parentField.appendChild(parentLabel); parentField.appendChild(parentSel);
 
+    const translationsField = el('div', { class: 'em-field em-translations' });
+    const translationsLabel = el('label', { text: tr('translations_header') });
+    const translationsHost = el('div', { class: 'em-translations-host' });
+    const translationsRows = el('div', { class: 'em-translations-rows' });
+    const translationsAddRow = el('div', { class: 'em-translations-add' });
+    const translationsLangSel = el('select', { class: 'em-translations-lang' });
+    for (const l of LANGS) {
+      if (l === 'en') continue;
+      const o = document.createElement('option');
+      o.value = l;
+      o.textContent = l.toUpperCase();
+      translationsLangSel.appendChild(o);
+    }
+    const translationsAddBtn = el('button', { type: 'button', class: 'modal-btn', text: tr('translations_add') });
+    translationsAddRow.appendChild(translationsLangSel);
+    translationsAddRow.appendChild(translationsAddBtn);
+    translationsHost.appendChild(translationsRows);
+    translationsHost.appendChild(translationsAddRow);
+    translationsField.appendChild(translationsLabel);
+    translationsField.appendChild(translationsHost);
+    translationsAddBtn.addEventListener('click', () => {
+      const l = translationsLangSel.value;
+      if (!l) return;
+      if (!this._translations) this._translations = {};
+      if (!this._translations[l]) this._translations[l] = { label: '', body: '' };
+      this._renderTranslations();
+    });
+
     const imageField = el('div', { class: 'em-field' });
     const imageLabel = el('label', { text: tr('edit_modal_image') });
     const imageRow = el('div', { class: 'em-image-row' });
@@ -194,6 +222,7 @@ export class EditNodeModal {
     body.appendChild(bodyField);
     body.appendChild(captionField);
     body.appendChild(parentField);
+    body.appendChild(translationsField);
     body.appendChild(imageField);
 
     const foot = el('div', { id: 'edit-node-foot' });
@@ -253,6 +282,10 @@ export class EditNodeModal {
     this.colorBtnEls = colorBtns;
     this.parentLabelEl = parentLabel;
     this.parentSelectEl = parentSel;
+    this.translationsLabelEl = translationsLabel;
+    this.translationsRowsEl = translationsRows;
+    this.translationsLangSelEl = translationsLangSel;
+    this.translationsAddBtnEl = translationsAddBtn;
     this.deleteBtnEl = delBtn;
     this.cancelBtnEl = cancelBtn;
     this.saveBtnEl = saveBtn;
@@ -344,6 +377,8 @@ export class EditNodeModal {
       rect: view.rect ? { ...view.rect } : null,
     };
     this._tags = [...this._state.tags];
+    this._translations = view.translations ? JSON.parse(JSON.stringify(view.translations)) : null;
+    this._renderTranslations();
     const isImage = looksLikeImage(this._state);
     this.imageFieldEl.style.display = isImage ? 'flex' : 'none';
     if (isImage) this._setImagePreview(this._state.file || '');
@@ -475,6 +510,48 @@ export class EditNodeModal {
     }
   }
 
+  _renderTranslations() {
+    const host = this.translationsRowsEl;
+    if (!host) return;
+    while (host.firstChild) host.removeChild(host.firstChild);
+    const data = this._translations || {};
+    for (const lang of Object.keys(data)) {
+      const slot = data[lang] || {};
+      const row = document.createElement('div');
+      row.className = 'em-translation-row';
+      const head = document.createElement('div');
+      head.className = 'em-translation-head';
+      const langLab = document.createElement('span');
+      langLab.className = 'em-translation-lang';
+      langLab.textContent = lang.toUpperCase();
+      const rmBtn = document.createElement('button');
+      rmBtn.type = 'button';
+      rmBtn.className = 'em-translation-remove';
+      rmBtn.textContent = tr('translations_remove');
+      rmBtn.addEventListener('click', () => {
+        delete this._translations[lang];
+        if (Object.keys(this._translations).length === 0) this._translations = null;
+        this._renderTranslations();
+      });
+      head.appendChild(langLab);
+      head.appendChild(rmBtn);
+      const labelIn = document.createElement('input');
+      labelIn.type = 'text';
+      labelIn.placeholder = tr('translations_label_field');
+      labelIn.value = slot.label || '';
+      labelIn.addEventListener('input', () => { slot.label = labelIn.value; });
+      const bodyIn = document.createElement('textarea');
+      bodyIn.placeholder = tr('translations_body_field');
+      bodyIn.value = slot.body || '';
+      bodyIn.rows = 3;
+      bodyIn.addEventListener('input', () => { slot.body = bodyIn.value; });
+      row.appendChild(head);
+      row.appendChild(labelIn);
+      row.appendChild(bodyIn);
+      host.appendChild(row);
+    }
+  }
+
   _rebuildParentSelect(currentParent) {
     const nodes = this.getNodes();
     this.parentSelectEl.innerHTML = '';
@@ -526,6 +603,15 @@ export class EditNodeModal {
     if (!payload.caption.text && payload.caption.side === 'bottom' && payload.caption.offset === 12) {
       payload.caption = null;
     }
+    if (this._translations && Object.keys(this._translations).length > 0) {
+      const cleaned = {};
+      for (const [l, slot] of Object.entries(this._translations)) {
+        if (slot && (slot.label || slot.body)) cleaned[l] = { ...slot };
+      }
+      payload.translations = Object.keys(cleaned).length ? cleaned : null;
+    } else {
+      payload.translations = null;
+    }
     this.close();
     this.onSave(payload);
   }
@@ -555,6 +641,8 @@ export class EditNodeModal {
     }
     this.colorLabelEl.textContent = tr('edit_modal_color');
     this.parentLabelEl.textContent = tr('edit_modal_parent_group');
+    if (this.translationsLabelEl) this.translationsLabelEl.textContent = tr('translations_header');
+    if (this.translationsAddBtnEl) this.translationsAddBtnEl.textContent = tr('translations_add');
     this.deleteBtnEl.textContent = tr('edit_modal_delete');
     this.cancelBtnEl.textContent = tr('edit_modal_cancel');
     this.saveBtnEl.textContent = tr('edit_modal_save');

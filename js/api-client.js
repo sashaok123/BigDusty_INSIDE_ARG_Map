@@ -305,6 +305,10 @@ export async function deleteInvitation(id) {
   });
 }
 
+export async function getAuditLog() {
+  return _request('/admin/audit', { auth: true });
+}
+
 export async function checkInvitation(token) {
   return _request(`/auth/invitation/${encodeURIComponent(token)}`);
 }

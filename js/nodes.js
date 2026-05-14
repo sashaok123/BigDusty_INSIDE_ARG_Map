@@ -52,8 +52,12 @@ export function isGroupNode(n) {
   return n && (n.type === 'group' || n.kind === 'group');
 }
 
+export function isTextNode(n) {
+  return n && n.kind === 'text';
+}
+
 export function isEditableNode(n) {
-  return n && (isPuzzleNode(n) || isStickyNode(n) || isGroupNode(n));
+  return n && (isPuzzleNode(n) || isStickyNode(n) || isGroupNode(n) || isTextNode(n));
 }
 
 export function nodeRect(n) {
@@ -89,13 +93,15 @@ export function toViewShape(n) {
     color: n.color || '',
     caption: n.caption ? { ...n.caption } : null,
     label: typeof n.label === 'string' ? n.label : '',
+    translations: n.translations && typeof n.translations === 'object' ? { ...n.translations } : null,
+    text: typeof n.text === 'string' ? n.text : '',
   };
 }
 
 export function puzzleViews(nodes) {
   const out = [];
   for (const n of nodes.values()) {
-    if (isPuzzleNode(n) || isStickyNode(n)) out.push(toViewShape(n));
+    if (isPuzzleNode(n) || isStickyNode(n) || isTextNode(n)) out.push(toViewShape(n));
   }
   return out;
 }
@@ -145,6 +151,29 @@ export function addPuzzleNode(nodes, payload) {
 
 export function addStickyNode(nodes, payload) {
   return addPuzzleNode(nodes, { ...payload, kind: 'sticky', color: payload.color || '3' });
+}
+
+export function addTextNode(nodes, payload) {
+  const id = payload.id;
+  if (!id || nodes.has(id)) return null;
+  const node = {
+    id,
+    type: 'text',
+    x: payload.rect.x,
+    y: payload.rect.y,
+    width: payload.rect.w,
+    height: payload.rect.h,
+    text: payload.md || payload.text || '',
+    status: normaliseStatus(payload.status || 'no-data'),
+    tags: Array.isArray(payload.tags) ? [...payload.tags] : [],
+    kind: 'text',
+    slug: payload.slug || id,
+  };
+  if (payload.parent) node.parent = payload.parent;
+  if (payload.color) node.color = payload.color;
+  if (payload.translations) node.translations = { ...payload.translations };
+  nodes.set(id, node);
+  return node;
 }
 
 export function addGroupNode(nodes, payload) {
@@ -207,7 +236,27 @@ export function updatePuzzleNode(nodes, id, patch) {
   if (patch.backgroundStyle !== undefined && n.type === 'group') {
     n.backgroundStyle = patch.backgroundStyle;
   }
+  if (patch.translations !== undefined) {
+    if (patch.translations && typeof patch.translations === 'object') {
+      n.translations = { ...patch.translations };
+    } else {
+      delete n.translations;
+    }
+  }
   return true;
+}
+
+export function viewWithLang(view, lang) {
+  if (!view || !lang || lang === 'en' || !view.translations) return view;
+  const t = view.translations[lang];
+  if (!t || typeof t !== 'object') return view;
+  const out = { ...view };
+  if (typeof t.label === 'string' && t.label) out.title = t.label;
+  if (typeof t.body === 'string' && t.body) out.text = t.body;
+  if (t.caption && typeof t.caption === 'object') {
+    out.caption = { ...(view.caption || {}), ...t.caption };
+  }
+  return out;
 }
 
 export function groupDescendantIds(nodes, groupId) {

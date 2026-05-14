@@ -10,11 +10,13 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..audit import log_action
 from ..config import get_settings
 from ..database import get_db
 from ..deps import require_admin
-from ..models import Invitation, User
+from ..models import AuditLog, Invitation, User
 from ..schemas import (
+    AuditEntryOut,
     CreateUserRequest,
     InvitationCreateRequest,
     InvitationOut,
@@ -34,7 +36,11 @@ async def list_users(db: Annotated[AsyncSession, Depends(get_db)]) -> list[UserO
 
 
 @router.post("/users", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-async def create_user(payload: CreateUserRequest, db: Annotated[AsyncSession, Depends(get_db)]) -> UserOut:
+async def create_user(
+    payload: CreateUserRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    actor: Annotated[User, Depends(require_admin)],
+) -> UserOut:
     username_lower = normalize_username(payload.username)
     existing = await db.scalar(select(User).where(User.username == username_lower))
     if existing is not None:
@@ -52,6 +58,8 @@ async def create_user(payload: CreateUserRequest, db: Annotated[AsyncSession, De
         await db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already taken")
     await db.refresh(user)
+    await log_action(db, actor.id, "user_created", {"target_id": str(user.id), "username": user.username_display, "is_admin": user.is_admin})
+    await db.commit()
     return UserOut.model_validate(user)
 
 
@@ -67,6 +75,7 @@ async def delete_user(
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     await db.delete(user)
+    await log_action(db, actor.id, "user_deleted", {"target_id": str(user_id), "username": user.username_display})
     await db.commit()
     return None
 
@@ -76,11 +85,13 @@ async def reset_password(
     user_id: uuid.UUID,
     payload: ResetPasswordRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
+    actor: Annotated[User, Depends(require_admin)],
 ) -> None:
     user = await db.scalar(select(User).where(User.id == user_id))
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     user.password_hash = hash_password(payload.new_password)
+    await log_action(db, actor.id, "password_reset_by_admin", {"target_id": str(user_id)})
     await db.commit()
     return None
 
@@ -99,6 +110,7 @@ async def patch_user(
         if user_id == actor.id and not payload.is_admin:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot revoke own admin")
         user.is_admin = payload.is_admin
+        await log_action(db, actor.id, "user_role_changed", {"target_id": str(user_id), "is_admin": payload.is_admin})
     await db.commit()
     await db.refresh(user)
     return UserOut.model_validate(user)
@@ -173,6 +185,8 @@ async def create_invitation(
         await db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Invitation collision")
     await db.refresh(inv)
+    await log_action(db, actor.id, "invitation_created", {"target_username": inv.username_display, "is_admin_initial": inv.is_admin_initial})
+    await db.commit()
     return _invitation_out(inv, include_token=True)
 
 
@@ -180,10 +194,18 @@ async def create_invitation(
 async def delete_invitation(
     invitation_id: uuid.UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
+    actor: Annotated[User, Depends(require_admin)],
 ) -> None:
     inv = await db.scalar(select(Invitation).where(Invitation.id == invitation_id))
     if inv is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found")
     await db.delete(inv)
+    await log_action(db, actor.id, "invitation_revoked", {"invitation_id": str(invitation_id), "target_username": inv.username_display})
     await db.commit()
     return None
+
+
+@router.get("/audit", response_model=list[AuditEntryOut])
+async def get_audit_log(db: Annotated[AsyncSession, Depends(get_db)]) -> list[AuditEntryOut]:
+    result = await db.scalars(select(AuditLog).order_by(AuditLog.created_at.desc()).limit(200))
+    return [AuditEntryOut.model_validate(e) for e in result.all()]
