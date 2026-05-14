@@ -1,9 +1,9 @@
-"""SQLAlchemy ORM models for users, refresh tokens, canvas."""
+"""SQLAlchemy ORM models for users, refresh tokens, canvas, images."""
 
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, LargeBinary, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON, TypeDecorator
@@ -94,3 +94,15 @@ class Invitation(Base):
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_admin_initial: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class CanvasImage(Base):
+    __tablename__ = "canvas_images"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    sha256: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    mime: Mapped[str] = mapped_column(String(64), nullable=False)
+    size: Mapped[int] = mapped_column(Integer, nullable=False)
+    data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)

@@ -2,11 +2,25 @@
    double-click, right-click Edit, or Enter on a selected node. Fields:
    title, status segmented control, tag chip input, body editor with
    Edit/Preview tabs, caption (text + side + offset), color palette,
-   parent-group dropdown, Save / Cancel / Delete. */
+   parent-group dropdown, Save / Cancel / Delete. For image file-nodes
+   also shows a preview with Crop / Replace buttons. */
 
 import { tr } from './i18n.js';
 import { STATUSES, statusVarName, isGroupNode } from './nodes.js';
 import { renderMarkdown } from './markdown.js';
+
+const IMAGE_EXT_RE = /\.(png|jpe?g|webp|gif|bmp)(\?.*)?$/i;
+const IMAGE_MIME_RE = /^image\//i;
+
+function looksLikeImage(view) {
+  if (!view) return false;
+  if (view.mime && IMAGE_MIME_RE.test(view.mime)) return true;
+  const f = view.file;
+  if (typeof f !== 'string') return false;
+  if (IMAGE_EXT_RE.test(f)) return true;
+  if (/\/images\//i.test(f)) return true;
+  return false;
+}
 
 const COLOR_PRESETS = [
   { id: '',  label: 'none',    swatch: '' },
@@ -43,6 +57,8 @@ export class EditNodeModal {
     this.onDelete = opts.onDelete || (() => {});
     this.onCancel = opts.onCancel || (() => {});
     this.onUnauthedSubmit = opts.onUnauthedSubmit || (() => {});
+    this.onCropImage = opts.onCropImage || null;
+    this.onReplaceImage = opts.onReplaceImage || null;
     this._build();
     document.addEventListener('i18n:changed', () => this._retranslate());
   }
@@ -150,6 +166,25 @@ export class EditNodeModal {
     const parentSel = el('select');
     parentField.appendChild(parentLabel); parentField.appendChild(parentSel);
 
+    const imageField = el('div', { class: 'em-field' });
+    const imageLabel = el('label', { text: tr('edit_modal_image') });
+    const imageRow = el('div', { class: 'em-image-row' });
+    const imagePreview = el('div', { class: 'em-image-preview' });
+    const imagePreviewEmpty = el('div', { class: 'em-image-preview-empty', text: tr('edit_modal_image_empty') });
+    imagePreview.appendChild(imagePreviewEmpty);
+    const imageActions = el('div', { class: 'em-image-actions' });
+    const cropBtn = el('button', { type: 'button', class: 'modal-btn', text: tr('edit_modal_crop_image') });
+    const replaceBtn = el('button', { type: 'button', class: 'modal-btn', text: tr('edit_modal_replace_image') });
+    cropBtn.addEventListener('click', () => this._cropImage());
+    replaceBtn.addEventListener('click', () => this._replaceImage());
+    imageActions.appendChild(cropBtn);
+    imageActions.appendChild(replaceBtn);
+    imageRow.appendChild(imagePreview);
+    imageRow.appendChild(imageActions);
+    imageField.appendChild(imageLabel);
+    imageField.appendChild(imageRow);
+    imageField.style.display = 'none';
+
     body.appendChild(signinHint);
     body.appendChild(titleField);
     const row = el('div', { class: 'em-row' });
@@ -159,6 +194,7 @@ export class EditNodeModal {
     body.appendChild(bodyField);
     body.appendChild(captionField);
     body.appendChild(parentField);
+    body.appendChild(imageField);
 
     const foot = el('div', { id: 'edit-node-foot' });
     const delBtn = el('button', { type: 'button', class: 'modal-btn danger', text: tr('edit_modal_delete') });
@@ -220,10 +256,56 @@ export class EditNodeModal {
     this.deleteBtnEl = delBtn;
     this.cancelBtnEl = cancelBtn;
     this.saveBtnEl = saveBtn;
+    this.imageFieldEl = imageField;
+    this.imageLabelEl = imageLabel;
+    this.imagePreviewEl = imagePreview;
+    this.imagePreviewEmptyEl = imagePreviewEmpty;
+    this.cropBtnEl = cropBtn;
+    this.replaceBtnEl = replaceBtn;
 
     this._state = null;
     this._tags = [];
     this._readonly = false;
+  }
+
+  _setImagePreview(url) {
+    const host = this.imagePreviewEl;
+    if (!host) return;
+    while (host.firstChild) host.removeChild(host.firstChild);
+    if (url) {
+      const img = new Image();
+      img.alt = '';
+      img.src = url;
+      host.appendChild(img);
+    } else {
+      host.appendChild(this.imagePreviewEmptyEl);
+    }
+  }
+
+  _cropImage() {
+    if (this._readonly) { this.onUnauthedSubmit(); return; }
+    if (!this._state || !this._state.file) return;
+    if (typeof this.onCropImage !== 'function') return;
+    const id = this._state.id;
+    Promise.resolve(this.onCropImage(id, this._state.file)).then((newUrl) => {
+      if (newUrl && this._state && this._state.id === id) {
+        this._state.file = newUrl;
+        this._setImagePreview(newUrl);
+      }
+    }).catch((e) => { void e; });
+  }
+
+  _replaceImage() {
+    if (this._readonly) { this.onUnauthedSubmit(); return; }
+    if (!this._state) return;
+    if (typeof this.onReplaceImage !== 'function') return;
+    const id = this._state.id;
+    Promise.resolve(this.onReplaceImage(id)).then((newUrl) => {
+      if (newUrl && this._state && this._state.id === id) {
+        this._state.file = newUrl;
+        this._setImagePreview(newUrl);
+      }
+    }).catch((e) => { void e; });
   }
 
   _statusLabel(s) {
@@ -249,6 +331,9 @@ export class EditNodeModal {
     this._state = {
       id: view.id,
       kind: view.kind || 'puzzle',
+      type: view.type || null,
+      file: view.file || null,
+      mime: view.mime || null,
       title: view.title || '',
       status: view.status || 'unsolved',
       tags: Array.isArray(view.tags) ? [...view.tags] : [],
@@ -259,6 +344,9 @@ export class EditNodeModal {
       rect: view.rect ? { ...view.rect } : null,
     };
     this._tags = [...this._state.tags];
+    const isImage = looksLikeImage(this._state);
+    this.imageFieldEl.style.display = isImage ? 'flex' : 'none';
+    if (isImage) this._setImagePreview(this._state.file || '');
     this._readonly = !this.canEdit();
     this.modalEl.classList.toggle('em-readonly', this._readonly);
     if (this.signinHintEl) this.signinHintEl.classList.toggle('visible', this._readonly);
@@ -420,6 +508,8 @@ export class EditNodeModal {
     const payload = {
       id: this._state.id,
       kind: this._state.kind,
+      type: this._state.type || null,
+      file: this._state.file || null,
       title: this.titleInputEl.value.trim(),
       status: this._state.status,
       tags: [...this._tags],
@@ -468,6 +558,10 @@ export class EditNodeModal {
     this.deleteBtnEl.textContent = tr('edit_modal_delete');
     this.cancelBtnEl.textContent = tr('edit_modal_cancel');
     this.saveBtnEl.textContent = tr('edit_modal_save');
+    if (this.imageLabelEl) this.imageLabelEl.textContent = tr('edit_modal_image');
+    if (this.imagePreviewEmptyEl) this.imagePreviewEmptyEl.textContent = tr('edit_modal_image_empty');
+    if (this.cropBtnEl) this.cropBtnEl.textContent = tr('edit_modal_crop_image');
+    if (this.replaceBtnEl) this.replaceBtnEl.textContent = tr('edit_modal_replace_image');
     for (const s of STATUSES) {
       const b = this.statusBtnEls[s];
       if (b && b.lastChild) b.lastChild.textContent = this._statusLabel(s);

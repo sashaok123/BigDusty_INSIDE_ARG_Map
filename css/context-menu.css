@@ -1,0 +1,70 @@
+/* Global right-click menu styling. Theme-aware via tokens. */
+
+ul.ctx-menu {
+  position: fixed;
+  z-index: 2400;
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  min-width: 180px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-modal);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text);
+  user-select: none;
+}
+
+ul.ctx-menu .ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px 7px 12px;
+  cursor: pointer;
+  letter-spacing: 0.8px;
+  color: var(--text);
+  position: relative;
+}
+
+ul.ctx-menu .ctx-item:hover:not(.disabled) {
+  background: var(--accent-soft-bg-hover);
+  color: var(--accent);
+}
+
+ul.ctx-menu .ctx-item.danger { color: var(--unsolved); }
+ul.ctx-menu .ctx-item.danger:hover:not(.disabled) {
+  background: var(--unsolved-soft-bg);
+  color: var(--unsolved);
+}
+
+ul.ctx-menu .ctx-item.disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+ul.ctx-menu .ctx-icon {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+}
+ul.ctx-menu .ctx-item:hover .ctx-icon { color: var(--accent); }
+
+ul.ctx-menu .ctx-label { flex: 1; }
+
+ul.ctx-menu .ctx-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--panel-border);
+}
+
+ul.ctx-menu .ctx-submenu-arrow {
+  font-size: 10px;
+  margin-left: 8px;
+  color: var(--text-dim);
+}
+ul.ctx-menu .ctx-item:hover .ctx-submenu-arrow { color: var(--accent); }
