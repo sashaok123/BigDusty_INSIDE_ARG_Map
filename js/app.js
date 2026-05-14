@@ -45,9 +45,20 @@ import {
   statusLabel,
 } from './nodes.js';
 import { LANGS, initLang, getLang, setLang, tr } from './i18n.js';
+import { AuthUI } from './auth-ui.js';
+import { Realtime } from './realtime.js';
+import {
+  isLoggedIn, getCurrentUser, subscribeAuth,
+  getCanvas as apiGetCanvas, putCanvas as apiPutCanvas,
+  createNode as apiCreateNode, patchNode as apiPatchNode, deleteNode as apiDeleteNode,
+  createEdge as apiCreateEdge, patchEdge as apiPatchEdge, deleteEdge as apiDeleteEdge,
+  getClientId,
+} from './api-client.js';
+import { isPlaceholderApiBase } from './config.js';
 
 const STATE_VERSION = 3;
 const DETECTIVE_KEY = 'arg_map_detective_theme';
+const SELF_ECHO_WINDOW_MS = 250;
 
 const state = {
   nodes: new Map(),
@@ -59,6 +70,9 @@ const state = {
   mode: 'viewer',
   searchTerm: '',
   searchMatches: null,
+  backendOnline: false,
+  revision: 0,
+  recentSelfMutations: [],
 };
 
 let viewer;
@@ -72,6 +86,8 @@ let outlinePanel;
 let commandPalette;
 let keyboard;
 let statusFilter;
+let authUI;
+let realtime;
 
 function $(id) { return document.getElementById(id); }
 
@@ -116,10 +132,14 @@ async function bootstrap() {
   setupCommandPalette();
   setupKeyboard();
   setupDetectiveTheme();
+  setupAuthUI();
 
   await loadInitialData();
   await outlinePanel.loadInitial();
   applyFilters();
+  applyAuthState();
+
+  setupRealtime();
 
   document.addEventListener('i18n:changed', () => {
     applyStaticTranslations();
@@ -132,7 +152,45 @@ async function bootstrap() {
     if (commandPalette) commandPalette.retranslate();
     if (keyboard) keyboard.retranslate();
     refreshMigrationBannerText();
+    refreshRealtimeStatusLabel();
+    refreshOfflineBanner();
   });
+}
+
+function setupAuthUI() {
+  authUI = new AuthUI({
+    toolbarEl: $('toolbar'),
+    afterModeSwitchEl: document.querySelector('.mode-switch'),
+    onLogin: () => {
+      applyAuthState();
+      if (realtime) realtime._reconnectNow();
+      toast(tr('login_title'));
+    },
+    onLogout: () => {
+      applyAuthState();
+      if (realtime) realtime._reconnectNow();
+      if (state.mode === 'editor') setMode('viewer');
+    },
+  });
+  subscribeAuth((kind) => {
+    if (kind === 'login' || kind === 'logout' || kind === 'expired') applyAuthState();
+  });
+}
+
+function applyAuthState() {
+  const authed = isLoggedIn();
+  document.body.classList.toggle('authed', authed);
+  if (!authed && state.mode === 'editor') setMode('viewer');
+}
+
+function setupRealtime() {
+  realtime = new Realtime({
+    getRevision: () => state.revision,
+    onStatus: (s) => setRealtimeStatus(s),
+    onChange: (ev) => applyRealtimeChange(ev),
+    onResync: (data) => applyServerCanvas(data),
+  });
+  realtime.start();
 }
 
 function setupViewer() {
@@ -194,7 +252,11 @@ function setupViewer() {
     onHotspotResize: (id, rect) => {
       updatePuzzleNode(state.nodes, id, { rect });
     },
-    onHotspotResizeEnd: () => {
+    onHotspotResizeEnd: (id) => {
+      const n = findNode(state.nodes, id);
+      if (n) {
+        pushNodePatch(id, { x: n.x, y: n.y, width: n.width, height: n.height });
+      }
       scheduleSave();
     },
     onTransformChange: () => {
@@ -212,6 +274,22 @@ function setupArrowLayer() {
     getTransform: () => viewer.getTransform(),
     onEdgesChange: () => {},
     onScheduleSave: () => scheduleSave(),
+    onEdgeMutation: (kind, id, edge) => {
+      if (!state.backendOnline || !isLoggedIn()) return;
+      if (kind === 'create' && edge) {
+        trackSelfMutation('edge_created', id);
+        apiCreateEdge({ ...edge }).then((r) => { if (r) state.revision = r.revision; })
+          .catch((e) => { if (e && e.kind !== 'auth_expired') console.warn('[app] edge create', e); });
+      } else if (kind === 'update' && edge) {
+        trackSelfMutation('edge_updated', id);
+        apiPatchEdge(id, { ...edge }).then((r) => { if (r) state.revision = r.revision; })
+          .catch((e) => { if (e && e.kind !== 'auth_expired') console.warn('[app] edge update', e); });
+      } else if (kind === 'delete') {
+        trackSelfMutation('edge_deleted', id);
+        apiDeleteEdge(id).then((r) => { if (r) state.revision = r.revision; })
+          .catch((e) => { if (e && e.kind !== 'auth_expired') console.warn('[app] edge delete', e); });
+      }
+    },
   });
 }
 
@@ -233,6 +311,12 @@ function setupSidePanel() {
     overlayCancelEl: $('md-edit-cancel'),
     getNode: (id) => findNode(state.nodes, id),
     onStatusChange: (id, status) => {
+      if (!isLoggedIn()) {
+        const n0 = findNode(state.nodes, id);
+        if (n0) sidePanel.setNodeMeta(toViewShape(n0));
+        if (authUI) authUI.openLogin();
+        return;
+      }
       updatePuzzleNode(state.nodes, id, { status });
       const n = findNode(state.nodes, id);
       if (!n) return;
@@ -240,6 +324,7 @@ function setupSidePanel() {
       sidePanel.setNodeMeta(view);
       sidePanel.refreshStatusDot(view.status);
       refreshPuzzleViewsInViewer();
+      pushNodePatch(id, { status });
       scheduleSave();
     },
     onContentChange: (id, md, persist) => {
@@ -251,6 +336,7 @@ function setupSidePanel() {
       }
       if (persist) {
         toast(tr('toast_md_saved'));
+        pushNodePatch(id, { text: md });
         scheduleSave();
       }
     },
@@ -342,6 +428,14 @@ function setupEditorModal() {
         if (sidePanel.isOpen() && sidePanel.currentSlug() === finalSlug) {
           sidePanel.open(view);
         }
+        pushNodePatch(payload.id, {
+          slug: finalSlug,
+          status: payload.status,
+          tags: payload.tags,
+          x: payload.rect.x, y: payload.rect.y,
+          width: payload.rect.w, height: payload.rect.h,
+          text: payload.md,
+        });
         scheduleSave();
         toast(tr('toast_hotspot_updated'));
         return;
@@ -363,6 +457,8 @@ function setupEditorModal() {
       });
       setCachedMarkdown(finalSlug, payload.md);
       refreshPuzzleViewsInViewer();
+      const newNode = findNode(state.nodes, id);
+      if (newNode) pushNodeCreate(toViewShape(newNode), payload.md);
       scheduleSave();
       toast(tr('toast_hotspot_added'));
     },
@@ -383,6 +479,7 @@ function deletePuzzleNode(id) {
   if (sidePanel.isOpen() && sidePanel.currentSlug() === slug) {
     sidePanel.requestClose();
   }
+  pushNodeDelete(id);
   scheduleSave();
   toast(tr('toast_hotspot_deleted'));
 }
@@ -497,6 +594,10 @@ function applyStaticTranslations() {
 }
 
 function setMode(mode) {
+  if (mode === 'editor' && !isLoggedIn()) {
+    if (authUI) authUI.openLogin();
+    return;
+  }
   state.mode = mode;
   viewer.setMode(mode);
   if (arrowLayer) arrowLayer.setMode(mode);
@@ -512,6 +613,22 @@ function applyFilters() {
 }
 
 async function loadInitialData() {
+  if (!isPlaceholderApiBase()) {
+    try {
+      const remote = await apiGetCanvas();
+      if (remote && remote.data && Array.isArray(remote.data.nodes) && Array.isArray(remote.data.edges)) {
+        state.backendOnline = true;
+        state.revision = Number(remote.revision) || 0;
+        await ingestCanvasData(remote.data);
+        return;
+      }
+    } catch (e) {
+      console.warn('[app] backend fetch failed, falling back to local file:', e && e.message);
+    }
+  }
+  state.backendOnline = false;
+  refreshOfflineBanner();
+
   const loaded = await loadCanvas();
   const stored = loadState();
   const useStored = stored && stored.version === STATE_VERSION
@@ -557,6 +674,192 @@ async function loadInitialData() {
   if (loaded.fellBack && !useStored) {
     showMigrationBanner();
   }
+}
+
+async function ingestCanvasData(data) {
+  const nodes = new Map();
+  for (const raw of (data.nodes || [])) {
+    if (!raw || typeof raw.id !== 'string') continue;
+    nodes.set(raw.id, normaliseNode(raw));
+  }
+  const edges = new Map();
+  for (const raw of (data.edges || [])) {
+    if (!raw || typeof raw.id !== 'string') continue;
+    edges.set(raw.id, normaliseEdge(raw));
+  }
+  state.nodes = nodes;
+  state.edges = edges;
+  const blocks = blockViews(nodes);
+  await viewer.setBlocks(blocks);
+  const sz = viewer.getImageSize();
+  state.imageW = sz.w;
+  state.imageH = sz.h;
+  refreshPuzzleViewsInViewer();
+  arrowLayer.setEdges(edges);
+  arrowLayer.setMode(state.mode);
+  hideMigrationBanner();
+  refreshOfflineBanner();
+}
+
+function applyServerCanvas(payload) {
+  if (!payload || !payload.data) return;
+  state.revision = Number(payload.revision) || state.revision;
+  ingestCanvasData(payload.data).catch((e) => console.warn('[app] resync ingest', e));
+}
+
+function trackSelfMutation(kind, id) {
+  const now = Date.now();
+  state.recentSelfMutations.push({ kind, id, t: now });
+  if (state.recentSelfMutations.length > 32) state.recentSelfMutations.shift();
+}
+
+function isSelfEcho(ev) {
+  if (ev && ev.clientId && ev.selfClientId && ev.clientId === ev.selfClientId) return true;
+  const now = Date.now();
+  for (let i = state.recentSelfMutations.length - 1; i >= 0; i--) {
+    const r = state.recentSelfMutations[i];
+    if (now - r.t > SELF_ECHO_WINDOW_MS) break;
+    if (r.kind === ev.kind && (r.id || null) === (ev.id || null)) {
+      state.recentSelfMutations.splice(i, 1);
+      return true;
+    }
+  }
+  return false;
+}
+
+function applyRealtimeChange(ev) {
+  if (!ev || !ev.kind) return;
+  if (typeof ev.revision === 'number') state.revision = ev.revision;
+  if (isSelfEcho(ev)) return;
+  const k = ev.kind;
+  if (k === 'canvas_replaced') {
+    realtime && realtime._fullResync();
+    return;
+  }
+  if (k === 'node_created' && ev.data && ev.id) {
+    const nn = normaliseNode(ev.data);
+    state.nodes.set(nn.id, nn);
+    refreshAllAfterChange();
+    return;
+  }
+  if (k === 'node_updated' && ev.data && ev.id) {
+    const nn = normaliseNode(ev.data);
+    state.nodes.set(nn.id, nn);
+    refreshAllAfterChange();
+    return;
+  }
+  if (k === 'node_deleted' && ev.id) {
+    state.nodes.delete(ev.id);
+    if (arrowLayer) arrowLayer.notifyNodeDeleted(ev.id);
+    refreshAllAfterChange();
+    return;
+  }
+  if (k === 'edge_created' && ev.data && ev.id) {
+    const ee = normaliseEdge(ev.data);
+    state.edges.set(ee.id, ee);
+    if (arrowLayer) arrowLayer.setEdges(state.edges);
+    return;
+  }
+  if (k === 'edge_updated' && ev.data && ev.id) {
+    const ee = normaliseEdge(ev.data);
+    state.edges.set(ee.id, ee);
+    if (arrowLayer) arrowLayer.setEdges(state.edges);
+    return;
+  }
+  if (k === 'edge_deleted' && ev.id) {
+    state.edges.delete(ev.id);
+    if (arrowLayer) arrowLayer.setEdges(state.edges);
+    return;
+  }
+}
+
+function refreshAllAfterChange() {
+  refreshPuzzleViewsInViewer();
+  if (viewer) viewer.notifyNodesChanged();
+}
+
+function setRealtimeStatus(s) {
+  const dot = $('realtime-status');
+  if (!dot) return;
+  dot.classList.remove('connected', 'connecting', 'offline');
+  dot.classList.add(s === 'connected' ? 'connected' : s === 'connecting' ? 'connecting' : 'offline');
+  refreshRealtimeStatusLabel();
+}
+
+function refreshRealtimeStatusLabel() {
+  const dot = $('realtime-status');
+  if (!dot) return;
+  const s = dot.classList.contains('connected') ? 'connected'
+    : dot.classList.contains('connecting') ? 'connecting' : 'offline';
+  const key = s === 'connected' ? 'realtime_connected'
+    : s === 'connecting' ? 'realtime_connecting' : 'realtime_offline';
+  dot.title = tr(key);
+}
+
+function refreshOfflineBanner() {
+  const b = $('offline-banner');
+  if (!b) return;
+  if (state.backendOnline) b.classList.remove('open');
+  else b.classList.add('open');
+  b.textContent = tr('offline_banner');
+}
+
+async function pushNodeCreate(view, md) {
+  if (!state.backendOnline || !isLoggedIn()) return false;
+  const node = { ...nodeToServer(view, md) };
+  trackSelfMutation('node_created', node.id);
+  try {
+    const res = await apiCreateNode(node);
+    if (res && typeof res.revision === 'number') state.revision = res.revision;
+    return true;
+  } catch (e) {
+    if (e && e.kind === 'auth_expired') return false;
+    console.warn('[app] node create failed', e);
+    return false;
+  }
+}
+
+async function pushNodePatch(id, patch) {
+  if (!state.backendOnline || !isLoggedIn()) return false;
+  trackSelfMutation('node_updated', id);
+  try {
+    const res = await apiPatchNode(id, patch);
+    if (res && typeof res.revision === 'number') state.revision = res.revision;
+    return true;
+  } catch (e) {
+    if (e && e.kind === 'auth_expired') return false;
+    console.warn('[app] node patch failed', e);
+    return false;
+  }
+}
+
+async function pushNodeDelete(id) {
+  if (!state.backendOnline || !isLoggedIn()) return false;
+  trackSelfMutation('node_deleted', id);
+  try {
+    const res = await apiDeleteNode(id);
+    if (res && typeof res.revision === 'number') state.revision = res.revision;
+    return true;
+  } catch (e) {
+    if (e && e.kind === 'auth_expired') return false;
+    console.warn('[app] node delete failed', e);
+    return false;
+  }
+}
+
+function nodeToServer(view, md) {
+  return {
+    id: view.id,
+    type: 'text',
+    x: view.rect.x, y: view.rect.y,
+    width: view.rect.w, height: view.rect.h,
+    text: md || '',
+    status: view.status,
+    tags: view.tags || [],
+    kind: 'puzzle',
+    slug: view.slug || view.id,
+    parent: view.parent || undefined,
+  };
 }
 
 function applyImportedCanvas(imported) {
@@ -750,6 +1053,7 @@ function resetZoom() {
 }
 
 function createChildNode() {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return false; }
   const id = viewer.activeId;
   if (!id) return false;
   const n = findNode(state.nodes, id);
@@ -775,12 +1079,15 @@ function createChildNode() {
   });
   refreshPuzzleViewsInViewer();
   viewer.setActiveId(newId);
+  const newNode = findNode(state.nodes, newId);
+  if (newNode) pushNodeCreate(toViewShape(newNode), `# ${title}\n`);
   scheduleSave();
   toast(tr('node_created'));
   return true;
 }
 
 function createSiblingNode() {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return false; }
   const id = viewer.activeId;
   if (!id) return false;
   const n = findNode(state.nodes, id);
@@ -806,12 +1113,15 @@ function createSiblingNode() {
   });
   refreshPuzzleViewsInViewer();
   viewer.setActiveId(newId);
+  const newNode = findNode(state.nodes, newId);
+  if (newNode) pushNodeCreate(toViewShape(newNode), `# ${title}\n`);
   scheduleSave();
   toast(tr('node_created'));
   return true;
 }
 
 function confirmDeleteSelected() {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return false; }
   const id = viewer.activeId;
   if (!id) return false;
   const n = findNode(state.nodes, id);
@@ -833,6 +1143,7 @@ function confirmDeleteSelected() {
 
 function setSelectedStatus(status) {
   if (!status) return false;
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return false; }
   const id = viewer.activeId;
   if (!id) return false;
   const n = findNode(state.nodes, id);
@@ -840,6 +1151,7 @@ function setSelectedStatus(status) {
   if (!STATUSES.includes(status)) return false;
   updatePuzzleNode(state.nodes, id, { status });
   refreshPuzzleViewsInViewer();
+  pushNodePatch(id, { status });
   scheduleSave();
   toast(tr('node_status_changed', { status: statusLabel(status) }));
   return true;

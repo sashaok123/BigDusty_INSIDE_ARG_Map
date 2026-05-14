@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="css/outline.css">
   <link rel="stylesheet" href="css/command-palette.css">
   <link rel="stylesheet" href="css/theme-detective.css">
+  <link rel="stylesheet" href="css/auth.css">
 </head>
 <body>
 
@@ -43,6 +44,8 @@
   </div>
 
   <div class="spacer"></div>
+
+  <span id="realtime-status" class="offline" title="" aria-label="realtime status"></span>
 
   <label id="lang-select-wrap" title="Language">
     <span class="lang-label" data-i18n="lang_label">Language</span>
@@ -155,6 +158,8 @@
 </div>
 
 <div id="toast"></div>
+
+<div id="offline-banner" data-i18n="offline_banner">Working offline (local file)</div>
 
 <div id="migration-banner">
   <span id="migration-banner-text" data-i18n="migration_banner_text">Older data files detected.</span>
