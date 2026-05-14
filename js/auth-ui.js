@@ -492,6 +492,8 @@ export class AuthUI {
     }});
     const me = getCurrentUser();
     const del = el('button', { type: 'button', class: 'danger', text: tr('user_delete'), onclick: async () => {
+      const msg = `${tr('user_delete')}: ${u.username}\n${tr('delete_user_irreversible')}`;
+      if (!confirm(msg)) return;
       try { await deleteUser(u.id); await reload(); } catch (e) { void e; }
     }});
     if (me && me.id === u.id) del.disabled = true;

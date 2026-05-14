@@ -15,17 +15,18 @@
 
 #toolbar .logo {
   font-family: var(--font-mono);
-  font-size: 13px;
-  letter-spacing: 3px;
+  font-size: 12px;
+  letter-spacing: 2.4px;
   color: var(--accent);
   text-transform: uppercase;
   white-space: nowrap;
   margin-right: 8px;
+  font-weight: 700;
 }
 
 #toolbar .sep {
   width: 1px;
-  height: 24px;
+  height: 22px;
   background: var(--panel-border);
   margin: 0 4px;
 }
@@ -42,7 +43,7 @@
   color: var(--text);
   font-family: var(--font-mono);
   font-size: 12px;
-  padding: 7px 10px;
+  padding: 6px 10px;
   width: 220px;
   outline: none;
   border-radius: var(--radius);
@@ -92,7 +93,7 @@
   color: var(--text-dim);
   font-family: var(--font-mono);
   font-size: 10px;
-  padding: 6px 10px;
+  padding: 5px 9px;
   cursor: pointer;
   letter-spacing: 1px;
   transition: all .2s;
@@ -114,7 +115,7 @@
   color: var(--text-dim);
   font-family: var(--font-mono);
   font-size: 10px;
-  padding: 6px 11px;
+  padding: 5px 10px;
   cursor: pointer;
   letter-spacing: 1px;
   text-transform: uppercase;
@@ -129,100 +130,42 @@
 }
 .tb-btn.primary:hover { background: var(--accent-soft-bg-hover); }
 
-.mode-switch {
-  display: inline-flex;
-  border: 1px solid var(--field-border);
-  border-radius: var(--radius);
-  overflow: hidden;
-}
-.mode-switch button {
-  background: var(--field-bg);
-  border: none;
-  color: var(--text-dim);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  padding: 6px 12px;
-  cursor: pointer;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  transition: background .15s, color .15s;
-}
-.mode-switch button + button { border-left: 1px solid var(--field-border); }
-.mode-switch button.active {
-  background: var(--accent-soft-bg-strong);
-  color: var(--accent);
-}
-.mode-switch button:hover:not(.active) {
-  background: var(--hover);
-  color: var(--text);
-}
-
-#lang-select-wrap {
+#realtime-status {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  margin-right: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  margin: 0 6px;
+  cursor: default;
 }
-#lang-select-wrap .lang-label {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: var(--text-dim);
+#realtime-status.connected  { background: var(--status-solved); }
+#realtime-status.connecting {
+  background: var(--status-partial);
+  animation: realtime-pulse 1.2s ease-in-out infinite;
 }
-#lang-select {
-  background: var(--field-bg);
-  border: 1px solid var(--field-border);
-  color: var(--text);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 1px;
-  padding: 5px 8px;
-  cursor: pointer;
-  border-radius: var(--radius);
-  outline: none;
-  text-transform: uppercase;
-}
-#lang-select:focus { border-color: var(--accent); }
-#lang-select:hover { border-color: var(--accent); }
+#realtime-status.offline    { background: var(--text-dim); }
 
-#theme-switch {
-  display: inline-flex;
-  border: 1px solid var(--field-border);
-  border-radius: var(--radius);
-  overflow: hidden;
-  margin-right: 4px;
+@keyframes realtime-pulse {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 1; }
 }
-#theme-switch button {
-  background: var(--field-bg);
-  border: none;
-  color: var(--text-dim);
+
+#selection-status {
+  position: fixed;
+  left: 14px;
+  bottom: 8px;
+  padding: 4px 10px;
+  background: var(--panel-bg);
+  border: 1px solid var(--accent);
+  color: var(--accent);
   font-family: var(--font-mono);
   font-size: 11px;
-  width: 30px;
-  height: 26px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background .15s, color .15s;
-  padding: 0;
+  border-radius: var(--radius);
+  letter-spacing: 0.5px;
+  z-index: 900;
+  display: none;
+  pointer-events: none;
 }
-#theme-switch button + button { border-left: 1px solid var(--field-border); }
-#theme-switch button:hover:not(.active) {
-  background: var(--hover);
-  color: var(--text);
-}
-#theme-switch button.active {
-  background: var(--accent-soft-bg-strong);
-  color: var(--accent);
-}
-#theme-switch svg {
-  width: 14px;
-  height: 14px;
-  stroke: currentColor;
-  fill: none;
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
+#selection-status.visible { display: inline-block; }

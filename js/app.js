@@ -1,5 +1,5 @@
 /* Top-level bootstrap. Wires viewer + arrow layer + side panel + editor +
-   search + i18n + minimap + outline + command palette + keyboard. Owns the
+   search + i18n + minimap + outline + keyboard + left rail + touch. Owns the
    canvas nodes/edges maps, syncs persistence. */
 
 import { Viewer } from './viewer.js';
@@ -10,7 +10,6 @@ import { ContextMenu, statusSubmenu } from './context-menu.js';
 import { ArrowLayer } from './arrows.js';
 import { Minimap } from './minimap.js';
 import { OutlinePanel } from './outline.js';
-import { CommandPalette } from './command-palette.js';
 import { KeyboardShortcuts } from './keyboard.js';
 import { StatusFilter } from './status-filter.js';
 import {
@@ -36,6 +35,7 @@ import {
   addPuzzleNode,
   addStickyNode,
   addGroupNode,
+  addTextNode,
   updatePuzzleNode,
   removeNode,
   uniqueId,
@@ -46,35 +46,38 @@ import {
   isPuzzleNode,
   isStickyNode,
   isGroupNode,
+  isTextNode,
   isEditableNode,
   groupDescendantIds,
   nextGroupLabel,
   nodeAtParentLookup,
   nodeMarkdown,
   statusLabel,
+  viewWithLang,
 } from './nodes.js';
-import { EditorToolbar } from './editor-toolbar.js';
+import { LeftRail } from './left-rail.js';
 import { EditNodeModal } from './edit-node-modal.js';
-import { Uploader, validateImageFile, ALLOWED_MIMES as UPLOAD_ALLOWED_MIMES } from './uploader.js';
+import { Uploader, validateImageFile } from './uploader.js';
 import { openCropper } from './crop-tool.js';
+import { TouchHandler } from './touch.js';
+import { NodeClipboard } from './clipboard.js';
 import { LANGS, initLang, getLang, setLang, tr } from './i18n.js';
 import { AuthUI } from './auth-ui.js';
 import { Realtime } from './realtime.js';
 import {
   isLoggedIn, getCurrentUser, subscribeAuth,
-  getCanvas as apiGetCanvas, putCanvas as apiPutCanvas,
+  getCanvas as apiGetCanvas,
   createNode as apiCreateNode, patchNode as apiPatchNode, deleteNode as apiDeleteNode,
   createEdge as apiCreateEdge, patchEdge as apiPatchEdge, deleteEdge as apiDeleteEdge,
   uploadImage as apiUploadImage,
-  getClientId,
 } from './api-client.js';
 import { isPlaceholderApiBase } from './config.js';
 
 const STATE_VERSION = 3;
-const DETECTIVE_KEY = 'arg_map_detective_theme';
 const THEME_KEY = 'arg.theme';
-const THEME_CHOICES = ['light', 'dark', 'auto'];
+const THEME_CHOICES = ['white', 'dark', 'graphite', 'auto'];
 const SELF_ECHO_WINDOW_MS = 250;
+const BACKEND_RETRY_MS = 30000;
 
 const state = {
   nodes: new Map(),
@@ -91,6 +94,7 @@ const state = {
   recentSelfMutations: [],
   selection: new Set(),
   history: { past: [], future: [] },
+  hasUnsavedEdits: false,
 };
 
 const HISTORY_LIMIT = 50;
@@ -100,12 +104,11 @@ let sidePanel;
 let searchBar;
 let editorModal;
 let editNodeModal;
-let editorToolbar;
+let leftRail;
 let contextMenu;
 let arrowLayer;
 let minimap;
 let outlinePanel;
-let commandPalette;
 let keyboard;
 let statusFilter;
 let authUI;
@@ -113,6 +116,11 @@ let realtime;
 let selectionStatusEl;
 let uploader;
 let replaceImagePicker;
+let touchHandler;
+let clipboardMgr;
+let pendingTextClick = false;
+let backendRetryTimer = null;
+let backendOfflineMode = 'placeholder';
 
 function $(id) { return document.getElementById(id); }
 
@@ -142,7 +150,7 @@ async function bootstrap() {
   initLang();
   setupThemeSwitch();
   applyStaticTranslations();
-  setupLangSelect();
+  clipboardMgr = new NodeClipboard();
   setupViewer();
   setupSidePanel();
   setupSearchBar();
@@ -157,13 +165,13 @@ async function bootstrap() {
   setupStatusFilter();
   setupMinimap();
   setupOutline();
-  setupCommandPalette();
   setupKeyboard();
-  setupDetectiveTheme();
   setupAuthUI();
   setupEditNodeModal();
-  setupEditorToolbar();
+  setupLeftRail();
   setupSelectionStatus();
+  setupTouch();
+  setupBeforeUnload();
 
   await loadInitialData();
   await outlinePanel.loadInitial();
@@ -174,18 +182,34 @@ async function bootstrap() {
 
   document.addEventListener('i18n:changed', () => {
     applyStaticTranslations();
+    refreshPuzzleViewsInViewer();
     if (sidePanel && sidePanel.isOpen() && sidePanel.currentView) {
       sidePanel.refreshLocalised();
+      const cur = sidePanel.currentView;
+      const n = findNode(state.nodes, cur.id);
+      if (n) sidePanel.open(viewWithLang(toViewShape(n), getLang()));
     }
     if (arrowLayer) arrowLayer.retranslate();
     if (minimap) minimap.retranslate();
     if (outlinePanel) outlinePanel.retranslate();
-    if (commandPalette) commandPalette.retranslate();
     if (keyboard) keyboard.retranslate();
+    if (leftRail) leftRail.setLang(getLang());
     refreshMigrationBannerText();
     refreshRealtimeStatusLabel();
     refreshOfflineBanner();
     refreshSelectionStatus();
+  });
+}
+
+function setupBeforeUnload() {
+  window.addEventListener('beforeunload', (e) => {
+    if (state.hasUnsavedEdits) {
+      const msg = tr('unsaved_edits_warning');
+      e.preventDefault();
+      e.returnValue = msg;
+      return msg;
+    }
+    return undefined;
   });
 }
 
@@ -212,7 +236,10 @@ function setupAuthUI() {
 
 function applyAuthState() {
   const authed = isLoggedIn();
+  const user = getCurrentUser();
+  const isAdmin = !!(user && user.is_admin);
   document.body.classList.toggle('authed', authed);
+  document.body.classList.toggle('admin', isAdmin);
   if (!authed) {
     document.body.classList.remove('editor-mode');
     state.selection = new Set();
@@ -220,6 +247,11 @@ function applyAuthState() {
     refreshSelectionStatus();
   }
   if (!authed && state.mode === 'editor') setMode('viewer');
+  if (leftRail) leftRail.setAuthState(authed, isAdmin);
+  const importBtn = $('btn-import');
+  const resetBtn = $('btn-reset');
+  if (importBtn) importBtn.style.display = isAdmin ? '' : 'none';
+  if (resetBtn) resetBtn.style.display = isAdmin ? '' : 'none';
 }
 
 function setupRealtime() {
@@ -240,7 +272,7 @@ function setupViewer() {
       if (!n) return;
       const view = toViewShape(n);
       viewer.setActiveId(id);
-      sidePanel.open(view);
+      sidePanel.open(viewWithLang(view, getLang()));
     },
     onHotspotDoubleClick: (id) => openRichEdit(id),
     onHotspotRightClick: (id, ev) => {
@@ -506,16 +538,19 @@ function deletePuzzleNode(id) {
 }
 
 function refreshPuzzleViewsInViewer() {
-  viewer.setHotspots(puzzleViews(state.nodes));
-  viewer.setGroups(groupViews(state.nodes));
+  const lang = getLang();
+  viewer.setHotspots(puzzleViews(state.nodes).map((v) => viewWithLang(v, lang)));
+  viewer.setGroups(groupViews(state.nodes).map((v) => viewWithLang(v, lang)));
   if (viewer) viewer.notifyNodesChanged();
 }
 
-function setupEditorToolbar() {
-  editorToolbar = new EditorToolbar({
+function setupLeftRail() {
+  leftRail = new LeftRail({
     handlers: {
+      onModeChange: (m) => setMode(m),
       onCreateModeChange: (mode) => {
         if (viewer) viewer.setCreateMode(mode);
+        pendingTextClick = mode === 'text';
       },
       onRoutingChange: () => {},
       onGroupSelection: () => groupCurrentSelection(),
@@ -524,9 +559,56 @@ function setupEditorToolbar() {
       onUndo: () => doUndo(),
       onRedo: () => doRedo(),
       onUploadImage: () => uploader && uploader.openFilePicker(),
+      onFocusSearch: () => {
+        const s = $('search');
+        if (s) { s.focus(); s.select(); }
+      },
+      onToggleOutline: () => outlinePanel && outlinePanel.toggle(),
+      onToggleMinimap: () => minimap && minimap.toggle(),
+      onThemeChange: (choice) => {
+        try { localStorage.setItem(THEME_KEY, choice); } catch (e) { void e; }
+        applyTheme(choice);
+      },
+      onLangChange: (l) => {
+        if (LANGS.includes(l)) setLang(l);
+      },
+      onOpenLogin: () => { if (authUI) authUI.openLogin(); },
     },
   });
-  if (viewer) viewer.setCreateMode(editorToolbar.getCreateMode());
+  if (viewer) viewer.setCreateMode(leftRail.getCreateMode());
+  leftRail.setActiveMode(state.mode);
+  leftRail.setLang(getLang());
+  const stored = readStoredThemeChoice();
+  leftRail.setThemeChoice(stored);
+}
+
+function setupTouch() {
+  const canvas = $('map-canvas');
+  if (!canvas || !viewer) return;
+  touchHandler = new TouchHandler({
+    canvas,
+    viewer,
+    onTap: (cx, cy) => {
+      const pt = viewer.imagePointFromClient(cx, cy);
+      const target = viewer.selectableAtImagePoint ? viewer.selectableAtImagePoint(pt) : null;
+      if (target) {
+        const n = findNode(state.nodes, target.id);
+        if (n) {
+          const view = toViewShape(n);
+          viewer.setActiveId(target.id);
+          sidePanel.open(viewWithLang(view, getLang()));
+        }
+      }
+    },
+    onLongPress: (cx, cy) => {
+      const pt = viewer.imagePointFromClient(cx, cy);
+      const target = viewer.selectableAtImagePoint ? viewer.selectableAtImagePoint(pt) : null;
+      if (target) {
+        const items = buildContextMenuItemsForNode(target.id);
+        if (items.length && contextMenu) contextMenu.open(cx, cy, items);
+      }
+    },
+  });
 }
 
 function setupEditNodeModal() {
@@ -772,7 +854,7 @@ async function doCropImage(nodeId, currentUrl) {
   const blob = await openCropper(currentUrl);
   if (!blob) return null;
   try {
-    const uploaded = await apiUploadImage(blob, 'crop.png');
+    const uploaded = await apiUploadImage(blob, 'crop.webp');
     if (!uploaded || !uploaded.url) return null;
     await replaceImageForNode(nodeId, uploaded.url);
     return uploaded.url;
@@ -808,7 +890,16 @@ function doReplaceImage(nodeId) {
       if (invalid === 'invalid_type') { toast(tr('upload_image_invalid_type'), 'error'); resolve(null); return; }
       if (invalid === 'too_large')   { toast(tr('upload_image_too_large'),  'error'); resolve(null); return; }
       try {
-        const uploaded = await apiUploadImage(file, file.name);
+        let blob = file;
+        let name = file.name;
+        if (file.type !== 'image/webp') {
+          const converted = await convertImageBlobToWebP(file);
+          if (converted) {
+            blob = converted;
+            name = (file.name || 'image').replace(/\.[^.]+$/, '') + '.webp';
+          }
+        }
+        const uploaded = await apiUploadImage(blob, name);
         if (!uploaded || !uploaded.url) { resolve(null); return; }
         await replaceImageForNode(nodeId, uploaded.url);
         resolve(uploaded.url);
@@ -850,7 +941,7 @@ async function replaceImageForNode(nodeId, newUrl) {
 
 function handleDrawRect(rect) {
   if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
-  const createMode = (editorToolbar && editorToolbar.getCreateMode()) || 'block';
+  const createMode = (leftRail && leftRail.getCreateMode()) || 'block';
   if (createMode === 'group') {
     createGroupFromRect(rect);
     return;
@@ -859,9 +950,33 @@ function handleDrawRect(rect) {
     createStickyFromRect(rect);
     return;
   }
+  if (createMode === 'text') {
+    createTextFromRect(rect);
+    return;
+  }
   editorModal.openCreate(rect, {
     md: '# New puzzle\n\n## Status\nunsolved\n\n## TLDR\n\n## Background\n\n## Current state\n\n## Techniques tried\n\n## References\n\n## Open questions\n',
   });
+}
+
+function createTextFromRect(rect) {
+  pushHistory();
+  const id = uniqueId(state.nodes, 'text');
+  const parent = nodeAtParentLookup(state.nodes, rect);
+  const initRect = (rect && rect.w >= 40 && rect.h >= 40)
+    ? rect
+    : { x: rect.x, y: rect.y, w: Math.max(rect.w || 0, 280), h: Math.max(rect.h || 0, 80) };
+  const md = '';
+  addTextNode(state.nodes, { id, rect: initRect, md, parent });
+  refreshPuzzleViewsInViewer();
+  const newNode = findNode(state.nodes, id);
+  if (newNode) pushNodeCreate(toViewShape(newNode), md);
+  scheduleSave();
+  toast(tr('node_created'));
+  if (editNodeModal) {
+    const view = toViewShape(newNode);
+    editNodeModal.open(view, md);
+  }
 }
 
 function createStickyFromRect(rect) {
@@ -1087,8 +1202,9 @@ function persistRichEditSave(payload) {
     color: payload.color || undefined,
     caption: payload.caption,
     parent: payload.parent,
+    translations: payload.translations || null,
   };
-  if (isPuzzleNode(n) || isStickyNode(n)) {
+  if (isPuzzleNode(n) || isStickyNode(n) || isTextNode(n)) {
     patch.md = payload.md;
   } else if (isGroupNode(n)) {
     patch.label = payload.title;
@@ -1104,6 +1220,7 @@ function persistRichEditSave(payload) {
     color: updated.color,
     parent: updated.parent || null,
     caption: updated.caption || null,
+    translations: updated.translations || null,
   };
   if (updated.type === 'text') wireBody.text = updated.text || '';
   pushNodePatch(payload.id, wireBody);
@@ -1112,27 +1229,32 @@ function persistRichEditSave(payload) {
 }
 
 function setupToolbar() {
-  document.querySelectorAll('.mode-switch button').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      setMode(btn.dataset.mode);
-    });
-  });
-
-  $('btn-zoom-in').addEventListener('click', () => {
+  const zin = $('btn-zoom-in');
+  const zout = $('btn-zoom-out');
+  const zfit = $('btn-zoom-fit');
+  if (zin) zin.addEventListener('click', () => {
     const r = $('map-canvas').getBoundingClientRect();
     viewer.zoomAt(r.width / 2, r.height / 2, 1.25);
   });
-  $('btn-zoom-out').addEventListener('click', () => {
+  if (zout) zout.addEventListener('click', () => {
     const r = $('map-canvas').getBoundingClientRect();
     viewer.zoomAt(r.width / 2, r.height / 2, 1 / 1.25);
   });
-  $('btn-zoom-fit').addEventListener('click', () => viewer.fitToScreen());
+  if (zfit) zfit.addEventListener('click', () => viewer.fitToScreen());
 
-  $('btn-export').addEventListener('click', () => {
-    exportCanvasAndOutline();
+  const dlBtn = $('btn-download-snapshot');
+  if (dlBtn) dlBtn.addEventListener('click', () => exportCanvasAndOutline());
+
+  const importBtn = $('btn-import');
+  if (importBtn) importBtn.addEventListener('click', () => {
+    confirmWithWord({
+      title: tr('import_confirm_title'),
+      message: tr('import_confirm_message'),
+      requireWord: tr('import_confirm_word'),
+      confirmLabel: tr('import_confirm_ok'),
+      onConfirm: () => $('file-import').click(),
+    });
   });
-
-  $('btn-import').addEventListener('click', () => $('file-import').click());
   $('file-import').addEventListener('change', async (e) => {
     const f = e.target.files[0];
     if (!f) return;
@@ -1147,27 +1269,61 @@ function setupToolbar() {
     e.target.value = '';
   });
 
-  $('btn-reset').addEventListener('click', () => {
-    editorModal.showConfirm({
+  const resetBtn = $('btn-reset');
+  if (resetBtn) resetBtn.addEventListener('click', () => {
+    confirmWithWord({
       title: tr('reset_title'),
       message: tr('reset_message'),
-      actions: [
-        { label: tr('editor_cancel_button'), kind: 'cancel', fn: () => editorModal.hideConfirm() },
-        { label: tr('reset_confirm'),        kind: 'danger', fn: () => {
-          editorModal.hideConfirm();
-          clearState();
-          window.location.reload();
-        } },
-      ],
+      requireWord: tr('reset_confirm_word'),
+      confirmLabel: tr('reset_confirm'),
+      onConfirm: () => { clearState(); window.location.reload(); },
     });
   });
+}
 
-  const outlineBtn = $('btn-outline');
-  if (outlineBtn) outlineBtn.addEventListener('click', () => outlinePanel && outlinePanel.toggle());
-  const minimapBtn = $('btn-minimap');
-  if (minimapBtn) minimapBtn.addEventListener('click', () => minimap && minimap.toggle());
-  const paletteBtn = $('btn-palette');
-  if (paletteBtn) paletteBtn.addEventListener('click', () => commandPalette && commandPalette.open());
+function confirmWithWord(opts) {
+  const modal = $('confirm-modal');
+  const titleEl = $('confirm-title');
+  const messageEl = $('confirm-message');
+  const actionsEl = $('confirm-actions');
+  const wordIn = $('confirm-word-input');
+  if (!modal || !titleEl || !actionsEl) {
+    if (opts.onConfirm) opts.onConfirm();
+    return;
+  }
+  titleEl.textContent = opts.title || tr('reset_title');
+  messageEl.textContent = opts.message || '';
+  actionsEl.innerHTML = '';
+  if (opts.requireWord) {
+    wordIn.style.display = 'block';
+    wordIn.value = '';
+    wordIn.placeholder = opts.requireWord;
+    setTimeout(() => wordIn.focus(), 30);
+  } else {
+    wordIn.style.display = 'none';
+  }
+  const close = () => modal.classList.remove('open');
+  const cancel = document.createElement('button');
+  cancel.className = 'modal-btn cancel';
+  cancel.textContent = tr('editor_cancel_button');
+  cancel.addEventListener('click', close);
+  const ok = document.createElement('button');
+  ok.className = 'modal-btn danger';
+  ok.textContent = opts.confirmLabel || tr('reset_confirm');
+  ok.disabled = !!opts.requireWord;
+  ok.addEventListener('click', () => {
+    if (opts.requireWord && wordIn.value !== opts.requireWord) return;
+    close();
+    if (typeof opts.onConfirm === 'function') opts.onConfirm();
+  });
+  if (opts.requireWord) {
+    wordIn.addEventListener('input', () => {
+      ok.disabled = wordIn.value !== opts.requireWord;
+    });
+  }
+  actionsEl.appendChild(cancel);
+  actionsEl.appendChild(ok);
+  modal.classList.add('open');
 }
 
 function exportCanvasAndOutline() {
@@ -1184,17 +1340,6 @@ function exportCanvasAndOutline() {
     setTimeout(() => URL.revokeObjectURL(url), 200);
   }
   toast(tr('toast_exported'));
-}
-
-function setupLangSelect() {
-  const sel = $('lang-select');
-  if (!sel) return;
-  sel.value = getLang();
-  sel.addEventListener('change', () => {
-    if (LANGS.includes(sel.value)) {
-      setLang(sel.value);
-    }
-  });
 }
 
 function applyStaticTranslations() {
@@ -1223,14 +1368,13 @@ function setMode(mode) {
   state.mode = mode;
   viewer.setMode(mode);
   if (arrowLayer) arrowLayer.setMode(mode);
-  document.querySelectorAll('.mode-switch button').forEach((b) => {
-    b.classList.toggle('active', b.dataset.mode === mode);
-  });
   document.body.classList.toggle('editor-mode', mode === 'editor');
+  if (leftRail) leftRail.setActiveMode(mode);
   if (mode !== 'editor') {
     state.selection = new Set();
     if (viewer) viewer.setSelection(new Set());
     refreshSelectionStatus();
+    pendingTextClick = false;
   }
 }
 
@@ -1246,15 +1390,21 @@ async function loadInitialData() {
       const remote = await apiGetCanvas();
       if (remote && remote.data && Array.isArray(remote.data.nodes) && Array.isArray(remote.data.edges)) {
         state.backendOnline = true;
+        backendOfflineMode = 'online';
         state.revision = Number(remote.revision) || 0;
         await ingestCanvasData(remote.data);
         return;
       }
+      backendOfflineMode = 'unreachable';
     } catch (e) {
+      backendOfflineMode = 'unreachable';
       console.warn('[app] backend fetch failed, falling back to local file:', e && e.message);
     }
+  } else {
+    backendOfflineMode = 'placeholder';
   }
   state.backendOnline = false;
+  if (backendOfflineMode === 'unreachable') startBackendRetry();
   refreshOfflineBanner();
 
   const loaded = await loadCanvas();
@@ -1440,9 +1590,224 @@ function refreshRealtimeStatusLabel() {
 function refreshOfflineBanner() {
   const b = $('offline-banner');
   if (!b) return;
-  if (state.backendOnline) b.classList.remove('open');
-  else b.classList.add('open');
-  b.textContent = tr('offline_banner');
+  if (state.backendOnline) { b.classList.remove('open'); return; }
+  b.classList.add('open');
+  if (backendOfflineMode === 'placeholder') {
+    b.textContent = tr('offline_banner_local');
+  } else if (backendOfflineMode === 'unreachable') {
+    b.textContent = tr('offline_banner_unreachable');
+  } else {
+    b.textContent = tr('offline_banner');
+  }
+}
+
+function startBackendRetry() {
+  if (backendRetryTimer) return;
+  if (isPlaceholderApiBase()) return;
+  backendRetryTimer = setTimeout(async () => {
+    backendRetryTimer = null;
+    try {
+      const r = await apiGetCanvas();
+      if (r) {
+        const wasOffline = !state.backendOnline;
+        state.backendOnline = true;
+        state.revision = Number(r.revision) || 0;
+        await ingestCanvasData(r.data);
+        refreshOfflineBanner();
+        if (realtime) realtime._reconnectNow();
+        if (wasOffline) toast(tr('backend_reconnected'));
+      } else {
+        startBackendRetry();
+      }
+    } catch (e) {
+      startBackendRetry();
+    }
+  }, BACKEND_RETRY_MS);
+}
+
+async function doCopy() {
+  if (!isLoggedIn() && state.mode !== 'editor') return;
+  if (state.selection.size === 0) return;
+  const ids = Array.from(state.selection);
+  const allIds = new Set();
+  for (const id of ids) {
+    allIds.add(id);
+    const n = findNode(state.nodes, id);
+    if (n && isGroupNode(n)) {
+      for (const sid of groupDescendantIds(state.nodes, id)) allIds.add(sid);
+    }
+  }
+  const nodes = [];
+  for (const id of allIds) {
+    const n = findNode(state.nodes, id);
+    if (!n) continue;
+    nodes.push(JSON.parse(JSON.stringify(n)));
+  }
+  const edges = [];
+  for (const e of state.edges.values()) {
+    if (allIds.has(e.fromNode) && allIds.has(e.toNode)) edges.push(JSON.parse(JSON.stringify(e)));
+  }
+  await clipboardMgr.copyPayload({ nodes, edges });
+  toast(tr('copy_paste_copied', { n: nodes.length }));
+}
+
+async function doPaste() {
+  if (state.mode !== 'editor') return;
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  const sysPayload = await clipboardMgr.readSystemPayload();
+  if (sysPayload && sysPayload.kind === 'image' && sysPayload.blob) {
+    await pasteImage(sysPayload.blob);
+    return;
+  }
+  let payload = null;
+  if (sysPayload && sysPayload.kind === 'nodes_payload') payload = sysPayload.payload;
+  else if (clipboardMgr.hasInternal()) payload = clipboardMgr.getInternal();
+  else if (sysPayload && sysPayload.kind === 'text' && sysPayload.text) {
+    pasteText(sysPayload.text);
+    return;
+  }
+  if (!payload || !Array.isArray(payload.nodes) || payload.nodes.length === 0) {
+    toast(tr('copy_paste_clipboard_empty'));
+    return;
+  }
+  instantiatePastedNodes(payload, 20, 20);
+}
+
+async function doDuplicate() {
+  if (state.mode !== 'editor') return;
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  if (state.selection.size === 0) return;
+  await doCopy();
+  await doPaste();
+}
+
+function pasteText(text) {
+  const pt = viewer.imagePointFromClient(window.innerWidth / 2, window.innerHeight / 2);
+  const rect = { x: Math.round(pt.x), y: Math.round(pt.y), w: 280, h: 80 };
+  pushHistory();
+  const id = uniqueId(state.nodes, 'text');
+  addTextNode(state.nodes, { id, rect, md: text });
+  refreshPuzzleViewsInViewer();
+  const newNode = findNode(state.nodes, id);
+  if (newNode) pushNodeCreate(toViewShape(newNode), text);
+  scheduleSave();
+  toast(tr('copy_paste_pasted', { n: 1 }));
+}
+
+async function pasteImage(blob) {
+  if (!isLoggedIn() || !state.backendOnline) return;
+  try {
+    const converted = await convertImageBlobToWebP(blob);
+    const finalBlob = converted || blob;
+    const name = converted ? 'paste.webp' : 'paste.png';
+    const result = await apiUploadImage(finalBlob, name);
+    if (!result || !result.url) return;
+    const dims = await readBlobDims(finalBlob).catch(() => null);
+    const w = dims ? Math.min(400, dims.w) : 300;
+    const h = dims ? Math.round(w * (dims.h / dims.w)) : 200;
+    const pt = viewer.imagePointFromClient(window.innerWidth / 2, window.innerHeight / 2);
+    const rect = { x: Math.round(pt.x - w / 2), y: Math.round(pt.y - h / 2), w, h };
+    await placeUploadedImageNode({
+      file: result.url, imageId: result.id || null, sha256: result.sha256 || null,
+      mime: result.mime || finalBlob.type, size: result.size || finalBlob.size,
+      name, rect,
+    });
+    toast(tr('copy_paste_pasted', { n: 1 }));
+  } catch (e) {
+    console.warn('[app] paste image failed', e);
+    toast(tr('upload_image_failed'), 'error');
+  }
+}
+
+function readBlobDims(blob) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      const w = img.naturalWidth || img.width || 0;
+      const h = img.naturalHeight || img.height || 0;
+      try { URL.revokeObjectURL(url); } catch (e) { void e; }
+      resolve({ w, h });
+    };
+    img.onerror = (e) => {
+      try { URL.revokeObjectURL(url); } catch (er) { void er; }
+      reject(e || new Error('img_dim_failed'));
+    };
+    img.src = url;
+  });
+}
+
+function instantiatePastedNodes(payload, dx, dy) {
+  pushHistory();
+  const idMap = new Map();
+  const newNodes = [];
+  for (const raw of payload.nodes) {
+    if (!raw || typeof raw.id !== 'string') continue;
+    const newId = uniqueId(state.nodes, `${raw.kind || raw.type || 'node'}-paste`);
+    idMap.set(raw.id, newId);
+    const clone = JSON.parse(JSON.stringify(raw));
+    clone.id = newId;
+    clone.x = (Number(clone.x) || 0) + dx;
+    clone.y = (Number(clone.y) || 0) + dy;
+    clone.slug = newId;
+    if (clone.parent && idMap.has(clone.parent)) {
+      clone.parent = idMap.get(clone.parent);
+    } else if (clone.parent && !idMap.has(clone.parent) && !state.nodes.has(clone.parent)) {
+      delete clone.parent;
+    }
+    state.nodes.set(newId, clone);
+    newNodes.push(clone);
+  }
+  if (Array.isArray(payload.edges)) {
+    for (const raw of payload.edges) {
+      if (!raw) continue;
+      const fromNew = idMap.get(raw.fromNode);
+      const toNew = idMap.get(raw.toNode);
+      if (!fromNew || !toNew) continue;
+      const clone = JSON.parse(JSON.stringify(raw));
+      clone.id = uniqueId(state.nodes, `${raw.id}-paste`);
+      clone.fromNode = fromNew;
+      clone.toNode = toNew;
+      state.edges.set(clone.id, clone);
+      if (arrowLayer) arrowLayer.setEdges(state.edges);
+    }
+  }
+  state.selection = new Set(Array.from(idMap.values()));
+  refreshPuzzleViewsInViewer();
+  if (viewer) viewer.setSelection(state.selection);
+  for (const n of newNodes) {
+    pushNodeCreate(toViewShape(n), typeof n.text === 'string' ? n.text : '');
+  }
+  scheduleSave();
+  refreshSelectionStatus();
+  toast(tr('copy_paste_pasted', { n: newNodes.length }));
+}
+
+async function convertImageBlobToWebP(blob) {
+  if (!blob || !blob.type) return null;
+  if (blob.type === 'image/webp') return null;
+  try {
+    const url = URL.createObjectURL(blob);
+    const img = await new Promise((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = (e) => reject(e);
+      i.src = url;
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width  = img.naturalWidth  || img.width;
+    canvas.height = img.naturalHeight || img.height;
+    const cx = canvas.getContext('2d');
+    cx.drawImage(img, 0, 0);
+    const out = await new Promise((resolve) => {
+      canvas.toBlob((b) => resolve(b), 'image/webp', 0.9);
+    });
+    try { URL.revokeObjectURL(url); } catch (e) { void e; }
+    return out;
+  } catch (e) {
+    console.warn('[app] webp convert failed', e);
+    return null;
+  }
 }
 
 async function pushNodeCreate(view, md) {
@@ -1581,85 +1946,18 @@ function setupOutline() {
   });
 }
 
-function setupCommandPalette() {
-  commandPalette = new CommandPalette({
-    container: document.body,
-    getEntries: () => collectCommandEntries(),
-    onActivate: () => {},
-  });
-}
-
-function collectCommandEntries() {
-  const out = [];
-  for (const n of state.nodes.values()) {
-    if (!isPuzzleNode(n)) continue;
-    const view = toViewShape(n);
-    out.push({
-      id: `node:${n.id}`,
-      category: 'nodes',
-      title: view.title,
-      hint: view.status,
-      fn: () => {
-        viewer.centerOnHotspot(view);
-        viewer.setActiveId(n.id);
-        sidePanel.open(view);
-      },
-    });
-  }
-  out.push(
-    { id: 'cmd:toggle-minimap',  category: 'commands', title: tr('command_toggle_minimap'),  hint: 'M',     fn: () => minimap && minimap.toggle() },
-    { id: 'cmd:toggle-outline',  category: 'commands', title: tr('command_toggle_outline'),  hint: 'O',     fn: () => outlinePanel && outlinePanel.toggle() },
-    { id: 'cmd:reset-zoom',      category: 'commands', title: tr('command_reset_zoom'),      hint: '0',     fn: () => viewer && resetZoom() },
-    { id: 'cmd:fit-all',         category: 'commands', title: tr('command_fit_all'),         hint: '',      fn: () => viewer && viewer.fitToScreen() },
-    { id: 'cmd:export-canvas',   category: 'commands', title: tr('command_export_canvas'),   hint: '',      fn: () => exportCanvasAndOutline() },
-    { id: 'cmd:import-canvas',   category: 'commands', title: tr('command_import_canvas'),   hint: '',      fn: () => $('file-import') && $('file-import').click() },
-    { id: 'cmd:switch-viewer',   category: 'commands', title: tr('command_switch_viewer'),   hint: 'E',     fn: () => setMode('viewer') },
-    { id: 'cmd:switch-editor',   category: 'commands', title: tr('command_switch_editor'),   hint: 'E',     fn: () => setMode('editor') },
-    { id: 'cmd:show-shortcuts',  category: 'commands', title: tr('command_show_shortcuts'),  hint: '?',     fn: () => keyboard && keyboard.showOverlay() },
-    { id: 'cmd:change-language', category: 'commands', title: tr('command_change_language'), hint: '',      fn: () => commandPalette.enterLangSubmode() },
-  );
-  out.push(
-    { id: 'filter:solved',     category: 'filters', title: `${tr('filter_all')} -> ${tr('filter_solved')}`,   fn: () => statusFilter.apply('solved',   new Set(['solved'])) },
-    { id: 'filter:partial',    category: 'filters', title: `${tr('filter_all')} -> ${tr('filter_partial')}`,  fn: () => statusFilter.apply('partial',  new Set(['partial'])) },
-    { id: 'filter:unsolved',   category: 'filters', title: `${tr('filter_all')} -> ${tr('filter_unsolved')}`, fn: () => statusFilter.apply('unsolved', new Set(['unsolved'])) },
-    { id: 'filter:dead-end',   category: 'filters', title: `${tr('filter_all')} -> ${tr('filter_dead_end')}`, fn: () => statusFilter.apply('dead-end', new Set(['dead-end'])) },
-    { id: 'filter:clear',      category: 'filters', title: tr('filter_clear'), fn: () => statusFilter.clear() },
-  );
-  if (outlinePanel) {
-    const items = outlinePanel.getItems();
-    for (let i = 0; i < items.length; i++) {
-      const it = items[i];
-      out.push({
-        id: `outline:${i}`,
-        category: 'outline',
-        title: it.title || it.nodeId || `(#${i + 1})`,
-        hint: it.note || '',
-        fn: () => {
-          const n = findNode(state.nodes, it.nodeId);
-          if (!n) return;
-          const view = toViewShape(n);
-          viewer.centerOnHotspot(view);
-          viewer.setActiveId(it.nodeId);
-          sidePanel.open(view);
-          if (outlinePanel) outlinePanel.open();
-        },
-      });
-    }
-  }
-  out.push({ id: 'setting:detective', category: 'settings', title: tr('command_toggle_detective'), fn: () => toggleDetectiveTheme() });
-  return out;
-}
-
 function setupKeyboard() {
   keyboard = new KeyboardShortcuts({
     overlayContainer: document.body,
     handlers: {
-      onCommandPalette: () => commandPalette && commandPalette.open(),
+      onCommandPalette: () => {
+        const s = $('search');
+        if (s) { s.focus(); s.select(); }
+      },
+      onCopy: () => doCopy(),
+      onPaste: () => doPaste(),
+      onDuplicate: () => doDuplicate(),
       onEscape: () => {
-        if (commandPalette && commandPalette.isOpen()) {
-          commandPalette.close();
-          return;
-        }
         if (sidePanel && sidePanel.isOpen()) {
           sidePanel.requestClose();
           return;
@@ -1791,9 +2089,14 @@ function confirmDeleteSelected() {
   const n = findNode(state.nodes, id);
   if (!n || !isPuzzleNode(n)) return false;
   const view = toViewShape(n);
+  let message = tr('delete_node_prompt', { label: view.title });
+  if (isGroupNode(n)) {
+    const descCount = groupDescendantIds(state.nodes, id).size;
+    message = tr('delete_group_prompt', { label: view.title, n: descCount });
+  }
   editorModal.showConfirm({
     title: tr('editor_delete_title'),
-    message: tr('context_delete_confirm_msg', { title: view.title }),
+    message,
     actions: [
       { label: tr('editor_cancel_button'), kind: 'cancel', fn: () => editorModal.hideConfirm() },
       { label: tr('editor_delete_button'), kind: 'danger', fn: () => {
@@ -1825,16 +2128,17 @@ function readStoredThemeChoice() {
   try {
     const raw = localStorage.getItem(THEME_KEY);
     if (THEME_CHOICES.includes(raw)) return raw;
+    if (raw === 'light') return 'white';
   } catch (e) { void e; }
-  return 'light';
+  return 'white';
 }
 
 function resolveTheme(choice) {
-  if (choice === 'dark' || choice === 'light') return choice;
+  if (choice === 'dark' || choice === 'white' || choice === 'graphite') return choice;
   try {
     if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark';
   } catch (e) { void e; }
-  return 'light';
+  return 'white';
 }
 
 function applyTheme(choice) {
@@ -1847,27 +2151,12 @@ function applyTheme(choice) {
   if (minimap && typeof minimap.refreshPalette === 'function') {
     minimap.refreshPalette();
   }
-  document.querySelectorAll('#theme-switch button').forEach((btn) => {
-    btn.classList.toggle('active', btn.dataset.themeValue === choice);
-  });
+  if (leftRail) leftRail.setThemeChoice(choice);
 }
 
 function setupThemeSwitch() {
   const choice = readStoredThemeChoice();
   applyTheme(choice);
-
-  const root = document.getElementById('theme-switch');
-  if (root) {
-    root.querySelectorAll('button[data-theme-value]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const next = btn.dataset.themeValue;
-        if (!THEME_CHOICES.includes(next)) return;
-        try { localStorage.setItem(THEME_KEY, next); } catch (e) { void e; }
-        applyTheme(next);
-      });
-    });
-  }
-
   try {
     const mq = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
     if (mq && typeof mq.addEventListener === 'function') {
@@ -1880,21 +2169,6 @@ function setupThemeSwitch() {
       });
     }
   } catch (e) { void e; }
-}
-
-function setupDetectiveTheme() {
-  let enabled = false;
-  try { enabled = localStorage.getItem(DETECTIVE_KEY) === '1'; }
-  catch (e) { void e; }
-  if (enabled) document.body.classList.add('detective');
-}
-
-function toggleDetectiveTheme() {
-  const next = !document.body.classList.contains('detective');
-  document.body.classList.toggle('detective', next);
-  try { localStorage.setItem(DETECTIVE_KEY, next ? '1' : '0'); }
-  catch (e) { void e; }
-  viewer.setBackgroundFromCSS();
 }
 
 window.addEventListener('DOMContentLoaded', () => {

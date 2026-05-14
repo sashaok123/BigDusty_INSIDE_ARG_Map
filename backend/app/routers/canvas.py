@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSock
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..audit import log_action
 from ..database import get_db, get_session_factory
 from ..deps import get_current_user
 from ..models import Canvas, User
@@ -108,7 +109,9 @@ async def replace_canvas(
             status_code=status.HTTP_409_CONFLICT,
             detail={"message": "Revision mismatch", "current_revision": canvas.revision},
         )
+    node_count = len(payload.data.get("nodes", [])) if isinstance(payload.data, dict) else 0
     canvas.data = _ensure_lists(deepcopy(payload.data))
+    await log_action(db, user.id, "canvas_replaced", {"node_count": node_count, "revision": canvas.revision})
     await _bump_and_broadcast(db, canvas, user, "canvas_replaced", None, None)
     return CanvasOut(revision=canvas.revision, data=_ensure_lists(deepcopy(canvas.data or {})))
 

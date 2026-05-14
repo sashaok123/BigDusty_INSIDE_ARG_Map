@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..audit import log_action
 from ..database import get_db
 from ..deps import get_current_user
 from ..models import CanvasImage, User
@@ -80,6 +81,8 @@ async def upload_image(
             "size": again.size,
         }
     await db.refresh(record)
+    await log_action(db, user.id, "image_uploaded", {"image_id": str(record.id), "mime": record.mime, "size": record.size, "sha256": record.sha256})
+    await db.commit()
     return {
         "id": str(record.id),
         "url": _image_url(canvas_id, record.id),

@@ -472,6 +472,7 @@ export class Viewer {
     for (const h of this.hotspots) {
       if (!this._isVisible(h)) continue;
       if (h.kind === 'sticky') this._drawSticky(ctx, h, lod);
+      else if (h.kind === 'text') this._drawText(ctx, h, lod);
       else this._drawHotspot(ctx, h, lod);
     }
 
@@ -572,6 +573,43 @@ export class Viewer {
       const maxChars = Math.max(8, Math.floor(w / (fontPx * 0.55)));
       const shown = text.length > maxChars ? text.slice(0, maxChars - 1) + '…' : text;
       ctx.fillText(shown, x + padding, y + padding);
+    }
+    ctx.restore();
+  }
+
+  _drawText(ctx, h, lod) {
+    const { x, y, w, h: hh } = h.rect;
+    const isHover = this.hoverId === h.id || this.activeId === h.id || this.selection.has(h.id);
+    const isOutlineHL = this.outlineHighlightId === h.id;
+    ctx.save();
+    if (this.scale > 0.25 && lod && lod.edgeLabelsVisible) {
+      const fontPx = Math.max(11, Math.min(20, 14 / this.scale));
+      ctx.font = `400 ${fontPx}px var(--font-ui)`;
+      ctx.fillStyle = this.statusPalette.unsolved ? this.statusPalette.unsolved.stroke : this.borderColour;
+      ctx.fillStyle = readCssVar('--text', '#16181c');
+      ctx.textBaseline = 'top';
+      const text = h.title || '';
+      const maxChars = Math.max(8, Math.floor(w / (fontPx * 0.55)));
+      const shown = text.length > maxChars ? text.slice(0, maxChars - 1) + '…' : text;
+      ctx.fillText(shown, x, y);
+    }
+    if (this.mode === 'editor' && (isHover || isOutlineHL || this.selection.has(h.id))) {
+      ctx.lineWidth = 1.4 / this.scale;
+      ctx.strokeStyle = this.accentColour;
+      ctx.setLineDash([6 / this.scale, 4 / this.scale]);
+      ctx.strokeRect(x, y, w, hh);
+      ctx.setLineDash([]);
+      if (lod && lod.handlesVisible) {
+        ctx.fillStyle = this.accentColour;
+        ctx.strokeStyle = this.handleStrokeColour;
+        ctx.lineWidth = 1.4 / this.scale;
+        const handles = this._handlePositions(x, y, w, hh);
+        const hs = HANDLE_SIZE / this.scale;
+        for (const { hx, hy } of handles) {
+          ctx.fillRect(hx - hs / 2, hy - hs / 2, hs, hs);
+          ctx.strokeRect(hx - hs / 2, hy - hs / 2, hs, hs);
+        }
+      }
     }
     ctx.restore();
   }

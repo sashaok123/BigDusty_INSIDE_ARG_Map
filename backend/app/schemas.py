@@ -130,3 +130,12 @@ class CanvasChange(BaseModel):
     kind: ChangeKind
     id: str | None = None
     data: dict[str, Any] | None = None
+
+
+class AuditEntryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    user_id: uuid.UUID | None = None
+    action: str
+    payload: dict[str, Any] | None = None
+    created_at: Any

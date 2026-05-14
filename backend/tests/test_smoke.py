@@ -230,3 +230,73 @@ async def test_image_upload_requires_auth(client):
     files = {"file": ("anon.png", _TINY_PNG, "image/png")}
     resp = await client.post("/canvas/main/images", files=files)
     assert resp.status_code == 401
+
+
+async def test_audit_log_records_login_and_image_upload(client, admin_token):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    files = {"file": ("audit.png", _TINY_PNG, "image/png")}
+    upload = await client.post("/canvas/main/images", files=files, headers=headers)
+    assert upload.status_code == 201
+
+    audit = await client.get("/admin/audit", headers=headers)
+    assert audit.status_code == 200, audit.text
+    rows = audit.json()
+    assert isinstance(rows, list)
+    actions = {r["action"] for r in rows}
+    assert "login" in actions
+    assert "image_uploaded" in actions
+
+
+async def test_audit_log_requires_admin(client):
+    resp = await client.get("/admin/audit")
+    assert resp.status_code == 401
+
+
+async def test_audit_log_records_canvas_replace(client, admin_token):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    base = await client.get("/canvas/main")
+    rev0 = base.json()["revision"]
+    body = {
+        "data": {"nodes": [{"id": "node_audit", "type": "text", "x": 0, "y": 0, "width": 10, "height": 10, "text": "x"}], "edges": []},
+        "expected_revision": rev0,
+    }
+    resp = await client.put("/canvas/main", json=body, headers=headers)
+    assert resp.status_code == 200
+    audit = await client.get("/admin/audit", headers=headers)
+    assert audit.status_code == 200
+    actions = [r["action"] for r in audit.json()]
+    assert "canvas_replaced" in actions
+
+
+async def test_node_translations_persist(client, admin_token):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    create = await client.post(
+        "/canvas/main/nodes",
+        json={
+            "id": "node_translate",
+            "type": "text",
+            "x": 0, "y": 0, "width": 100, "height": 50,
+            "text": "Hello in English",
+            "translations": {
+                "ru": {"label": "Привет", "body": "Текст по-русски"},
+                "de": {"label": "Hallo", "body": "Deutscher Text"},
+            },
+        },
+        headers=headers,
+    )
+    assert create.status_code == 201, create.text
+    snap = await client.get("/canvas/main")
+    node = next(n for n in snap.json()["data"]["nodes"] if n["id"] == "node_translate")
+    assert node["translations"]["ru"]["label"] == "Привет"
+    assert node["translations"]["de"]["body"] == "Deutscher Text"
+
+    patch = await client.patch(
+        "/canvas/main/nodes/node_translate",
+        json={"translations": {"ru": {"label": "Здравствуй"}, "it": {"label": "Ciao"}}},
+        headers=headers,
+    )
+    assert patch.status_code == 200
+    snap2 = await client.get("/canvas/main")
+    node2 = next(n for n in snap2.json()["data"]["nodes"] if n["id"] == "node_translate")
+    assert node2["translations"]["ru"]["label"] == "Здравствуй"
+    assert node2["translations"]["it"]["label"] == "Ciao"

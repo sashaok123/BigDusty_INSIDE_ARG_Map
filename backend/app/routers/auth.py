@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..audit import log_action
 from ..database import get_db
 from ..deps import get_current_user
 from ..models import Invitation, RefreshToken, User
@@ -46,6 +47,7 @@ async def login(payload: LoginRequest, db: Annotated[AsyncSession, Depends(get_d
     jti = make_jti()
     refresh, exp_at = create_refresh_token(user.id, jti)
     db.add(RefreshToken(jti=jti, user_id=user.id, expires_at=exp_at, revoked=False))
+    await log_action(db, user.id, "login", {"username": user.username_display})
     await db.commit()
     return TokenPair(access_token=access, refresh_token=refresh, user=UserOut.model_validate(user))
 
@@ -106,6 +108,7 @@ async def change_password(
     if not verify_password(payload.old_password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Old password incorrect")
     user.password_hash = hash_password(payload.new_password)
+    await log_action(db, user.id, "password_changed", None)
     await db.commit()
     return None
 
@@ -172,5 +175,6 @@ async def setup_account(
     jti = make_jti()
     refresh, exp_at = create_refresh_token(user.id, jti)
     db.add(RefreshToken(jti=jti, user_id=user.id, expires_at=exp_at, revoked=False))
+    await log_action(db, user.id, "account_setup", {"username": user.username_display, "is_admin": user.is_admin})
     await db.commit()
     return TokenPair(access_token=access, refresh_token=refresh, user=UserOut.model_validate(user))

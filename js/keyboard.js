@@ -71,6 +71,21 @@ export class KeyboardShortcuts {
       else this._call('onGroupSelection', ev);
       return;
     }
+    if (meta && (k === 'c' || k === 'C')) {
+      ev.preventDefault();
+      this._call('onCopy', ev);
+      return;
+    }
+    if (meta && (k === 'v' || k === 'V')) {
+      ev.preventDefault();
+      this._call('onPaste', ev);
+      return;
+    }
+    if (meta && (k === 'd' || k === 'D')) {
+      ev.preventDefault();
+      this._call('onDuplicate', ev);
+      return;
+    }
     if (k === 'm' || k === 'M') {
       if (meta) return;
       ev.preventDefault();
@@ -173,7 +188,7 @@ export class KeyboardShortcuts {
   _renderOverlay() {
     const sections = [
       { titleKey: 'shortcut_section_general', rows: [
-        { keys: ['Ctrl', 'K'],   descKey: 'shortcut_desc_palette' },
+        { keys: ['Ctrl', 'K'],   descKey: 'shortcut_desc_search' },
         { keys: ['?'],           descKey: 'shortcut_desc_shortcuts' },
         { keys: ['Esc'],         descKey: 'shortcut_desc_escape' },
       ]},
@@ -187,6 +202,9 @@ export class KeyboardShortcuts {
         { keys: ['Tab'],         descKey: 'shortcut_desc_child' },
         { keys: ['Enter'],       descKey: 'shortcut_desc_sibling' },
         { keys: ['Del'],         descKey: 'shortcut_desc_delete' },
+        { keys: ['Ctrl', 'C'],   descKey: 'shortcut_desc_copy' },
+        { keys: ['Ctrl', 'V'],   descKey: 'shortcut_desc_paste' },
+        { keys: ['Ctrl', 'D'],   descKey: 'shortcut_desc_duplicate' },
         { keys: ['Ctrl', 'Z'],   descKey: 'shortcut_desc_undo' },
         { keys: ['Ctrl', 'Shift', 'Z'], descKey: 'shortcut_desc_redo' },
       ]},

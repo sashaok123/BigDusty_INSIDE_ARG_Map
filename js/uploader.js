@@ -133,9 +133,17 @@ export class Uploader {
       if (reason === 'invalid_type') { this.onToast(tr('upload_image_invalid_type'), 'error'); continue; }
       if (reason === 'too_large')   { this.onToast(tr('upload_image_too_large'),  'error'); continue; }
       try {
-        const result = await this.onUpload(f);
+        let toUpload = f;
+        if (f.type && f.type !== 'image/webp') {
+          const converted = await this._convertToWebP(f).catch(() => null);
+          if (converted) {
+            const baseName = (f.name || 'image').replace(/\.[^.]+$/, '') + '.webp';
+            toUpload = new File([converted], baseName, { type: 'image/webp' });
+          }
+        }
+        const result = await this.onUpload(toUpload);
         if (!result || !result.url) continue;
-        const dims = await this._readImageDims(f).catch(() => null);
+        const dims = await this._readImageDims(toUpload).catch(() => null);
         const w = dims ? dims.w : 400;
         const h = dims ? dims.h : 300;
         const longest = Math.max(w, h) || 1;
@@ -174,6 +182,35 @@ export class Uploader {
       }
     }
     if (placed > 0) this.onToast(tr('upload_image_success', { n: placed }));
+  }
+
+  _convertToWebP(blob) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width  = img.naturalWidth  || img.width;
+          canvas.height = img.naturalHeight || img.height;
+          const cx = canvas.getContext('2d');
+          cx.drawImage(img, 0, 0);
+          canvas.toBlob((b) => {
+            try { URL.revokeObjectURL(url); } catch (e) { void e; }
+            if (b) resolve(b);
+            else reject(new Error('webp_conv_null'));
+          }, 'image/webp', 0.9);
+        } catch (e) {
+          try { URL.revokeObjectURL(url); } catch (er) { void er; }
+          reject(e);
+        }
+      };
+      img.onerror = (e) => {
+        try { URL.revokeObjectURL(url); } catch (er) { void er; }
+        reject(e || new Error('img_load_failed'));
+      };
+      img.src = url;
+    });
   }
 
   _defaultWorldPoint() {
