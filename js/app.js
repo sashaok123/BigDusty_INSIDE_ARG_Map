@@ -769,6 +769,14 @@ function setupArrowLayer() {
         trackSelfMutation('edge_created', id);
         apiCreateEdge({ ...edge }).then((r) => { if (r) state.revision = r.revision; })
           .catch((e) => { if (e && e.kind !== 'auth_expired') console.warn('[app] edge create', e); });
+  if (viewer && typeof viewer === 'object') {
+    viewer.onAnchorMouseDown = (ev, nodeId, side) => {
+      if (arrowLayer && typeof arrowLayer._beginDrawEdge === 'function') {
+        arrowLayer._beginDrawEdge(ev, nodeId, side);
+      }
+    };
+  }
+
       } else if (kind === 'update' && edge) {
         trackSelfMutation('edge_updated', id);
         apiPatchEdge(id, { ...edge }).then((r) => { if (r) state.revision = r.revision; })

@@ -1029,6 +1029,25 @@ export class Viewer {
 
       if (tool === 'select') {
         if (hover) {
+          const t = this.getTransform ? this.getTransform() : { scale: this.scale || 1 };
+          const sc = (t && t.scale) || this.scale || 1;
+          const anchorRadiusImg = 14 / sc;
+          const r = hover.rect;
+          const anchors = [
+            { side: 'left',   x: r.x,             y: r.y + r.h / 2 },
+            { side: 'right',  x: r.x + r.w,       y: r.y + r.h / 2 },
+            { side: 'top',    x: r.x + r.w / 2,   y: r.y           },
+            { side: 'bottom', x: r.x + r.w / 2,   y: r.y + r.h     },
+          ];
+          for (const a of anchors) {
+            const dx = img.x - a.x, dy = img.y - a.y;
+            if (dx*dx + dy*dy <= anchorRadiusImg * anchorRadiusImg) {
+              if (typeof this.onAnchorMouseDown === 'function') {
+                this.onAnchorMouseDown(ev, hover.id, a.side);
+                return;
+              }
+            }
+          }
           const locked = this._isLocked(hover.id);
           const handle = !locked ? this.handleAtImagePoint(hover, img) : null;
           if (handle && !ev.shiftKey) {
