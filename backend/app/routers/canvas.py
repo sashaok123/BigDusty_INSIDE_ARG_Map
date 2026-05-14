@@ -12,6 +12,7 @@ from ..audit import log_action
 from ..database import get_db, get_session_factory
 from ..deps import get_current_user
 from ..models import Canvas, User
+from ..snapshots import prune_snapshots, write_snapshot
 from ..schemas import (
     CanvasOut,
     CanvasReplaceRequest,
@@ -71,6 +72,8 @@ async def _bump_and_broadcast(
     canvas.revision = (canvas.revision or 0) + 1
     canvas.updated_by_user_id = user.id
     _mark_dirty(canvas)
+    await write_snapshot(db, canvas, user, kind)
+    await prune_snapshots(db, canvas.id)
     await db.commit()
     await db.refresh(canvas)
     change: dict[str, object] = {"kind": kind, "id": item_id, "data": item_data}
@@ -268,6 +271,8 @@ async def canvas_socket(
     canvas_id: str,
     token: Annotated[str | None, Query()] = None,
 ) -> None:
+    import json as _json
+
     factory = get_session_factory()
     async with factory() as db:
         canvas = await db.scalar(select(Canvas).where(Canvas.id == canvas_id))
@@ -278,8 +283,21 @@ async def canvas_socket(
     await manager.connect(canvas_id, ws)
     try:
         await ws.send_json({"type": "hello", "revision": canvas.revision})
+        await ws.send_json({"type": "presence", "users": manager.presence_users(canvas_id)})
         while True:
-            await ws.receive_text()
+            raw = await ws.receive_text()
+            try:
+                payload = _json.loads(raw)
+            except (ValueError, TypeError):
+                continue
+            if not isinstance(payload, dict):
+                continue
+            ptype = payload.get("type")
+            if ptype == "presence_hello":
+                cid = payload.get("client_id")
+                uname = payload.get("username") or "anonymous"
+                if isinstance(cid, str) and cid:
+                    await manager.register_presence(canvas_id, ws, cid, str(uname))
     except WebSocketDisconnect:
         pass
     finally:

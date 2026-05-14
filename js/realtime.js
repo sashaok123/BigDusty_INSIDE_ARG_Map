@@ -2,10 +2,12 @@
    backoff, exposes a small status surface (connected/connecting/offline) and
    fires `realtime:change` on document after every applied event. If the
    server jumps the revision by more than 1 a full canvas re-fetch is
-   triggered via the supplied `onResync` callback. */
+   triggered via the supplied `onResync` callback. Also handles presence
+   broadcasts (`presence`) and emits `presence_hello` on connect; presence
+   events are forwarded to document as `presence:update`. */
 
 import { wsBase, CANVAS_ID, isPlaceholderApiBase } from './config.js';
-import { getAccessToken, getCanvas, subscribeAuth, getClientId } from './api-client.js';
+import { getAccessToken, getCanvas, getCurrentUser, subscribeAuth, getClientId } from './api-client.js';
 
 const BACKOFF_STEPS = [1000, 2000, 4000, 10000];
 
@@ -80,6 +82,14 @@ export class Realtime {
     ws.addEventListener('open', () => {
       this._reconnectAttempts = 0;
       this._setStatus('connected');
+      try {
+        const u = getCurrentUser();
+        ws.send(JSON.stringify({
+          type: 'presence_hello',
+          client_id: getClientId(),
+          username: u && u.username ? u.username : 'anonymous',
+        }));
+      } catch (e) { void e; }
     });
     ws.addEventListener('message', (ev) => this._onMessage(ev));
     ws.addEventListener('close', () => {
@@ -113,6 +123,14 @@ export class Realtime {
       if (typeof msg.revision === 'number' && msg.revision !== local) {
         await this._fullResync();
       }
+      return;
+    }
+    if (msg.type === 'presence') {
+      try {
+        document.dispatchEvent(new CustomEvent('presence:update', {
+          detail: { users: Array.isArray(msg.users) ? msg.users : [] },
+        }));
+      } catch (e) { void e; }
       return;
     }
     if (msg.type !== 'revision') return;

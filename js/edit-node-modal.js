@@ -181,10 +181,10 @@ export class EditNodeModal {
 
     const captionField = el('div', { class: 'em-field' });
     const captionLabel = el('label', { text: tr('edit_modal_caption') });
+    const captionTextIn = el('textarea', { spellcheck: 'false', rows: '2', placeholder: '' });
+    captionTextIn.classList.add('em-caption-textarea');
+    const captionToolbarRef = buildMarkdownToolbar(() => captionTextIn);
     const captionRow = el('div', { class: 'em-caption-row' });
-    const captionTextIn = el('input', { type: 'text', placeholder: '' });
-    captionTextIn.style.flex = '2';
-    captionTextIn.style.minWidth = '120px';
     const captionSideSeg = el('div', { class: 'em-segmented' });
     const sideBtns = {};
     for (const s of SIDES) {
@@ -195,11 +195,13 @@ export class EditNodeModal {
     }
     const captionOffsetIn = el('input', { type: 'range', min: '4', max: '40', step: '1', value: '12' });
     const captionOffsetVal = el('span', { class: 'em-offset-value', text: '12 px' });
-    captionRow.appendChild(captionTextIn);
     captionRow.appendChild(captionSideSeg);
     captionRow.appendChild(captionOffsetIn);
     captionRow.appendChild(captionOffsetVal);
-    captionField.appendChild(captionLabel); captionField.appendChild(captionRow);
+    captionField.appendChild(captionLabel);
+    captionField.appendChild(captionToolbarRef.el);
+    captionField.appendChild(captionTextIn);
+    captionField.appendChild(captionRow);
     captionOffsetIn.addEventListener('input', () => {
       captionOffsetVal.textContent = `${captionOffsetIn.value} px`;
     });

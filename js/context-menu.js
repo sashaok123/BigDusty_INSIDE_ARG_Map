@@ -14,7 +14,6 @@ export const OWNED_SURFACES = [
   '#tb-overflow-menu',
   '#panel',
   '#minimap',
-  '#outline',
   '#edit-node-modal',
   '#editor-modal',
   '#confirm-modal',

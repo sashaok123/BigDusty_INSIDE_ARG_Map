@@ -309,6 +309,26 @@ export async function getAuditLog() {
   return _request('/admin/audit', { auth: true });
 }
 
+export async function listSnapshots(canvasId) {
+  const cid = encodeURIComponent(canvasId || CANVAS_ID);
+  return _request(`/admin/canvas/${cid}/snapshots`, { auth: true });
+}
+
+export async function getSnapshot(canvasId, snapshotId) {
+  const cid = encodeURIComponent(canvasId || CANVAS_ID);
+  const sid = encodeURIComponent(snapshotId);
+  return _request(`/admin/canvas/${cid}/snapshots/${sid}`, { auth: true });
+}
+
+export async function restoreSnapshot(canvasId, snapshotId) {
+  const cid = encodeURIComponent(canvasId || CANVAS_ID);
+  const sid = encodeURIComponent(snapshotId);
+  return _request(`/admin/canvas/${cid}/snapshots/${sid}/restore`, {
+    method: 'POST',
+    auth: true,
+  });
+}
+
 export async function checkInvitation(token) {
   return _request(`/auth/invitation/${encodeURIComponent(token)}`);
 }

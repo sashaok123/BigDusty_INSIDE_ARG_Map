@@ -14,7 +14,7 @@ from ..audit import log_action
 from ..config import get_settings
 from ..database import get_db
 from ..deps import require_admin
-from ..models import AuditLog, Invitation, User
+from ..models import AuditLog, Canvas, Invitation, User
 from ..schemas import (
     AuditEntryOut,
     CreateUserRequest,
@@ -22,9 +22,16 @@ from ..schemas import (
     InvitationOut,
     PatchUserRequest,
     ResetPasswordRequest,
+    SnapshotOut,
+    SnapshotRestoreOut,
+    SnapshotSummary,
     UserOut,
 )
 from ..security import hash_password, normalize_username
+from ..snapshots import get_snapshot as snap_get
+from ..snapshots import list_snapshots as snap_list
+from ..snapshots import prune_snapshots, write_snapshot
+from ..ws import manager as ws_manager
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -209,3 +216,69 @@ async def delete_invitation(
 async def get_audit_log(db: Annotated[AsyncSession, Depends(get_db)]) -> list[AuditEntryOut]:
     result = await db.scalars(select(AuditLog).order_by(AuditLog.created_at.desc()).limit(200))
     return [AuditEntryOut.model_validate(e) for e in result.all()]
+
+
+@router.get("/canvas/{canvas_id}/snapshots", response_model=list[SnapshotSummary])
+async def list_canvas_snapshots(
+    canvas_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[SnapshotSummary]:
+    rows = await snap_list(db, canvas_id)
+    return [SnapshotSummary(**r) for r in rows]
+
+
+@router.get("/canvas/{canvas_id}/snapshots/{snapshot_id}", response_model=SnapshotOut)
+async def get_canvas_snapshot(
+    canvas_id: str,
+    snapshot_id: uuid.UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SnapshotOut:
+    row = await snap_get(db, canvas_id, snapshot_id)
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Snapshot not found")
+    return SnapshotOut(**row)
+
+
+@router.post("/canvas/{canvas_id}/snapshots/{snapshot_id}/restore", response_model=SnapshotRestoreOut)
+async def restore_canvas_snapshot(
+    canvas_id: str,
+    snapshot_id: uuid.UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    actor: Annotated[User, Depends(require_admin)],
+) -> SnapshotRestoreOut:
+    snap = await snap_get(db, canvas_id, snapshot_id)
+    if snap is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Snapshot not found")
+    canvas = await db.scalar(select(Canvas).where(Canvas.id == canvas_id))
+    if canvas is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Canvas not found")
+    from copy import deepcopy
+    from sqlalchemy.orm.attributes import flag_modified
+
+    canvas.data = deepcopy(snap["data"] or {})
+    canvas.revision = (canvas.revision or 0) + 1
+    canvas.updated_by_user_id = actor.id
+    flag_modified(canvas, "data")
+    await write_snapshot(db, canvas, actor, f"canvas_restored:{snap['revision']}")
+    await prune_snapshots(db, canvas.id)
+    await log_action(db, actor.id, "canvas_restored", {
+        "source_snapshot_id": str(snapshot_id),
+        "source_revision": snap["revision"],
+        "new_revision": canvas.revision,
+    })
+    await db.commit()
+    await db.refresh(canvas)
+    await ws_manager.broadcast(
+        canvas.id,
+        {
+            "type": "revision",
+            "revision": canvas.revision,
+            "change": {"kind": "canvas_replaced", "id": None, "data": None},
+            "by": actor.username_display,
+        },
+    )
+    return SnapshotRestoreOut(
+        revision=canvas.revision,
+        data=canvas.data or {},
+        snapshot_id=snap["id"],
+    )

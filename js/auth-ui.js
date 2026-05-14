@@ -35,6 +35,7 @@ export class AuthUI {
     this.onLogin  = opts.onLogin  || (() => {});
     this.onLogout = opts.onLogout || (() => {});
     this.onMessage = opts.onMessage || (() => {});
+    this.adminHandlers = opts.adminHandlers || {};
     this._open = false;
     this._activeTab = 'users';
 
@@ -83,9 +84,9 @@ export class AuthUI {
       onclick: () => this.openLogin(),
     });
     btn.textContent = tr('sign_in_button');
-    const langWrap = $('lang-select-wrap');
-    if (langWrap && langWrap.parentNode) {
-      langWrap.parentNode.insertBefore(btn, langWrap);
+    const zoneRight = document.querySelector('#toolbar .tb-zone-right');
+    if (zoneRight) {
+      zoneRight.appendChild(btn);
     } else if (this.toolbarEl) {
       this.toolbarEl.appendChild(btn);
     }
@@ -173,9 +174,11 @@ export class AuthUI {
     const caret = el('span', { class: 'chip-caret', html: '&#9662;' });
     chip.appendChild(text); chip.appendChild(caret);
     chip.addEventListener('click', (e) => { e.stopPropagation(); this._toggleMenu(); });
-    const ref = this.afterModeSwitchEl;
-    if (ref && ref.parentNode) {
-      ref.parentNode.insertBefore(chip, ref.nextSibling);
+    const zoneRight = document.querySelector('#toolbar .tb-zone-right');
+    if (zoneRight) {
+      zoneRight.appendChild(chip);
+    } else if (this.afterModeSwitchEl && this.afterModeSwitchEl.parentNode) {
+      this.afterModeSwitchEl.parentNode.insertBefore(chip, this.afterModeSwitchEl.nextSibling);
     } else {
       this.toolbarEl.appendChild(chip);
     }
@@ -206,14 +209,29 @@ export class AuthUI {
   _populateMenu() {
     const u = getCurrentUser();
     this.menuEl.innerHTML = '';
-    const mk = (label, fn, danger) => {
+    const mk = (label, fn, opts) => {
+      const o = opts || {};
       const b = el('button', { type: 'button', text: label, onclick: () => { this._closeMenu(); fn(); } });
-      if (danger) b.classList.add('danger');
+      if (o.danger) b.classList.add('danger');
+      if (o.divider) b.classList.add('divider');
       return b;
     };
-    this.menuEl.appendChild(mk(tr('change_password_title'), () => this._openChangePw()));
-    if (u && u.is_admin) this.menuEl.appendChild(mk(tr('manage_users'), () => this._openManageUsers()));
-    this.menuEl.appendChild(mk(tr('logout'), () => this._doLogout(), true));
+    this.menuEl.appendChild(mk(tr('dropdown_change_password'), () => this._openChangePw()));
+    if (u && u.is_admin) {
+      this.menuEl.appendChild(mk(tr('dropdown_manage_users'), () => this._openManageUsers()));
+      const h = this.adminHandlers || {};
+      this.menuEl.appendChild(mk(tr('dropdown_activity_log'), () => { if (h.onOpenActivityLog) h.onOpenActivityLog(); }));
+      this.menuEl.appendChild(mk(tr('dropdown_online_users'), () => { if (h.onOpenPresence) h.onOpenPresence(); }));
+      this.menuEl.appendChild(mk(tr('dropdown_snapshots'),    () => { if (h.onOpenSnapshots) h.onOpenSnapshots(); }, { divider: true }));
+      this.menuEl.appendChild(mk(tr('dropdown_download_snapshot'), () => { if (h.onDownloadSnapshot) h.onDownloadSnapshot(); }));
+      this.menuEl.appendChild(mk(tr('dropdown_import'), () => { if (h.onImportCanvas) h.onImportCanvas(); }));
+      this.menuEl.appendChild(mk(tr('dropdown_reset'),  () => { if (h.onResetDefaults) h.onResetDefaults(); }, { danger: true }));
+    }
+    this.menuEl.appendChild(mk(tr('dropdown_logout'), () => this._doLogout(), { danger: true, divider: true }));
+  }
+
+  refreshAdmin() {
+    if (this.menuEl && this.menuEl.classList.contains('open')) this._populateMenu();
   }
 
   async _doLogout() {
@@ -302,7 +320,7 @@ export class AuthUI {
     const modal = el('div', { id: 'auth-users-modal', class: 'auth-modal' });
     const box = el('div', { class: 'auth-modal-box wide' });
     const head = el('div', { class: 'auth-modal-head' });
-    const titleEl = el('h2', { text: tr('manage_users') });
+    const titleEl = el('h2', { text: tr('dropdown_manage_users') });
     const close = el('button', { type: 'button', class: 'auth-x', html: '&times;',
       onclick: () => modal.classList.remove('open') });
     head.appendChild(titleEl); head.appendChild(close);
@@ -717,7 +735,7 @@ export class AuthUI {
     this.changePwLabels.neu.textContent = tr('change_password_new');
     this.changePwLabels.conf.textContent = tr('change_password_confirm');
     this.changePwSubmitEl.textContent = tr('change_password_title');
-    this.usersTitleEl.textContent = tr('manage_users');
+    this.usersTitleEl.textContent = tr('dropdown_manage_users');
     this.usersAddBtnEl.textContent = tr('user_add');
     this.usersAddUserIn.placeholder = tr('login_username');
     this.usersAddPwIn.placeholder = tr('login_password');

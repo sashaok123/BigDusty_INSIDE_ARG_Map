@@ -6,6 +6,7 @@
 
 import { tr } from './i18n.js';
 import { rectOf, anchorWorld, perimeterProjection, rectContains, sideFromBinding, bindingPoint } from './bindings.js';
+import { buildMarkdownToolbar } from './md-toolbar.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const SNAP_PX = 40;
@@ -211,14 +212,18 @@ export class EdgePropsPopover {
     }));
 
     const labelRow = document.createElement('div');
-    labelRow.className = 'arrow-props-row';
+    labelRow.className = 'arrow-props-row arrow-props-row-block';
     const labelLab = document.createElement('label');
     labelLab.textContent = tr('edge_label');
     labelRow.appendChild(labelLab);
-    const input = document.createElement('input');
-    input.type = 'text';
+    const input = document.createElement('textarea');
+    input.rows = 2;
+    input.spellcheck = false;
+    input.className = 'arrow-props-textarea';
     input.value = popoverLabelText(edge.label);
     input.placeholder = tr('arrow_label_placeholder');
+    const mdToolbarRef = buildMarkdownToolbar(() => input);
+    labelRow.appendChild(mdToolbarRef.el);
     let labelDebounceTimer = null;
     const commitLabelText = () => {
       this.layer.applyEdgePatch(edge.id, { labelText: input.value });
@@ -235,7 +240,7 @@ export class EdgePropsPopover {
       commitLabelText();
     });
     input.addEventListener('keydown', (ev) => {
-      if (ev.key === 'Enter') {
+      if (ev.key === 'Enter' && (ev.metaKey || ev.ctrlKey)) {
         ev.preventDefault();
         if (labelDebounceTimer) { clearTimeout(labelDebounceTimer); labelDebounceTimer = null; }
         commitLabelText();
@@ -267,14 +272,18 @@ export class EdgePropsPopover {
         const branchIdx = i;
         const b = edge.branches[i];
         const row = document.createElement('div');
-        row.className = 'arrow-props-row';
+        row.className = 'arrow-props-row arrow-props-row-block';
         const lab = document.createElement('label');
         lab.textContent = `${tr('edge_branch_label')} ${i + 1}`;
         row.appendChild(lab);
-        const inp = document.createElement('input');
-        inp.type = 'text';
+        const inp = document.createElement('textarea');
+        inp.rows = 2;
+        inp.spellcheck = false;
+        inp.className = 'arrow-props-textarea';
         inp.value = popoverLabelText(b.label);
         inp.placeholder = tr('arrow_label_placeholder');
+        const branchTbRef = buildMarkdownToolbar(() => inp);
+        row.appendChild(branchTbRef.el);
         let bTimer = null;
         const commit = () => this.layer.applyEdgePatch(edge.id, { branchLabel: { index: branchIdx, text: inp.value } });
         inp.addEventListener('input', () => {

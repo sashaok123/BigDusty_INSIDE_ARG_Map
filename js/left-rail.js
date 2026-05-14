@@ -1,8 +1,7 @@
 /* Left-side primary navigation rail. 60-px fixed column with grouped icon
    buttons: app logo, Modes (Browse/Edit), Tools (only in editor mode and
-   when authed: Block / Sticky / Group / Text / Image upload / Arrow style),
-   View (Search focus / Outline / Minimap / Theme cycler / Language picker),
-   bottom: Sign in / user chip. Replaces the old editor-toolbar second row. */
+   when authed: Block / Sticky / Group / Text / Image upload / Video / Arrow
+   style picker / Group / Ungroup / Delete / Undo / Redo). */
 
 import { tr } from './i18n.js';
 

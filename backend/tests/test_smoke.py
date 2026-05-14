@@ -502,3 +502,99 @@ async def test_node_translations_persist(client, admin_token):
     node2 = next(n for n in snap2.json()["data"]["nodes"] if n["id"] == "node_translate")
     assert node2["translations"]["ru"]["label"] == "Здравствуй"
     assert node2["translations"]["it"]["label"] == "Ciao"
+
+
+async def test_snapshot_created_on_mutation(client, admin_token):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    before = await client.get("/admin/canvas/main/snapshots", headers=headers)
+    assert before.status_code == 200, before.text
+    pre_count = len(before.json())
+
+    create = await client.post(
+        "/canvas/main/nodes",
+        json={"id": "node_snap_one", "type": "text", "x": 0, "y": 0, "width": 10, "height": 10, "text": "s"},
+        headers=headers,
+    )
+    assert create.status_code == 201, create.text
+
+    after = await client.get("/admin/canvas/main/snapshots", headers=headers)
+    assert after.status_code == 200
+    rows = after.json()
+    assert len(rows) >= pre_count + 1
+    assert rows[0]["comment"] == "node_created"
+    assert rows[0]["revision"] >= 1
+
+
+async def test_snapshot_requires_admin(client):
+    resp = await client.get("/admin/canvas/main/snapshots")
+    assert resp.status_code == 401
+
+
+async def test_snapshot_restore_flow(client, admin_token):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+
+    create = await client.post(
+        "/canvas/main/nodes",
+        json={"id": "node_restore_marker", "type": "text", "x": 0, "y": 0, "width": 10, "height": 10, "text": "before"},
+        headers=headers,
+    )
+    assert create.status_code == 201, create.text
+
+    snaps = await client.get("/admin/canvas/main/snapshots", headers=headers)
+    target = snaps.json()[0]
+    target_id = target["id"]
+    target_rev = target["revision"]
+
+    patch = await client.patch(
+        "/canvas/main/nodes/node_restore_marker",
+        json={"text": "after"},
+        headers=headers,
+    )
+    assert patch.status_code == 200
+
+    detail = await client.get(f"/admin/canvas/main/snapshots/{target_id}", headers=headers)
+    assert detail.status_code == 200, detail.text
+    snap_body = detail.json()
+    assert snap_body["revision"] == target_rev
+    assert any(n["id"] == "node_restore_marker" and n.get("text") == "before"
+               for n in snap_body["data"]["nodes"])
+
+    restore = await client.post(
+        f"/admin/canvas/main/snapshots/{target_id}/restore",
+        headers=headers,
+    )
+    assert restore.status_code == 200, restore.text
+    body = restore.json()
+    assert body["revision"] > target_rev
+    nodes = body["data"]["nodes"]
+    assert any(n["id"] == "node_restore_marker" and n.get("text") == "before" for n in nodes)
+
+    audit = await client.get("/admin/audit", headers=headers)
+    actions = [r["action"] for r in audit.json()]
+    assert "canvas_restored" in actions
+
+
+async def test_presence_broadcast_via_ws_hello(client, admin_token):
+    from app.ws import manager
+
+    presence_msgs: list[dict] = []
+
+    class _Sink:
+        async def send_json(self, msg: dict) -> None:
+            presence_msgs.append(msg)
+
+    sink = _Sink()
+    async with manager._lock:
+        manager._rooms.setdefault("main", set()).add(sink)
+
+    try:
+        await manager.register_presence("main", sink, "presence-test-c1", "alice")
+        users = manager.presence_users("main")
+        assert any(u["client_id"] == "presence-test-c1" and u["username"] == "alice" for u in users)
+        assert any(m.get("type") == "presence" for m in presence_msgs)
+    finally:
+        await manager._remove_presence("main", "presence-test-c1")
+        async with manager._lock:
+            room = manager._rooms.get("main")
+            if room is not None:
+                room.discard(sink)
