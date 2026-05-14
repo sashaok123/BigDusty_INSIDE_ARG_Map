@@ -182,6 +182,15 @@ export class Viewer {
     this.requestDraw();
   }
 
+  updateBlockRect(id, rect) {
+    const i = this.blocks.findIndex((b) => b.id === id);
+    if (i >= 0) {
+      this.blocks[i].rect = { ...rect };
+      this._computeBounds();
+      this.requestDraw();
+    }
+  }
+
   _loadBlockImage(b) {
     return new Promise((resolve) => {
       const img = new Image();
@@ -471,6 +480,15 @@ export class Viewer {
     return null;
   }
 
+  blockAtImagePoint(pt) {
+    for (let i = this.blocks.length - 1; i >= 0; i--) {
+      const b = this.blocks[i];
+      const { x, y, w, h } = b.rect;
+      if (pt.x >= x && pt.x <= x + w && pt.y >= y && pt.y <= y + h) return b;
+    }
+    return null;
+  }
+
   groupAtImagePoint(pt) {
     let best = null;
     let bestArea = Infinity;
@@ -501,6 +519,7 @@ export class Viewer {
       && n.rect.x + n.rect.w <= r.x + r.w && n.rect.y + n.rect.h <= r.y + r.h;
     for (const h of this.hotspots) if (inside(h)) out.push(h.id);
     for (const g of this.groups) if (inside(g)) out.push(g.id);
+    for (const b of this.blocks) if (inside(b)) out.push(b.id);
     return out;
   }
 
@@ -594,6 +613,13 @@ export class Viewer {
         const img = this.blockImages.get(b.id);
         if (!img) continue;
         ctx.drawImage(img, b.rect.x, b.rect.y, b.rect.w, b.rect.h);
+        if (this.mode === 'editor' && this.selection.has(b.id)) {
+          ctx.save();
+          ctx.lineWidth = 2.4 / this.scale;
+          ctx.strokeStyle = this.accentColour;
+          ctx.strokeRect(b.rect.x, b.rect.y, b.rect.w, b.rect.h);
+          ctx.restore();
+        }
       }
     } else {
       ctx.fillStyle = rgba(this.borderColour, 0.55);
@@ -1087,6 +1113,38 @@ export class Viewer {
           };
           return;
         }
+        const blk = this.blockAtImagePoint(img);
+        if (blk) {
+          const locked = this._isLocked(blk.id);
+          let anchorSide = null;
+          if (!locked) {
+            const sc = (this.getTransform && this.getTransform().scale) || 1;
+            const ar = 12 / sc;
+            const rr = blk.rect;
+            const pts = [
+              { side: 'left',   x: rr.x,                y: rr.y + rr.h / 2 },
+              { side: 'right',  x: rr.x + rr.w,         y: rr.y + rr.h / 2 },
+              { side: 'top',    x: rr.x + rr.w / 2,     y: rr.y            },
+              { side: 'bottom', x: rr.x + rr.w / 2,     y: rr.y + rr.h     },
+            ];
+            for (const pt of pts) {
+              const dx = img.x - pt.x, dy = img.y - pt.y;
+              if (dx*dx + dy*dy <= ar * ar) { anchorSide = pt.side; break; }
+            }
+          }
+          this.dragState = {
+            kind: 'edit-click',
+            id: blk.id,
+            kindOfTarget: 'block',
+            locked,
+            shiftKey: !!ev.shiftKey,
+            startScreen: screen,
+            startImg: img,
+            moved: false,
+            anchorSide,
+          };
+          return;
+        }
         if (ev.shiftKey) {
           this.dragState = {
             kind: 'marquee',
@@ -1328,7 +1386,8 @@ export class Viewer {
       const cur = d.current || this.imagePointFromClient(ev.clientX, ev.clientY);
       const targetHover = this.hotspotAtImagePoint(cur);
       const targetGroup = targetHover ? null : this.groupAtImagePoint(cur);
-      const target = targetHover || targetGroup;
+      const targetBlock = (targetHover || targetGroup) ? null : this.blockAtImagePoint(cur);
+      const target = targetHover || targetGroup || targetBlock;
       if (this.editorOptions.onArrowDrawEnd) {
         this.editorOptions.onArrowDrawEnd({
           fromId: d.fromHover,

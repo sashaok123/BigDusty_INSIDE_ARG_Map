@@ -769,14 +769,6 @@ function setupArrowLayer() {
         trackSelfMutation('edge_created', id);
         apiCreateEdge({ ...edge }).then((r) => { if (r) state.revision = r.revision; })
           .catch((e) => { if (e && e.kind !== 'auth_expired') console.warn('[app] edge create', e); });
-  if (viewer && typeof viewer === 'object') {
-    viewer.onAnchorMouseDown = (ev, nodeId, side) => {
-      if (arrowLayer && typeof arrowLayer._beginDrawEdge === 'function') {
-        arrowLayer._beginDrawEdge(ev, nodeId, side);
-      }
-    };
-  }
-
       } else if (kind === 'update' && edge) {
         trackSelfMutation('edge_updated', id);
         apiPatchEdge(id, { ...edge }).then((r) => { if (r) state.revision = r.revision; })
@@ -788,6 +780,13 @@ function setupArrowLayer() {
       }
     },
   });
+  if (viewer && typeof viewer === 'object') {
+    viewer.onAnchorMouseDown = (ev, nodeId, side) => {
+      if (arrowLayer && typeof arrowLayer._beginDrawEdge === 'function') {
+        arrowLayer._beginDrawEdge(ev, nodeId, side);
+      }
+    };
+  }
 }
 
 function setupSidePanel() {
@@ -1598,6 +1597,9 @@ function applyDragSelection(ids, dx, dy, commit) {
     n.x = o.x + dx;
     n.y = o.y + dy;
     if (arrowLayer) arrowLayer.invalidateNode(id);
+    if (viewer && n.kind === 'block' && typeof viewer.updateBlockRect === 'function') {
+      viewer.updateBlockRect(id, { x: n.x, y: n.y, w: n.width, h: n.height });
+    }
   }
   if (snapGuides && !commit) {
     const otherRects = [];
