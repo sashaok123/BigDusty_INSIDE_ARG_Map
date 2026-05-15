@@ -86,6 +86,8 @@ export class ArrowLayer {
     this.onScheduleSave = opts.onScheduleSave || (() => {});
     this.onEdgeMutation = opts.onEdgeMutation || (() => {});
     this.onBeforeMutation = opts.onBeforeMutation || (() => {});
+    this.getUsers = opts.getUsers || (() => []);
+    this.onMention = opts.onMention || (() => {});
 
     this.edges = new Map();
     this.boundEdges = new Map();

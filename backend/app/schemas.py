@@ -246,3 +246,53 @@ class FetchUrlMetaResult(BaseModel):
     fetched_at: str
     status: Literal["ok", "failed"] = "ok"
     error: str | None = None
+
+
+class ShareLinkCreateRequest(BaseModel):
+    canvas_id: str = Field(..., min_length=1, max_length=64)
+    expires_in_hours: int | None = Field(default=None, ge=1, le=24 * 365 * 5)
+
+
+class ShareLinkOut(BaseModel):
+    token: str
+    canvas_id: str
+    share_url: str
+    expires_at: Any | None = None
+    created_at: Any
+    revoked_at: Any | None = None
+
+
+class ShareLinkCanvasOut(BaseModel):
+    revision: int
+    data: dict[str, Any]
+    canvas_id: str
+    readonly: bool = True
+
+
+class PublicUserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    username: str = Field(..., validation_alias="username_display")
+
+
+class MentionCreateRequest(BaseModel):
+    to_username: str = Field(..., min_length=1, max_length=64)
+    node_id: str | None = Field(default=None, max_length=64)
+    text_snippet: str = Field(..., min_length=1, max_length=280)
+
+
+class MentionCreateResponse(BaseModel):
+    id: uuid.UUID
+
+
+class MentionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    canvas_id: str
+    from_user_id: uuid.UUID
+    from_username: str | None = None
+    to_user_id: uuid.UUID
+    node_id: str | None = None
+    text_snippet: str
+    created_at: Any
+    read_at: Any | None = None

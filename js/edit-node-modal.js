@@ -14,6 +14,7 @@ import {
 } from './nodes.js';
 import { renderMarkdown } from './markdown.js';
 import { attachMentionAutocomplete } from './node-mention.js';
+import { attachUserAutocomplete } from './user-mention.js';
 import { translateMany, providerLabel } from './translate.js';
 import { getTranslationProvider } from './settings.js';
 import { buildMarkdownToolbar } from './md-toolbar.js';
@@ -234,6 +235,8 @@ export class EditNodeModal {
     this.onFocusToggle = opts.onFocusToggle || (() => {});
     this.isFocusActive = opts.isFocusActive || (() => false);
     this.onAnnotationsChange = opts.onAnnotationsChange || (() => {});
+    this.getUsers = opts.getUsers || (() => []);
+    this.onMention = opts.onMention || (() => {});
     this._fileBodyCache = new Map();
     this._fileBytesCache = new Map();
     this._build();
@@ -257,6 +260,13 @@ export class EditNodeModal {
       }
       return out;
     };
+    const usersProvider = () => {
+      const rows = (typeof this.getUsers === 'function') ? (this.getUsers() || []) : [];
+      return rows.map((r) => ({
+        id: r && r.id ? r.id : null,
+        username: r && r.username ? r.username : '',
+      })).filter((r) => r.username);
+    };
     const targets = [
       this.mdInputEl,
       this.captionTextEl,
@@ -265,6 +275,14 @@ export class EditNodeModal {
     ];
     for (const t of targets) {
       if (t) attachMentionAutocomplete(t, nodesProvider, null);
+    }
+    for (const t of targets) {
+      if (t) attachUserAutocomplete(t, usersProvider, (detail) => {
+        try {
+          const nodeId = this.currentView && this.currentView.id ? this.currentView.id : null;
+          this.onMention(detail, nodeId);
+        } catch (e) { void e; }
+      });
     }
   }
 

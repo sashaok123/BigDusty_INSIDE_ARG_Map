@@ -20,6 +20,7 @@ from ..schemas import (
     InvitationCheckOut,
     LoginRequest,
     LogoutRequest,
+    PublicUserOut,
     RefreshRequest,
     SetupAccountRequest,
     TokenPair,
@@ -116,6 +117,12 @@ async def change_password(
 @router.get("/me", response_model=UserOut)
 async def whoami(user: Annotated[User, Depends(get_current_user)]) -> UserOut:
     return UserOut.model_validate(user)
+
+
+@router.get("/users", response_model=list[PublicUserOut])
+async def list_public_users(db: Annotated[AsyncSession, Depends(get_db)]) -> list[PublicUserOut]:
+    rows = await db.scalars(select(User).order_by(User.username_display))
+    return [PublicUserOut.model_validate(u) for u in rows.all()]
 
 
 def _normalize_expires(value: datetime) -> datetime:

@@ -3,7 +3,9 @@
    nodes/edges maps, syncs persistence, drives presence + snapshots. */
 
 import { Viewer } from './viewer.js';
-import { setMentionLookup } from './markdown.js';
+import { setMentionLookup, setUserMentionLookup } from './markdown.js';
+import { ShareLinkModal } from './share-modal.js';
+import { CursorsOverlay } from './cursors-overlay.js';
 import { SearchBar } from './search.js';
 import { EditorModal } from './editor.js';
 import { ContextMenu, statusSubmenu, isInOwnedSurface } from './context-menu.js';
@@ -103,6 +105,11 @@ import {
   fetchUrlMeta as apiFetchUrlMeta,
   apiRestoreOriginal,
   getClientId as getClientIdFromApi,
+  getSharedCanvas as apiGetSharedCanvas,
+  listPublicUsers as apiListPublicUsers,
+  postMention as apiPostMention,
+  listUnreadMentions as apiListUnreadMentions,
+  markMentionRead as apiMarkMentionRead,
 } from './api-client.js';
 import { isPlaceholderApiBase } from './config.js';
 
@@ -182,6 +189,13 @@ let layoutMenu;
 let activityFeed;
 let lockHeartbeatTimer = null;
 let _resizeHistoryPushed = false;
+let shareModal;
+let cursorsOverlay;
+let _shareViewerMode = false;
+let _shareCanvasData = null;
+let _knownUsersCache = [];
+let _knownUsersLastFetch = 0;
+let _cursorSendThrottle = 0;
 
 function $(id) { return document.getElementById(id); }
 
@@ -215,10 +229,38 @@ function scheduleSave() {
   dispatchStateChanged('save');
 }
 
+function detectShareToken() {
+  try {
+    const m = /[?&]share=([A-Za-z0-9_\-]+)/.exec(location.search);
+    return m ? m[1] : null;
+  } catch (e) { return null; }
+}
+
+async function prepareShareViewerMode(token) {
+  try {
+    const data = await apiGetSharedCanvas(token);
+    if (!data || !data.data) return false;
+    _shareCanvasData = data;
+    _shareViewerMode = true;
+    document.body.classList.add('share-viewer');
+    return true;
+  } catch (e) {
+    console.warn('[app] share fetch failed:', e && e.message);
+    return false;
+  }
+}
+
 async function bootstrap() {
   initLang();
   setupThemeSwitch();
   applyStaticTranslations();
+  const shareToken = detectShareToken();
+  if (shareToken) {
+    const ok = await prepareShareViewerMode(shareToken);
+    if (!ok) {
+      toast(tr('share_modal_error_load'), 'error');
+    }
+  }
   clipboardMgr = new NodeClipboard();
   setupViewer();
   setupEditorModal();
@@ -257,6 +299,7 @@ async function bootstrap() {
   compareModal = new CompareModal();
   setupToastBridge();
   setupPresence();
+  setupCursorsOverlay();
   setupPenLayer();
   setupLayoutMenu();
   setupActivityFeed();
@@ -299,6 +342,16 @@ function setupMentionPipeline() {
     if (!n) return null;
     return n.label || n.title || n.slug || n.id;
   });
+  setUserMentionLookup((uname) => {
+    if (!uname) return null;
+    const lower = uname.toLowerCase();
+    for (const u of _knownUsersCache) {
+      if (u && u.username && u.username.toLowerCase() === lower) return u.username;
+    }
+    return null;
+  });
+  refreshUserCache();
+  setupMentionToastCheck();
   document.addEventListener('click', (ev) => {
     const target = ev.target;
     if (!target || target.nodeType !== 1) return;
@@ -320,6 +373,175 @@ function setupMentionPipeline() {
     }
     openRichEdit(id);
   });
+  document.addEventListener('click', (ev) => {
+    const target = ev.target;
+    if (!target || target.nodeType !== 1) return;
+    const span = target.closest && target.closest('.md-mention-user[data-mention-user]');
+    if (!span) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+  });
+}
+
+async function refreshUserCache(force) {
+  if (_shareViewerMode) return;
+  const now = Date.now();
+  if (!force && now - _knownUsersLastFetch < 60000 && _knownUsersCache.length) return;
+  try {
+    const rows = await apiListPublicUsers();
+    if (Array.isArray(rows)) {
+      _knownUsersCache = rows.map((r) => ({
+        id: r && r.id ? String(r.id) : '',
+        username: r && r.username ? String(r.username) : '',
+      })).filter((r) => r.username);
+      _knownUsersLastFetch = now;
+    }
+  } catch (e) {
+    void e;
+  }
+}
+
+function getKnownUsers() { return _knownUsersCache.slice(); }
+
+async function emitMention(detail, nodeId) {
+  if (!detail || !detail.username) return;
+  if (!isLoggedIn()) return;
+  if (_shareViewerMode) return;
+  try {
+    const snippet = (detail.snippet || '').slice(0, 280);
+    await apiPostMention('main', {
+      to_username: detail.username,
+      node_id: nodeId || null,
+      text_snippet: snippet || `@${detail.username}`,
+    });
+  } catch (e) {
+    void e;
+  }
+}
+
+function setupMentionToastCheck() {
+  if (_shareViewerMode) return;
+  const trigger = () => {
+    if (!isLoggedIn()) return;
+    checkUnreadMentions();
+  };
+  trigger();
+  subscribeAuth((kind) => {
+    if (kind === 'login') trigger();
+  });
+}
+
+async function checkUnreadMentions() {
+  try {
+    const rows = await apiListUnreadMentions('main');
+    if (!Array.isArray(rows) || rows.length === 0) return;
+    showMentionToast(rows);
+  } catch (e) {
+    void e;
+  }
+}
+
+function showMentionToast(mentions) {
+  const existing = document.querySelector('.mention-toast');
+  if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+  const wrap = document.createElement('div');
+  wrap.className = 'mention-toast';
+  const txt = document.createElement('span');
+  txt.textContent = tr('mention_toast_new', { n: mentions.length });
+  const viewBtn = document.createElement('button');
+  viewBtn.type = 'button';
+  viewBtn.textContent = tr('mention_toast_view');
+  viewBtn.addEventListener('click', () => {
+    if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+    openMentionListModal(mentions);
+  });
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'mention-toast-close';
+  closeBtn.textContent = tr('mention_toast_dismiss');
+  closeBtn.addEventListener('click', () => {
+    if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+  });
+  wrap.appendChild(txt);
+  wrap.appendChild(viewBtn);
+  wrap.appendChild(closeBtn);
+  document.body.appendChild(wrap);
+}
+
+function openMentionListModal(mentions) {
+  const overlay = document.createElement('div');
+  overlay.className = 'auth-modal open mention-list-modal';
+  overlay.style.zIndex = '2600';
+  const box = document.createElement('div');
+  box.className = 'auth-modal-box wide';
+  const head = document.createElement('div');
+  head.className = 'auth-modal-head';
+  const title = document.createElement('h2');
+  title.textContent = tr('mention_list_title');
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'auth-x';
+  close.innerHTML = '&times;';
+  head.appendChild(title); head.appendChild(close);
+  const body = document.createElement('div');
+  body.className = 'auth-modal-body';
+  const list = document.createElement('div');
+  list.className = 'mention-list';
+  body.appendChild(list);
+  box.appendChild(head); box.appendChild(body);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  const closeFn = () => { try { document.body.removeChild(overlay); } catch (e) { void e; } };
+  close.addEventListener('click', closeFn);
+  overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) closeFn(); });
+
+  if (!Array.isArray(mentions) || mentions.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'share-empty';
+    empty.textContent = tr('mention_list_empty');
+    list.appendChild(empty);
+    return;
+  }
+  for (const m of mentions) {
+    const row = document.createElement('div');
+    row.className = 'mention-list-row';
+    const from = document.createElement('span');
+    from.className = 'mention-list-from';
+    from.textContent = `@${m.from_username || 'user'}`;
+    const snippet = document.createElement('span');
+    snippet.className = 'mention-list-snippet';
+    snippet.textContent = m.text_snippet || '';
+    snippet.title = m.text_snippet || '';
+    const acts = document.createElement('div');
+    if (m.node_id) {
+      const open = document.createElement('button');
+      open.type = 'button';
+      open.textContent = tr('mention_list_open');
+      open.addEventListener('click', async () => {
+        const n = findNode(state.nodes, m.node_id);
+        if (n && viewer) {
+          const view = toViewShape(n);
+          if (typeof viewer.centerOnHotspot === 'function') viewer.centerOnHotspot(view);
+          viewer.setActiveId(m.node_id);
+        }
+        try { await apiMarkMentionRead('main', m.id); } catch (e) { void e; }
+        if (row.parentNode) row.parentNode.removeChild(row);
+      });
+      acts.appendChild(open);
+    }
+    const markRead = document.createElement('button');
+    markRead.type = 'button';
+    markRead.textContent = tr('mention_list_mark_read');
+    markRead.addEventListener('click', async () => {
+      try { await apiMarkMentionRead('main', m.id); } catch (e) { void e; }
+      if (row.parentNode) row.parentNode.removeChild(row);
+    });
+    acts.appendChild(markRead);
+    row.appendChild(from);
+    row.appendChild(snippet);
+    row.appendChild(acts);
+    list.appendChild(row);
+  }
 }
 
 function setupDebugPanel() {
@@ -481,9 +703,69 @@ function setupPresence() {
   presencePanel = new PresencePanel({ mountEl: $('presence-badges') });
 }
 
+function setupCursorsOverlay() {
+  cursorsOverlay = new CursorsOverlay({
+    viewport: $('viewport'),
+    getTransform: () => viewer ? viewer.getTransform() : { scale: 1, panX: 0, panY: 0 },
+  });
+  if (viewer && typeof viewer.subscribe === 'function') {
+    viewer.subscribe((kind) => {
+      if (kind === 'transform') cursorsOverlay.requestDraw();
+    });
+  }
+  document.addEventListener('cursor:move', (ev) => {
+    if (!ev || !ev.detail) return;
+    const d = ev.detail;
+    if (!d.clientId) return;
+    if (d.selfClientId && d.clientId === d.selfClientId) return;
+    if (typeof d.x_image !== 'number' || typeof d.y_image !== 'number') return;
+    cursorsOverlay.update(d.clientId, {
+      x_image: d.x_image,
+      y_image: d.y_image,
+      username: d.username || 'anonymous',
+    });
+  });
+  document.addEventListener('presence:update', (ev) => {
+    if (!ev || !ev.detail) return;
+    const known = new Set();
+    for (const u of (ev.detail.users || [])) {
+      if (u && u.client_id) known.add(u.client_id);
+    }
+    if (!known.size) return;
+    for (const cid of Array.from(cursorsOverlay.cursors.keys())) {
+      if (!known.has(cid)) cursorsOverlay.remove(cid);
+    }
+  });
+  const viewport = $('viewport');
+  if (viewport) {
+    viewport.addEventListener('mousemove', (ev) => {
+      if (!realtime || !realtime.isConnected || !realtime.isConnected()) return;
+      if (!viewer) return;
+      const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      if (now - _cursorSendThrottle < 100) return;
+      _cursorSendThrottle = now;
+      const pt = viewer.imagePointFromClient(ev.clientX, ev.clientY);
+      if (!pt || typeof pt.x !== 'number' || typeof pt.y !== 'number') return;
+      try {
+        realtime.send({
+          type: 'cursor_move',
+          client_id: getClientIdFromApi(),
+          x_image: pt.x,
+          y_image: pt.y,
+        });
+      } catch (e) { void e; }
+    });
+  }
+}
+
 function openActivityLogModal() {
   if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
   openActivityLog();
+}
+
+function openShareModal() {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  if (shareModal) shareModal.open();
 }
 
 function openSnapshotsModal() {
@@ -1083,7 +1365,11 @@ function setupAuthUI() {
       onOpenExport:       () => openExportDialog(),
       onImportGithub:     () => triggerOpenGithubImport(),
       onOpenPdfExport:    () => triggerPdfExport(),
+      onOpenShare:        () => openShareModal(),
     },
+  });
+  shareModal = new ShareLinkModal({
+    onMessage: (msg) => { if (msg) toast(msg); },
   });
   subscribeAuth((kind) => {
     if (kind === 'login' || kind === 'logout' || kind === 'expired') applyAuthState();
@@ -1116,7 +1402,11 @@ function setupRealtime() {
     onChange: (ev) => applyRealtimeChange(ev),
     onResync: (data) => applyServerCanvas(data),
   });
-  realtime.start();
+  if (_shareViewerMode) {
+    realtime.setEnabled(false);
+  } else {
+    realtime.start();
+  }
   document.addEventListener('node:lock', (ev) => {
     if (!ev || !ev.detail) return;
     applyNodeLockEvent(ev.detail);
@@ -1343,6 +1633,8 @@ function setupArrowLayer() {
     svg: $('arrow-layer'),
     viewport: $('viewport'),
     getNodes: () => state.nodes,
+    getUsers: () => getKnownUsers(),
+    onMention: (detail, nodeId) => emitMention(detail, nodeId),
     getTransform: () => viewer.getTransform(),
     onEdgesChange: () => {},
     onScheduleSave: () => scheduleSave(),
@@ -1588,6 +1880,8 @@ function setupEditNodeModal() {
     getNodes: () => state.nodes,
     getNode: (id) => findNode(state.nodes, id),
     getBranches: () => (Array.isArray(state.branches) ? state.branches : []),
+    getUsers: () => getKnownUsers(),
+    onMention: (detail, nodeId) => emitMention(detail, nodeId),
     canEdit: () => isLoggedIn(),
     isAdmin: () => {
       const u = getCurrentUser();
@@ -3639,6 +3933,7 @@ function applyStaticTranslations() {
 }
 
 function setMode(mode) {
+  if (_shareViewerMode && mode === 'editor') return;
   if (mode === 'editor' && !isLoggedIn()) {
     if (authUI) authUI.openLogin();
     return;
@@ -3666,6 +3961,14 @@ function applyFilters() {
 }
 
 async function loadInitialData() {
+  if (_shareViewerMode && _shareCanvasData) {
+    state.backendOnline = true;
+    backendOfflineMode = 'online';
+    state.revision = Number(_shareCanvasData.revision) || 0;
+    state.githubOrigin = null;
+    await ingestCanvasData(_shareCanvasData.data || { nodes: [], edges: [] });
+    return;
+  }
   if (!isPlaceholderApiBase()) {
     try {
       const remote = await apiGetCanvas();

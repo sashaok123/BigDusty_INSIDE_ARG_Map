@@ -15,6 +15,11 @@ export function setMentionLookup(fn) {
   _mentionLookup = typeof fn === 'function' ? fn : null;
 }
 
+let _userMentionLookup = null;
+export function setUserMentionLookup(fn) {
+  _userMentionLookup = typeof fn === 'function' ? fn : null;
+}
+
 function inline(text) {
   const placeholders = [];
   const stash = (html) => {
@@ -35,6 +40,12 @@ function inline(text) {
       return stash(`<a class="md-mention" data-mention-id="${ESC(mentionId)}" href="#${ESC(mentionId)}">${ESC(label)}</a>`);
     }
     return stash(`<span class="md-mention-missing" data-mention-id="${ESC(mentionId)}" title="${ESC(mentionId)}">[[${ESC(mentionId)}]]</span>`);
+  });
+
+  s = s.replace(/(^|[\s(])@([A-Za-z0-9_\-]{1,64})/g, (match, pre, uname) => {
+    const tip = _userMentionLookup ? _userMentionLookup(uname) : null;
+    const titleAttr = tip ? ` title="${ESC(tip)}"` : '';
+    return pre + stash(`<span class="md-mention-user" data-mention-user="${ESC(uname)}"${titleAttr}>@${ESC(uname)}</span>`);
   });
 
   s = s.replace(/\[([^\]]+?)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g, (_, label, href, title) => {

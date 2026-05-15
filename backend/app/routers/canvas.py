@@ -2,6 +2,7 @@
 
 import uuid
 from copy import deepcopy
+from datetime import datetime, timezone
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, WebSocket, WebSocketDisconnect, status
@@ -11,7 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..audit import log_action
 from ..database import get_db, get_session_factory
 from ..deps import get_current_user
-from ..models import Canvas, User
+from ..models import Canvas, Mention, User
+from ..security import normalize_username
 from ..snapshots import prune_snapshots, write_snapshot
 from ..schemas import (
     CanvasOut,
@@ -19,8 +21,12 @@ from ..schemas import (
     CanvasRevisionOut,
     EdgeCreateRequest,
     EdgePatchRequest,
+    MentionCreateRequest,
+    MentionCreateResponse,
+    MentionOut,
     NodeCreateRequest,
     NodePatchRequest,
+    PublicUserOut,
 )
 from ..security import decode_token
 from ..ws import manager
@@ -278,6 +284,101 @@ async def delete_edge(
     return CanvasRevisionOut(revision=rev)
 
 
+@router.post(
+    "/canvas/{canvas_id}/mentions",
+    response_model=MentionCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_mention(
+    canvas_id: str,
+    payload: MentionCreateRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> MentionCreateResponse:
+    target_lower = normalize_username(payload.to_username)
+    if not target_lower:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty username")
+    target = await db.scalar(select(User).where(User.username == target_lower))
+    if target is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    row = Mention(
+        from_user_id=user.id,
+        to_user_id=target.id,
+        canvas_id=canvas_id,
+        node_id=payload.node_id,
+        text_snippet=payload.text_snippet[:280],
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return MentionCreateResponse(id=row.id)
+
+
+@router.get(
+    "/canvas/{canvas_id}/mentions/unread",
+    response_model=list[MentionOut],
+)
+async def list_unread_mentions(
+    canvas_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> list[MentionOut]:
+    rows = (await db.scalars(
+        select(Mention)
+        .where(
+            Mention.to_user_id == user.id,
+            Mention.canvas_id == canvas_id,
+            Mention.read_at.is_(None),
+        )
+        .order_by(Mention.created_at.desc())
+        .limit(100)
+    )).all()
+    from_ids = {r.from_user_id for r in rows}
+    user_map: dict[uuid.UUID, str] = {}
+    if from_ids:
+        users = (await db.scalars(select(User).where(User.id.in_(from_ids)))).all()
+        user_map = {u.id: u.username_display for u in users}
+    return [
+        MentionOut(
+            id=r.id,
+            canvas_id=r.canvas_id,
+            from_user_id=r.from_user_id,
+            from_username=user_map.get(r.from_user_id),
+            to_user_id=r.to_user_id,
+            node_id=r.node_id,
+            text_snippet=r.text_snippet,
+            created_at=r.created_at,
+            read_at=r.read_at,
+        )
+        for r in rows
+    ]
+
+
+@router.post(
+    "/canvas/{canvas_id}/mentions/{mention_id}/read",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def mark_mention_read(
+    canvas_id: str,
+    mention_id: uuid.UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> None:
+    row = await db.scalar(
+        select(Mention).where(
+            Mention.id == mention_id,
+            Mention.canvas_id == canvas_id,
+            Mention.to_user_id == user.id,
+        )
+    )
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mention not found")
+    if row.read_at is None:
+        row.read_at = datetime.now(timezone.utc)
+        await db.commit()
+    return None
+
+
 async def _resolve_ws_user(token: str | None) -> uuid.UUID | None:
     if not token:
         return None
@@ -363,6 +464,26 @@ async def canvas_socket(
                 if not isinstance(node_id, str) or not isinstance(client_id, str):
                     continue
                 await manager.refresh_node_lock(canvas_id, node_id, client_id)
+            elif ptype == "cursor_move":
+                cid = payload.get("client_id")
+                if not isinstance(cid, str) or not cid:
+                    continue
+                xi = payload.get("x_image")
+                yi = payload.get("y_image")
+                if not isinstance(xi, (int, float)) or not isinstance(yi, (int, float)):
+                    continue
+                uname = authed_username if authed_username else "anonymous"
+                await manager.broadcast(
+                    canvas_id,
+                    {
+                        "type": "cursor_move",
+                        "client_id": cid,
+                        "username": uname,
+                        "x_image": float(xi),
+                        "y_image": float(yi),
+                    },
+                    exclude_ws=ws,
+                )
     except WebSocketDisconnect:
         pass
     finally:

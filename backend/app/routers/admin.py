@@ -23,7 +23,7 @@ from ..github_import import (
     merge_into_canvas,
     resync_node_blob,
 )
-from ..models import AuditLog, Canvas, Invitation, User
+from ..models import AuditLog, Canvas, Invitation, ShareLink, User
 from ..schemas import (
     ActivityEntryOut,
     AuditEntryOut,
@@ -38,6 +38,8 @@ from ..schemas import (
     InvitationOut,
     PatchUserRequest,
     ResetPasswordRequest,
+    ShareLinkCreateRequest,
+    ShareLinkOut,
     SnapshotOut,
     SnapshotRestoreOut,
     SnapshotSummary,
@@ -225,6 +227,104 @@ async def delete_invitation(
     await db.delete(inv)
     await log_action(db, actor.id, "invitation_revoked", {"invitation_id": str(invitation_id), "target_username": inv.username_display})
     await db.commit()
+    return None
+
+
+def _build_share_url(token: str) -> str:
+    base = get_settings().frontend_base_url
+    sep = "&" if "?" in base else "?"
+    return f"{base}{sep}share={token}"
+
+
+def _share_out(row: ShareLink) -> ShareLinkOut:
+    return ShareLinkOut(
+        token=row.token,
+        canvas_id=row.canvas_id,
+        share_url=_build_share_url(row.token),
+        expires_at=row.expires_at,
+        created_at=row.created_at,
+        revoked_at=row.revoked_at,
+    )
+
+
+@router.post("/share/create", response_model=ShareLinkOut, status_code=status.HTTP_201_CREATED)
+async def create_share_link(
+    payload: ShareLinkCreateRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    actor: Annotated[User, Depends(require_admin)],
+) -> ShareLinkOut:
+    canvas = await db.scalar(select(Canvas).where(Canvas.id == payload.canvas_id))
+    if canvas is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Canvas not found")
+    token = secrets.token_urlsafe(24)[:32]
+    if len(token) < 32:
+        token = (token + secrets.token_hex(16))[:32]
+    expires_at: datetime | None = None
+    if payload.expires_in_hours is not None:
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=payload.expires_in_hours)
+    row = ShareLink(
+        token=token,
+        canvas_id=payload.canvas_id,
+        created_by_user_id=actor.id,
+        expires_at=expires_at,
+    )
+    db.add(row)
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Token collision")
+    await db.refresh(row)
+    await log_action(db, actor.id, "share_link_created", {
+        "canvas_id": payload.canvas_id,
+        "token": token,
+        "expires_in_hours": payload.expires_in_hours,
+    })
+    await db.commit()
+    return _share_out(row)
+
+
+@router.get("/share/list", response_model=list[ShareLinkOut])
+async def list_share_links(
+    canvas_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[ShareLinkOut]:
+    now = datetime.now(timezone.utc)
+    rows = (await db.scalars(
+        select(ShareLink)
+        .where(ShareLink.canvas_id == canvas_id)
+        .order_by(ShareLink.created_at.desc())
+    )).all()
+    out: list[ShareLinkOut] = []
+    for r in rows:
+        if r.revoked_at is not None:
+            continue
+        exp = r.expires_at
+        if exp is not None:
+            if exp.tzinfo is None:
+                exp = exp.replace(tzinfo=timezone.utc)
+            if exp < now:
+                continue
+        out.append(_share_out(r))
+    return out
+
+
+@router.post("/share/{token}/revoke", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_share_link(
+    token: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    actor: Annotated[User, Depends(require_admin)],
+) -> None:
+    row = await db.scalar(select(ShareLink).where(ShareLink.token == token))
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Share link not found")
+    if row.revoked_at is None:
+        row.revoked_at = datetime.now(timezone.utc)
+        await log_action(db, actor.id, "share_link_revoked", {
+            "canvas_id": row.canvas_id,
+            "token": token,
+        })
+        await db.commit()
     return None
 
 

@@ -8,6 +8,7 @@ import { tr } from './i18n.js';
 import { rectOf, anchorWorld, perimeterProjection, rectContains, sideFromBinding, bindingPoint } from './bindings.js';
 import { buildMarkdownToolbar } from './md-toolbar.js';
 import { attachMentionAutocomplete } from './node-mention.js';
+import { attachUserAutocomplete } from './user-mention.js';
 
 function _mentionNodesFor(layer) {
   return () => {
@@ -26,6 +27,24 @@ function _mentionNodesFor(layer) {
     }
     return out;
   };
+}
+
+function _userMentionsFor(layer) {
+  return () => {
+    if (!layer || typeof layer.getUsers !== 'function') return [];
+    const rows = layer.getUsers() || [];
+    return rows.map((r) => ({
+      id: r && r.id ? r.id : null,
+      username: r && r.username ? r.username : '',
+    })).filter((r) => r.username);
+  };
+}
+
+function _attachUserMentionFor(layer, input) {
+  if (!layer || typeof layer.onMention !== 'function') return;
+  attachUserAutocomplete(input, _userMentionsFor(layer), (detail) => {
+    try { layer.onMention(detail, null); } catch (e) { void e; }
+  });
 }
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -477,6 +496,7 @@ export class EdgePropsPopover {
     const mdToolbarRef = buildMarkdownToolbar(() => input);
     labelRow.appendChild(mdToolbarRef.el);
     attachMentionAutocomplete(input, _mentionNodesFor(this.layer), null);
+    _attachUserMentionFor(this.layer, input);
     let labelDebounceTimer = null;
     const commitLabelText = () => {
       this.layer.applyEdgePatch(edge.id, { labelText: input.value });
@@ -533,6 +553,7 @@ export class EdgePropsPopover {
         const branchTbRef = buildMarkdownToolbar(() => inp);
         row.appendChild(branchTbRef.el);
         attachMentionAutocomplete(inp, _mentionNodesFor(this.layer), null);
+        _attachUserMentionFor(this.layer, inp);
         let bTimer = null;
         const commit = () => this.layer.applyEdgePatch(edge.id, { branchLabel: { index: branchIdx, text: inp.value } });
         inp.addEventListener('input', () => {

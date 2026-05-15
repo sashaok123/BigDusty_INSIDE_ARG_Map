@@ -1,0 +1,105 @@
+.user-mention-popover {
+  min-width: 200px;
+  max-width: 260px;
+}
+.user-mention-popover .mention-dot.user-dot {
+  background: var(--accent, #2e6fe8);
+}
+
+.md-mention-user {
+  display: inline-block;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--accent-soft-bg, rgba(46, 111, 232, 0.10));
+  color: var(--accent, #2e6fe8);
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+.md-mention-user:hover {
+  border-color: var(--accent, #2e6fe8);
+}
+
+.mention-toast {
+  position: fixed;
+  bottom: 70px;
+  right: 24px;
+  z-index: 1700;
+  background: var(--panel-bg);
+  border: 1px solid var(--accent, #2e6fe8);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text);
+  box-shadow: var(--shadow-soft);
+  max-width: 360px;
+}
+.mention-toast button {
+  background: var(--accent, #2e6fe8);
+  color: #ffffff;
+  border: none;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  padding: 5px 10px;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.mention-toast button:hover { opacity: 0.92; }
+.mention-toast .mention-toast-close {
+  background: transparent;
+  color: var(--text-dim);
+  padding: 4px 6px;
+}
+
+.mention-list-modal .mention-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+.mention-list-modal .mention-list-row {
+  display: grid;
+  grid-template-columns: 130px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  background: var(--panel-bg);
+}
+.mention-list-modal .mention-list-from {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent, #2e6fe8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mention-list-modal .mention-list-snippet {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mention-list-modal .mention-list-row button {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  padding: 5px 10px;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.mention-list-modal .mention-list-row button:hover {
+  background: var(--hover);
+  border-color: var(--accent);
+}

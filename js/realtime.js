@@ -164,6 +164,20 @@ export class Realtime {
       } catch (e) { void e; }
       return;
     }
+    if (msg.type === 'cursor_move') {
+      try {
+        document.dispatchEvent(new CustomEvent('cursor:move', {
+          detail: {
+            clientId: msg.client_id || null,
+            username: msg.username || 'anonymous',
+            x_image: typeof msg.x_image === 'number' ? msg.x_image : null,
+            y_image: typeof msg.y_image === 'number' ? msg.y_image : null,
+            selfClientId: getClientId(),
+          },
+        }));
+      } catch (e) { void e; }
+      return;
+    }
     if (msg.type !== 'revision') return;
     const local = this.getRevision();
     const rev = msg.revision;

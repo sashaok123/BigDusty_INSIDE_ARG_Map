@@ -474,6 +474,54 @@ export async function uploadImage(blob, filename, opts) {
   return data;
 }
 
+export async function createShareLink(canvasId, expiresInHours) {
+  const body = { canvas_id: canvasId || CANVAS_ID };
+  if (expiresInHours !== null && expiresInHours !== undefined) body.expires_in_hours = expiresInHours;
+  return _request('/admin/share/create', { method: 'POST', auth: true, body });
+}
+
+export async function listShareLinks(canvasId) {
+  const cid = encodeURIComponent(canvasId || CANVAS_ID);
+  return _request(`/admin/share/list?canvas_id=${cid}`, { auth: true });
+}
+
+export async function revokeShareLink(token) {
+  return _request(`/admin/share/${encodeURIComponent(token)}/revoke`, {
+    method: 'POST',
+    auth: true,
+  });
+}
+
+export async function getSharedCanvas(token) {
+  return _request(`/share/${encodeURIComponent(token)}/canvas`);
+}
+
+export async function listPublicUsers() {
+  return _request('/auth/users');
+}
+
+export async function postMention(canvasId, payload) {
+  const cid = encodeURIComponent(canvasId || CANVAS_ID);
+  return _request(`/canvas/${cid}/mentions`, {
+    method: 'POST',
+    auth: true,
+    body: payload,
+  });
+}
+
+export async function listUnreadMentions(canvasId) {
+  const cid = encodeURIComponent(canvasId || CANVAS_ID);
+  return _request(`/canvas/${cid}/mentions/unread`, { auth: true });
+}
+
+export async function markMentionRead(canvasId, mentionId) {
+  const cid = encodeURIComponent(canvasId || CANVAS_ID);
+  return _request(`/canvas/${cid}/mentions/${encodeURIComponent(mentionId)}/read`, {
+    method: 'POST',
+    auth: true,
+  });
+}
+
 export async function apiRestoreOriginal(imageId) {
   if (!imageId) {
     const err = new Error('missing_image_id');

@@ -1,0 +1,31 @@
+.cursors-overlay {
+  pointer-events: none;
+}
+
+.live-cursor {
+  position: absolute;
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+  pointer-events: none;
+  opacity: 0.92;
+  transition: left .08s linear, top .08s linear;
+}
+.live-cursor svg {
+  flex-shrink: 0;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.25));
+}
+.live-cursor-label {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: #ffffff;
+  white-space: nowrap;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
