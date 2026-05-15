@@ -670,3 +670,85 @@
   padding: 4px 0;
 }
 
+.em-metadata {
+  border: 1px solid var(--field-border);
+  border-radius: var(--radius);
+  padding: 0;
+  margin-bottom: 14px;
+  background: var(--field-bg);
+}
+.em-metadata-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 10px 12px;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.em-metadata-header:hover { color: var(--text); }
+.em-metadata-chev { display: inline-block; transform: rotate(-90deg); transition: transform .2s; font-size: 11px; }
+.em-metadata.em-metadata-open .em-metadata-chev { transform: rotate(0); }
+.em-metadata-body {
+  display: none;
+  padding: 0 12px 12px;
+  flex-direction: column;
+  gap: 6px;
+}
+.em-metadata.em-metadata-open .em-metadata-body { display: flex; }
+.em-metadata-body label {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 8px 0 4px;
+}
+.em-metadata-body input[type="text"],
+.em-metadata-body select {
+  background: var(--panel-bg);
+  border: 1px solid var(--field-border);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 7px 9px;
+  outline: none;
+  border-radius: var(--radius);
+}
+.em-metadata-body input:focus,
+.em-metadata-body select:focus { border-color: var(--accent); }
+.em-metadata-body input[readonly] { background: var(--field-bg); color: var(--text-dim); cursor: text; }
+.em-metadata-gh-row {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+.em-metadata-gh-row input { flex: 1 1 160px; min-width: 0; }
+.em-metadata-bookmark-row { margin-top: 8px; }
+.em-metadata-bookmark-btn {
+  background: var(--panel-bg);
+  border: 1px solid var(--field-border);
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 7px 12px;
+  cursor: pointer;
+  border-radius: var(--radius);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.em-metadata-bookmark-btn:hover { border-color: var(--accent); color: var(--accent); }
+.em-metadata-bookmark-btn.on {
+  border-color: #e8c83d;
+  color: #e8c83d;
+}
+.em-metadata-bookmark-star { font-size: 14px; line-height: 1; }

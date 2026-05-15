@@ -329,6 +329,23 @@ export async function restoreSnapshot(canvasId, snapshotId) {
   });
 }
 
+export async function importFromGithub(payload) {
+  return _request('/admin/import/github', {
+    method: 'POST',
+    auth: true,
+    body: payload,
+  });
+}
+
+export async function resyncNodeFromGithub(canvasId, nodeId) {
+  const cid = encodeURIComponent(canvasId || CANVAS_ID);
+  return _request(`/admin/canvas/${cid}/resync_node`, {
+    method: 'POST',
+    auth: true,
+    body: { node_id: nodeId },
+  });
+}
+
 export async function checkInvitation(token) {
   return _request(`/auth/invitation/${encodeURIComponent(token)}`);
 }

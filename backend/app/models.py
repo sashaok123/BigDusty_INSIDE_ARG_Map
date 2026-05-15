@@ -80,6 +80,7 @@ class Canvas(Base):
     revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
     updated_by_user_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    github_origin: Mapped[dict | None] = mapped_column(JSONType, nullable=True)
 
 
 class Invitation(Base):

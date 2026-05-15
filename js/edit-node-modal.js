@@ -9,6 +9,7 @@ import { tr, LANGS } from './i18n.js';
 import {
   STATUSES, statusVarName, isGroupNode, nodeMarkdown, isDocumentNode,
   isPuzzleNode, isStickyNode, isTextNode, isBlockNode, isVideoNode, isAudioNode,
+  VERIFICATIONS, TECHNIQUES,
 } from './nodes.js';
 import { renderMarkdown } from './markdown.js';
 import { translateMany, providerLabel } from './translate.js';
@@ -133,6 +134,10 @@ export class EditNodeModal {
     this.onExportMd = opts.onExportMd || (() => {});
     this.onConfirmCloseWithUnsaved = opts.onConfirmCloseWithUnsaved || ((cb) => cb(true));
     this.onOpenFullViewer = opts.onOpenFullViewer || null;
+    this.onMetadataChange = opts.onMetadataChange || (() => {});
+    this.onResyncFromGithub = opts.onResyncFromGithub || null;
+    this.getGithubOrigin = opts.getGithubOrigin || (() => null);
+    this.isAdmin = opts.isAdmin || (() => false);
     this._fileBodyCache = new Map();
     this._fileBytesCache = new Map();
     this._build();
@@ -412,6 +417,7 @@ export class EditNodeModal {
     body.appendChild(translationsField);
     body.appendChild(imageField);
     body.appendChild(previewField);
+    body.appendChild(this._buildMetadataSection());
 
     const foot = el('div', { id: 'edit-node-foot' });
     const lockBtn = el('button', { type: 'button', class: 'modal-btn em-lock-btn', text: tr('ctx_lock') });
@@ -721,6 +727,12 @@ export class EditNodeModal {
       media: view.media ? { ...view.media } : null,
       branches: Array.isArray(view.branches) ? [...view.branches] : [],
       locked: !!view.locked,
+      verification: typeof view.verification === 'string' ? view.verification : '',
+      source_url: typeof view.source_url === 'string' ? view.source_url : '',
+      tool: typeof view.tool === 'string' ? view.tool : '',
+      technique: typeof view.technique === 'string' ? view.technique : '',
+      github_path: typeof view.github_path === 'string' ? view.github_path : '',
+      bookmarked: !!view.bookmarked,
     };
     this.currentView = view;
     this._tags = [...this._state.tags];
@@ -742,6 +754,7 @@ export class EditNodeModal {
       }
     }
     this._applyKindVisibility();
+    this._populateMetadataFields();
     this._readonly = !this.canEdit();
     if (this.rootEl) this.rootEl.classList.toggle('em-readonly', this._readonly);
     if (this.signinHintEl) this.signinHintEl.classList.toggle('visible', this._readonly);
@@ -933,6 +946,12 @@ export class EditNodeModal {
     if (view.kind) this._state.kind = view.kind;
     if (view.mime !== undefined) this._state.mime = view.mime;
     if (view.media !== undefined) this._state.media = view.media ? { ...view.media } : null;
+    if (view.verification !== undefined) this._state.verification = view.verification || '';
+    if (view.source_url !== undefined) this._state.source_url = view.source_url || '';
+    if (view.tool !== undefined) this._state.tool = view.tool || '';
+    if (view.technique !== undefined) this._state.technique = view.technique || '';
+    if (view.github_path !== undefined) this._state.github_path = view.github_path || '';
+    if (view.bookmarked !== undefined) this._state.bookmarked = !!view.bookmarked;
     this._tags = [...this._state.tags];
     this._lastCommittedLabel = this._state.title;
     this._lastCommittedTagsKey = this._tagsKey(this._tags);
@@ -946,7 +965,26 @@ export class EditNodeModal {
     this._setColor(this._state.color, true);
     this._refreshLockButton();
     this._applyKindVisibility();
+    this._populateMetadataFields();
     this._suppressInlineCommits = false;
+  }
+
+  _populateMetadataFields() {
+    if (!this._state) return;
+    if (this.metadataSourceInputEl && document.activeElement !== this.metadataSourceInputEl) {
+      this.metadataSourceInputEl.value = this._state.source_url || '';
+    }
+    if (this.metadataToolInputEl && document.activeElement !== this.metadataToolInputEl) {
+      this.metadataToolInputEl.value = this._state.tool || '';
+    }
+    if (this.metadataTechSelEl) {
+      const v = this._state.technique || '';
+      const opts = Array.from(this.metadataTechSelEl.options).map((o) => o.value);
+      this.metadataTechSelEl.value = opts.includes(v) ? v : '';
+    }
+    this._syncVerificationButtons();
+    this._syncBookmarkButton();
+    this._applyMetadataVisibility();
   }
 
   refreshLocalised() {
@@ -1037,6 +1075,7 @@ export class EditNodeModal {
     if (this.openFullImageBtnEl) {
       this.openFullImageBtnEl.style.display = showImage && typeof this.onOpenFullViewer === 'function' ? '' : 'none';
     }
+    this._applyMetadataVisibility();
   }
 
   _setBodyTab(t) {
@@ -1189,6 +1228,193 @@ export class EditNodeModal {
     return field;
   }
 
+  _buildMetadataSection() {
+    const field = el('div', { class: 'em-field em-metadata' });
+    const header = el('button', { type: 'button', class: 'em-metadata-header' });
+    const chev = el('span', { class: 'em-metadata-chev', text: '▾' });
+    const headerLabel = el('span', { class: 'em-metadata-header-label', text: tr('metadata_section') });
+    header.appendChild(chev);
+    header.appendChild(headerLabel);
+    const body = el('div', { class: 'em-metadata-body' });
+
+    const verifLabel = el('label', { text: tr('verification_label') });
+    const verifSeg = el('div', { class: 'em-segmented' });
+    const verifBtns = {};
+    const verifChoices = [...VERIFICATIONS, ''];
+    for (const v of verifChoices) {
+      const b = el('button', { type: 'button', 'data-verif': v || 'none',
+        text: this._verificationLabel(v) });
+      b.addEventListener('click', () => this._setVerification(v));
+      verifSeg.appendChild(b);
+      verifBtns[v || 'none'] = b;
+    }
+
+    const sourceLabel = el('label', { text: tr('source_url_label') });
+    const sourceInput = el('input', { type: 'text', placeholder: tr('source_url_placeholder') });
+    sourceInput.addEventListener('blur', () => this._commitMetadataField('source_url', sourceInput.value.trim()));
+    sourceInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sourceInput.blur(); } });
+
+    const toolLabel = el('label', { text: tr('tool_label') });
+    const toolInput = el('input', { type: 'text', placeholder: tr('tool_placeholder') });
+    toolInput.addEventListener('blur', () => this._commitMetadataField('tool', toolInput.value.trim()));
+    toolInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); toolInput.blur(); } });
+
+    const techLabel = el('label', { text: tr('technique_label') });
+    const techSel = el('select');
+    const techNone = el('option', { value: '', text: tr('technique_none') });
+    techSel.appendChild(techNone);
+    for (const t of TECHNIQUES) {
+      const o = el('option', { value: t, text: this._techniqueLabel(t) });
+      techSel.appendChild(o);
+    }
+    techSel.addEventListener('change', () => this._commitMetadataField('technique', techSel.value));
+
+    const ghLabel = el('label', { text: tr('github_path_label') });
+    const ghRow = el('div', { class: 'em-metadata-gh-row' });
+    const ghInput = el('input', { type: 'text', readonly: 'readonly' });
+    const ghOpenBtn = el('button', { type: 'button', class: 'modal-btn', text: tr('open_on_github') });
+    ghOpenBtn.addEventListener('click', () => this._openGithubPath());
+    const ghResyncBtn = el('button', { type: 'button', class: 'modal-btn', text: tr('resync_from_github') });
+    ghResyncBtn.addEventListener('click', () => this._resyncFromGithub());
+    ghRow.appendChild(ghInput);
+    ghRow.appendChild(ghOpenBtn);
+    ghRow.appendChild(ghResyncBtn);
+
+    const bookmarkRow = el('div', { class: 'em-metadata-bookmark-row' });
+    const bookmarkBtn = el('button', { type: 'button', class: 'em-metadata-bookmark-btn' });
+    const star = el('span', { class: 'em-metadata-bookmark-star', text: '☆' });
+    const bmLabel = el('span', { class: 'em-metadata-bookmark-label', text: tr('bookmark_toggle') });
+    bookmarkBtn.appendChild(star);
+    bookmarkBtn.appendChild(bmLabel);
+    bookmarkBtn.addEventListener('click', () => this._toggleBookmark());
+    bookmarkRow.appendChild(bookmarkBtn);
+
+    body.appendChild(verifLabel);
+    body.appendChild(verifSeg);
+    body.appendChild(sourceLabel);
+    body.appendChild(sourceInput);
+    body.appendChild(toolLabel);
+    body.appendChild(toolInput);
+    body.appendChild(techLabel);
+    body.appendChild(techSel);
+    body.appendChild(ghLabel);
+    body.appendChild(ghRow);
+    body.appendChild(bookmarkRow);
+
+    field.appendChild(header);
+    field.appendChild(body);
+
+    header.addEventListener('click', () => {
+      const open = field.classList.toggle('em-metadata-open');
+      chev.textContent = open ? '▾' : '▸';
+    });
+
+    this.metadataFieldEl = field;
+    this.metadataHeaderEl = header;
+    this.metadataHeaderLabelEl = headerLabel;
+    this.metadataChevEl = chev;
+    this.metadataBodyEl = body;
+    this.metadataVerifLabelEl = verifLabel;
+    this.metadataVerifBtnEls = verifBtns;
+    this.metadataSourceLabelEl = sourceLabel;
+    this.metadataSourceInputEl = sourceInput;
+    this.metadataToolLabelEl = toolLabel;
+    this.metadataToolInputEl = toolInput;
+    this.metadataTechLabelEl = techLabel;
+    this.metadataTechSelEl = techSel;
+    this.metadataGhLabelEl = ghLabel;
+    this.metadataGhInputEl = ghInput;
+    this.metadataGhOpenBtnEl = ghOpenBtn;
+    this.metadataGhResyncBtnEl = ghResyncBtn;
+    this.metadataBookmarkBtnEl = bookmarkBtn;
+    this.metadataBookmarkStarEl = star;
+    this.metadataBookmarkLabelEl = bmLabel;
+    return field;
+  }
+
+  _verificationLabel(v) {
+    if (!v) return tr('verification_none');
+    return tr(`verification_${v}`);
+  }
+
+  _techniqueLabel(t) {
+    if (!t) return tr('technique_none');
+    return tr(`technique_${t}`);
+  }
+
+  _setVerification(v) {
+    if (this._readonly) { this.onUnauthedSubmit(); return; }
+    if (!this._state) return;
+    const norm = VERIFICATIONS.includes(v) ? v : '';
+    this._state.verification = norm;
+    this._syncVerificationButtons();
+    if (!this._suppressInlineCommits) this.onMetadataChange(this._state.id, { verification: norm });
+  }
+
+  _syncVerificationButtons() {
+    const cur = (this._state && this._state.verification) || '';
+    const key = cur || 'none';
+    for (const [k, b] of Object.entries(this.metadataVerifBtnEls || {})) {
+      b.classList.toggle('active', k === key);
+    }
+  }
+
+  _commitMetadataField(field, value) {
+    if (this._readonly) { this.onUnauthedSubmit(); return; }
+    if (!this._state) return;
+    if (this._suppressInlineCommits) return;
+    const next = field === 'technique' && !TECHNIQUES.includes(value) ? '' : value;
+    if ((this._state[field] || '') === (next || '')) return;
+    if (next) this._state[field] = next;
+    else delete this._state[field];
+    this.onMetadataChange(this._state.id, { [field]: next || '' });
+  }
+
+  _toggleBookmark() {
+    if (this._readonly) { this.onUnauthedSubmit(); return; }
+    if (!this._state) return;
+    const next = !this._state.bookmarked;
+    this._state.bookmarked = next;
+    this._syncBookmarkButton();
+    if (!this._suppressInlineCommits) this.onMetadataChange(this._state.id, { bookmarked: next });
+  }
+
+  _syncBookmarkButton() {
+    if (!this.metadataBookmarkBtnEl) return;
+    const on = !!(this._state && this._state.bookmarked);
+    this.metadataBookmarkBtnEl.classList.toggle('on', on);
+    if (this.metadataBookmarkStarEl) this.metadataBookmarkStarEl.textContent = on ? '★' : '☆';
+  }
+
+  _openGithubPath() {
+    if (!this._state || !this._state.github_path) return;
+    const origin = this.getGithubOrigin();
+    if (!origin || !origin.owner || !origin.repo) return;
+    const branch = origin.branch || 'main';
+    const url = `https://github.com/${encodeURIComponent(origin.owner)}/${encodeURIComponent(origin.repo)}/blob/${encodeURIComponent(branch)}/${this._state.github_path.split('/').map(encodeURIComponent).join('/')}`;
+    try { window.open(url, '_blank', 'noopener'); } catch (e) { void e; }
+  }
+
+  _resyncFromGithub() {
+    if (this._readonly) { this.onUnauthedSubmit(); return; }
+    if (!this._state || !this._state.github_path) return;
+    if (typeof this.onResyncFromGithub !== 'function') return;
+    this.onResyncFromGithub(this._state.id);
+  }
+
+  _applyMetadataVisibility() {
+    if (!this.metadataFieldEl || !this._state) return;
+    const isGroup = isGroupNode({ kind: this._state.kind, type: this._state.type });
+    setDisp(this.metadataFieldEl, !isGroup);
+    const hasGhPath = !!(this._state.github_path);
+    if (this.metadataGhInputEl) this.metadataGhInputEl.value = this._state.github_path || '';
+    if (this.metadataGhOpenBtnEl) this.metadataGhOpenBtnEl.style.display = hasGhPath ? '' : 'none';
+    if (this.metadataGhResyncBtnEl) {
+      const canResync = hasGhPath && typeof this.onResyncFromGithub === 'function' && this.isAdmin();
+      this.metadataGhResyncBtnEl.style.display = canResync ? '' : 'none';
+    }
+  }
+
   _renderBranches() {
     if (!this._branchesHostEl) return;
     this._branchesHostEl.innerHTML = '';
@@ -1300,6 +1526,10 @@ export class EditNodeModal {
     if (this.tagsInputEl) this.tagsInputEl.value = '';
     if (this.mdInputEl) this.mdInputEl.value = '';
     if (this.captionTextEl) this.captionTextEl.value = '';
+    if (this.metadataSourceInputEl) this.metadataSourceInputEl.value = '';
+    if (this.metadataToolInputEl) this.metadataToolInputEl.value = '';
+    if (this.metadataTechSelEl) this.metadataTechSelEl.value = '';
+    if (this.metadataGhInputEl) this.metadataGhInputEl.value = '';
     this._renderTags();
     this._refreshLockButton();
     this._previewToken += 1;
@@ -1355,6 +1585,12 @@ export class EditNodeModal {
     if (this._state.media) payload.media = { ...this._state.media };
     else payload.media = null;
     payload.branches = Array.isArray(this._state.branches) ? [...this._state.branches] : [];
+    payload.verification = this._state.verification || '';
+    payload.source_url = this._state.source_url || '';
+    payload.tool = this._state.tool || '';
+    payload.technique = this._state.technique || '';
+    payload.github_path = this._state.github_path || '';
+    payload.bookmarked = !!this._state.bookmarked;
     this._state.md = payload.md;
     this.onSave(payload);
     if (typeof this.onContentChange === 'function') this.onContentChange(payload.id, payload.md, true);
@@ -1406,6 +1642,28 @@ export class EditNodeModal {
     if (this.previewTabRenderEl) this.previewTabRenderEl.textContent = tr('file_viewer_render');
     if (this.previewTabSourceEl) this.previewTabSourceEl.textContent = tr('file_viewer_source');
     if (this.previewOpenFullEl) this.previewOpenFullEl.textContent = tr('file_viewer_open_full');
+    if (this.metadataHeaderLabelEl) this.metadataHeaderLabelEl.textContent = tr('metadata_section');
+    if (this.metadataVerifLabelEl) this.metadataVerifLabelEl.textContent = tr('verification_label');
+    if (this.metadataSourceLabelEl) this.metadataSourceLabelEl.textContent = tr('source_url_label');
+    if (this.metadataToolLabelEl) this.metadataToolLabelEl.textContent = tr('tool_label');
+    if (this.metadataTechLabelEl) this.metadataTechLabelEl.textContent = tr('technique_label');
+    if (this.metadataGhLabelEl) this.metadataGhLabelEl.textContent = tr('github_path_label');
+    if (this.metadataGhOpenBtnEl) this.metadataGhOpenBtnEl.textContent = tr('open_on_github');
+    if (this.metadataGhResyncBtnEl) this.metadataGhResyncBtnEl.textContent = tr('resync_from_github');
+    if (this.metadataBookmarkLabelEl) this.metadataBookmarkLabelEl.textContent = tr('bookmark_toggle');
+    if (this.metadataSourceInputEl) this.metadataSourceInputEl.placeholder = tr('source_url_placeholder');
+    if (this.metadataToolInputEl) this.metadataToolInputEl.placeholder = tr('tool_placeholder');
+    if (this.metadataVerifBtnEls) {
+      for (const [k, b] of Object.entries(this.metadataVerifBtnEls)) {
+        const v = k === 'none' ? '' : k;
+        if (b) b.textContent = this._verificationLabel(v);
+      }
+    }
+    if (this.metadataTechSelEl) {
+      for (const opt of this.metadataTechSelEl.options) {
+        opt.textContent = opt.value ? this._techniqueLabel(opt.value) : tr('technique_none');
+      }
+    }
     this._refreshLockButton();
   }
 

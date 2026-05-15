@@ -86,6 +86,7 @@ class SetupAccountRequest(BaseModel):
 class CanvasOut(BaseModel):
     revision: int
     data: dict[str, Any]
+    github_origin: dict[str, Any] | None = None
 
 
 class CanvasRevisionOut(BaseModel):
@@ -189,3 +190,34 @@ class SnapshotRestoreOut(BaseModel):
     revision: int
     data: dict[str, Any]
     snapshot_id: uuid.UUID
+
+
+class GitHubImportRequest(BaseModel):
+    canvas_id: str = Field(..., min_length=1, max_length=64)
+    owner: str = Field(..., min_length=1, max_length=128)
+    repo: str = Field(..., min_length=1, max_length=128)
+    branch: str = "main"
+    path_prefix: str = ""
+    token: str | None = None
+    dry_run: bool = False
+    parse_frontmatter: bool = True
+    folder_layout: bool = True
+
+
+class GitHubImportPlan(BaseModel):
+    files_total: int
+    files_planned: int
+    nodes_planned: int
+    groups_planned: int
+    skipped: list[dict[str, Any]]
+    nodes_preview: list[dict[str, Any]]
+    revision: int | None = None
+
+
+class GitHubResyncRequest(BaseModel):
+    node_id: str = Field(..., min_length=1, max_length=128)
+
+
+class GitHubResyncResult(BaseModel):
+    revision: int
+    data: dict[str, Any]

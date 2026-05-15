@@ -94,7 +94,8 @@ async def _bump_and_broadcast(
 @router.get("/canvas/{canvas_id}", response_model=CanvasOut)
 async def get_canvas(canvas_id: str, db: Annotated[AsyncSession, Depends(get_db)]) -> CanvasOut:
     canvas = await _load_canvas(db, canvas_id)
-    return CanvasOut(revision=canvas.revision, data=_ensure_lists(deepcopy(canvas.data or {})))
+    origin = deepcopy(canvas.github_origin) if getattr(canvas, "github_origin", None) else None
+    return CanvasOut(revision=canvas.revision, data=_ensure_lists(deepcopy(canvas.data or {})), github_origin=origin)
 
 
 @router.get("/canvas/{canvas_id}/revision", response_model=CanvasRevisionOut)
@@ -121,7 +122,8 @@ async def replace_canvas(
     canvas.data = _ensure_lists(deepcopy(payload.data))
     await log_action(db, user.id, "canvas_replaced", {"node_count": node_count, "revision": canvas.revision})
     await _bump_and_broadcast(db, canvas, user, "canvas_replaced", None, None, x_client_id)
-    return CanvasOut(revision=canvas.revision, data=_ensure_lists(deepcopy(canvas.data or {})))
+    origin = deepcopy(canvas.github_origin) if getattr(canvas, "github_origin", None) else None
+    return CanvasOut(revision=canvas.revision, data=_ensure_lists(deepcopy(canvas.data or {})), github_origin=origin)
 
 
 @router.post("/canvas/{canvas_id}/nodes", response_model=CanvasRevisionOut, status_code=status.HTTP_201_CREATED)

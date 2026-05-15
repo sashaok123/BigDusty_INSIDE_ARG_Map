@@ -14,10 +14,20 @@ from ..audit import log_action
 from ..config import get_settings
 from ..database import get_db
 from ..deps import require_admin
+from ..github_import import (
+    GitHubImportError,
+    build_import_plan,
+    merge_into_canvas,
+    resync_node_blob,
+)
 from ..models import AuditLog, Canvas, Invitation, User
 from ..schemas import (
     AuditEntryOut,
     CreateUserRequest,
+    GitHubImportPlan,
+    GitHubImportRequest,
+    GitHubResyncRequest,
+    GitHubResyncResult,
     InvitationCreateRequest,
     InvitationOut,
     PatchUserRequest,
@@ -282,3 +292,163 @@ async def restore_canvas_snapshot(
         data=canvas.data or {},
         snapshot_id=snap["id"],
     )
+
+
+@router.post("/import/github", response_model=GitHubImportPlan)
+async def import_from_github(
+    payload: GitHubImportRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    actor: Annotated[User, Depends(require_admin)],
+) -> GitHubImportPlan:
+    canvas = await db.scalar(select(Canvas).where(Canvas.id == payload.canvas_id))
+    if canvas is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Canvas not found")
+    try:
+        nodes_to_create, groups_to_create, skipped = await build_import_plan(
+            db=db,
+            user_id=actor.id,
+            canvas_id=payload.canvas_id,
+            owner=payload.owner,
+            repo=payload.repo,
+            branch=payload.branch or "main",
+            path_prefix=payload.path_prefix or "",
+            token=payload.token,
+            parse_frontmatter=payload.parse_frontmatter,
+            folder_layout=payload.folder_layout,
+        )
+    except GitHubImportError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=exc.status, detail=exc.message) from exc
+    files_planned = len(nodes_to_create)
+    preview = [
+        {
+            "id": n.get("id"),
+            "label": n.get("label") or n.get("slug") or n.get("id"),
+            "kind": n.get("kind"),
+            "github_path": n.get("github_path"),
+        }
+        for n in nodes_to_create[:50]
+    ]
+    if payload.dry_run:
+        await db.rollback()
+        return GitHubImportPlan(
+            files_total=files_planned + len(skipped),
+            files_planned=files_planned,
+            nodes_planned=files_planned,
+            groups_planned=len(groups_to_create),
+            skipped=skipped,
+            nodes_preview=preview,
+            revision=None,
+        )
+    merged = merge_into_canvas(canvas.data or {}, nodes_to_create, groups_to_create)
+    canvas.data = merged
+    canvas.github_origin = {
+        "owner": payload.owner,
+        "repo": payload.repo,
+        "branch": payload.branch or "main",
+        "path_prefix": payload.path_prefix or "",
+    }
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(canvas, "data")
+    flag_modified(canvas, "github_origin")
+    canvas.revision = (canvas.revision or 0) + 1
+    canvas.updated_by_user_id = actor.id
+    await write_snapshot(db, canvas, actor, f"github_import:{payload.owner}/{payload.repo}")
+    await prune_snapshots(db, canvas.id)
+    await log_action(db, actor.id, "github_import", {
+        "owner": payload.owner,
+        "repo": payload.repo,
+        "branch": payload.branch or "main",
+        "nodes_added": files_planned,
+        "groups_added": len(groups_to_create),
+        "skipped_count": len(skipped),
+    })
+    await db.commit()
+    await db.refresh(canvas)
+    await ws_manager.broadcast(
+        canvas.id,
+        {
+            "type": "revision",
+            "revision": canvas.revision,
+            "change": {"kind": "canvas_replaced", "id": None, "data": None},
+            "by": actor.username_display,
+        },
+    )
+    return GitHubImportPlan(
+        files_total=files_planned + len(skipped),
+        files_planned=files_planned,
+        nodes_planned=files_planned,
+        groups_planned=len(groups_to_create),
+        skipped=skipped,
+        nodes_preview=preview,
+        revision=canvas.revision,
+    )
+
+
+@router.post("/canvas/{canvas_id}/resync_node", response_model=GitHubResyncResult)
+async def resync_node_from_github(
+    canvas_id: str,
+    payload: GitHubResyncRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    actor: Annotated[User, Depends(require_admin)],
+) -> GitHubResyncResult:
+    canvas = await db.scalar(select(Canvas).where(Canvas.id == canvas_id))
+    if canvas is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Canvas not found")
+    origin = getattr(canvas, "github_origin", None) or {}
+    if not origin or not origin.get("owner") or not origin.get("repo"):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Canvas has no github_origin")
+    data = canvas.data or {}
+    nodes = data.get("nodes") if isinstance(data, dict) else []
+    if not isinstance(nodes, list):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No nodes")
+    target_idx = -1
+    target = None
+    for idx, n in enumerate(nodes):
+        if isinstance(n, dict) and n.get("id") == payload.node_id:
+            target_idx = idx
+            target = n
+            break
+    if target is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found")
+    if not target.get("github_path"):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Node has no github_path")
+    try:
+        updated = await resync_node_blob(
+            db=db,
+            user_id=actor.id,
+            canvas_id=canvas_id,
+            owner=origin["owner"],
+            repo=origin["repo"],
+            branch=origin.get("branch") or "main",
+            token=None,
+            node=target,
+        )
+    except GitHubImportError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=exc.status, detail=exc.message) from exc
+    nodes[target_idx] = updated
+    canvas.data = data
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(canvas, "data")
+    canvas.revision = (canvas.revision or 0) + 1
+    canvas.updated_by_user_id = actor.id
+    await write_snapshot(db, canvas, actor, f"resync_node:{payload.node_id}")
+    await prune_snapshots(db, canvas.id)
+    await log_action(db, actor.id, "github_resync_node", {
+        "node_id": payload.node_id,
+        "owner": origin["owner"],
+        "repo": origin["repo"],
+    })
+    await db.commit()
+    await db.refresh(canvas)
+    await ws_manager.broadcast(
+        canvas_id,
+        {
+            "type": "revision",
+            "revision": canvas.revision,
+            "change": {"kind": "node_updated", "id": payload.node_id, "data": updated},
+            "by": actor.username_display,
+        },
+    )
+    return GitHubResyncResult(revision=canvas.revision, data=updated)

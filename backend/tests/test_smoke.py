@@ -796,3 +796,142 @@ async def test_branches_round_trip(client, admin_token):
     node2 = next(n for n in snap2.json()["data"]["nodes"] if n["id"] == "node_branched")
     assert node2["branches"] == ["printer"]
     assert snap2.json()["revision"] == rev1 + 1
+
+
+async def test_node_metadata_fields_round_trip(client, admin_token):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    base = await client.get("/canvas/main")
+    rev0 = base.json()["revision"]
+    new_data = {
+        "nodes": [
+            {
+                "id": "node_meta",
+                "type": "text",
+                "x": 0, "y": 0, "width": 100, "height": 50,
+                "text": "metadata test",
+                "verification": "hypothesis",
+                "source_url": "https://discord.com/example",
+                "tool": "CyberChef recipe",
+                "technique": "base64",
+                "github_path": "data/blocks/example.md",
+                "bookmarked": True,
+            },
+        ],
+        "edges": [],
+    }
+    put_resp = await client.put(
+        "/canvas/main",
+        json={"data": new_data, "expected_revision": rev0},
+        headers=headers,
+    )
+    assert put_resp.status_code == 200, put_resp.text
+    snap = await client.get("/canvas/main")
+    node = next(n for n in snap.json()["data"]["nodes"] if n["id"] == "node_meta")
+    assert node["verification"] == "hypothesis"
+    assert node["source_url"] == "https://discord.com/example"
+    assert node["tool"] == "CyberChef recipe"
+    assert node["technique"] == "base64"
+    assert node["github_path"] == "data/blocks/example.md"
+    assert node["bookmarked"] is True
+
+    rev1 = snap.json()["revision"]
+    patch_resp = await client.patch(
+        "/canvas/main/nodes/node_meta",
+        json={"verification": "verified", "bookmarked": False},
+        headers=headers,
+    )
+    assert patch_resp.status_code == 200, patch_resp.text
+    snap2 = await client.get("/canvas/main")
+    node2 = next(n for n in snap2.json()["data"]["nodes"] if n["id"] == "node_meta")
+    assert node2["verification"] == "verified"
+    assert node2.get("bookmarked") in (False, None)
+    assert snap2.json()["revision"] == rev1 + 1
+
+
+async def test_github_import_dry_run_with_mocked_tree(client, admin_token, monkeypatch):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    from app import github_import as gi
+
+    async def fake_fetch_tree(client_arg, owner, repo, branch, token):
+        return [
+            {"path": "README.md", "type": "blob", "sha": "sha-readme", "size": 64},
+            {"path": "data/notes.md", "type": "blob", "sha": "sha-notes", "size": 48},
+            {"path": "logo.bin", "type": "blob", "sha": "sha-logo", "size": 4},
+        ]
+
+    async def fake_fetch_blob(client_arg, owner, repo, sha, token, sem):
+        async with sem:
+            if sha == "sha-readme":
+                return b"---\ntitle: Top README\nstatus: verified\n---\n# README\nhi"
+            if sha == "sha-notes":
+                return b"# Notes\nFollow-up details."
+            return b"unused"
+
+    monkeypatch.setattr(gi, "fetch_tree", fake_fetch_tree)
+    monkeypatch.setattr(gi, "fetch_blob", fake_fetch_blob)
+
+    payload = {
+        "canvas_id": "main",
+        "owner": "octocat",
+        "repo": "demo",
+        "branch": "main",
+        "path_prefix": "",
+        "token": None,
+        "dry_run": True,
+        "parse_frontmatter": True,
+        "folder_layout": True,
+    }
+    resp = await client.post("/admin/import/github", json=payload, headers=headers)
+    assert resp.status_code == 200, resp.text
+    plan = resp.json()
+    assert plan["files_total"] >= 2
+    assert plan["nodes_planned"] >= 2
+    assert plan["files_planned"] == plan["nodes_planned"]
+    assert any(p.get("reason") == "unsupported_extension" for p in plan["skipped"])
+    ids = [n["github_path"] for n in plan["nodes_preview"]]
+    assert "README.md" in ids
+    assert any("notes" in s for s in ids)
+
+
+async def test_github_import_apply_persists(client, admin_token, monkeypatch):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    from app import github_import as gi
+
+    async def fake_fetch_tree(client_arg, owner, repo, branch, token):
+        return [
+            {"path": "notes/a.md", "type": "blob", "sha": "sha-a", "size": 16},
+        ]
+
+    async def fake_fetch_blob(client_arg, owner, repo, sha, token, sem):
+        async with sem:
+            return b"---\ntitle: Hello\n---\nbody text"
+
+    monkeypatch.setattr(gi, "fetch_tree", fake_fetch_tree)
+    monkeypatch.setattr(gi, "fetch_blob", fake_fetch_blob)
+
+    payload = {
+        "canvas_id": "main",
+        "owner": "octocat",
+        "repo": "demo",
+        "branch": "main",
+        "path_prefix": "",
+        "dry_run": False,
+        "parse_frontmatter": True,
+        "folder_layout": True,
+    }
+    resp = await client.post("/admin/import/github", json=payload, headers=headers)
+    assert resp.status_code == 200, resp.text
+    plan = resp.json()
+    assert plan["nodes_planned"] >= 1
+    snap = await client.get("/canvas/main")
+    assert snap.json()["github_origin"] == {"owner": "octocat", "repo": "demo", "branch": "main", "path_prefix": ""}
+    node = next((n for n in snap.json()["data"]["nodes"] if n.get("github_path") == "notes/a.md"), None)
+    assert node is not None
+    assert node["label"] == "Hello"
+    assert node["text"].strip() == "body text"
+
+
+async def test_github_import_requires_admin(client):
+    payload = {"canvas_id": "main", "owner": "x", "repo": "y", "branch": "main", "dry_run": True}
+    resp = await client.post("/admin/import/github", json=payload)
+    assert resp.status_code == 401

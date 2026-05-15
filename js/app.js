@@ -73,6 +73,8 @@ import { AudioOverlay } from './audio-overlay.js';
 import { DocumentOverlay } from './document-overlay.js';
 import { FileViewerModal } from './file-viewer.js';
 import { BranchesPanel, openManageBranchesModal } from './branches.js';
+import { BookmarksPanel } from './bookmarks.js';
+import { GitHubImportModal } from './github-import.js';
 import { LANGS, initLang, getLang, setLang, tr } from './i18n.js';
 import { AuthUI } from './auth-ui.js';
 import { Realtime } from './realtime.js';
@@ -113,6 +115,7 @@ const state = {
   selection: new Set(),
   history: { past: [], future: [] },
   hasUnsavedEdits: false,
+  githubOrigin: null,
 };
 
 const HISTORY_LIMIT = 50;
@@ -149,6 +152,8 @@ let branchesPanel;
 let presencePanel;
 let cropOverlay;
 let exportModal;
+let bookmarksPanel;
+let githubImportModal;
 let _resizeHistoryPushed = false;
 
 function $(id) { return document.getElementById(id); }
@@ -210,6 +215,8 @@ async function bootstrap() {
   setupFileViewer();
   setupCropOverlay();
   setupBranchesPanel();
+  setupBookmarksPanel();
+  setupGithubImportModal();
   setupToastBridge();
   setupPresence();
 
@@ -496,6 +503,124 @@ function setupBranchesPanel() {
   if (btn) btn.addEventListener('click', () => branchesPanel && branchesPanel.toggle());
 }
 
+function setupBookmarksPanel() {
+  bookmarksPanel = new BookmarksPanel({
+    getNodes: () => state.nodes,
+    onPick: (id) => focusBookmark(id),
+  });
+}
+
+function focusBookmark(id) {
+  if (!id) return;
+  const n = findNode(state.nodes, id);
+  if (!n) return;
+  const view = toViewShape(n);
+  if (viewer) {
+    viewer.setActiveId(id);
+    if (typeof viewer.centerOnHotspot === 'function') {
+      viewer.centerOnHotspot(view);
+    } else if (typeof viewer.fitToRect === 'function') {
+      viewer.fitToRect(view.rect);
+    }
+    viewer.setSelection(new Set([id]));
+    state.selection = new Set([id]);
+  }
+  if (editNodeModal) editNodeModal.open(viewWithLang(view, getLang()));
+}
+
+function setupGithubImportModal() {
+  githubImportModal = new GitHubImportModal({
+    getCanvasId: () => 'main',
+    canImport: () => {
+      const u = getCurrentUser();
+      return !!(u && u.is_admin);
+    },
+    onImported: async (summary) => {
+      if (summary && summary.local && summary.payload) {
+        await applyLocalImportPayload(summary.payload);
+      }
+      if (summary && typeof summary.nodes === 'number') {
+        toast(tr('github_import_done', { nodes: summary.nodes }));
+      }
+      reloadFromBackendAfterImport();
+    },
+    onError: (err) => {
+      const msg = (err && err.message) || String(err) || 'error';
+      toast(tr('github_import_failed', { error: msg }), 'error');
+    },
+  });
+}
+
+async function applyLocalImportPayload(payload) {
+  if (!payload) return;
+  pushHistory();
+  for (const g of (payload.groups || [])) {
+    if (!g || !g.id) continue;
+    state.nodes.set(g.id, normaliseNode(g));
+    if (state.backendOnline && isLoggedIn()) {
+      try { await apiCreateNode(g); } catch (e) { void e; }
+    }
+  }
+  for (const n of (payload.nodes || [])) {
+    if (!n || !n.id) continue;
+    state.nodes.set(n.id, normaliseNode(n));
+    if (state.backendOnline && isLoggedIn()) {
+      try { await apiCreateNode(n); } catch (e) { void e; }
+    }
+  }
+  refreshPuzzleViewsInViewer();
+  if (bookmarksPanel) bookmarksPanel.refresh();
+  scheduleSave();
+}
+
+async function reloadFromBackendAfterImport() {
+  if (!state.backendOnline) return;
+  try {
+    const data = await apiGetCanvas();
+    if (data && data.data) {
+      applyServerCanvas(data);
+    }
+  } catch (e) {
+    console.warn('[app] reload after import failed', e);
+  }
+}
+
+function triggerOpenGithubImport() {
+  if (!githubImportModal) return;
+  const u = getCurrentUser();
+  if (!u || !u.is_admin) {
+    toast(tr('github_import_admin_only'), 'error');
+    return;
+  }
+  githubImportModal.open();
+}
+
+async function triggerResyncNode(id) {
+  if (!id) return;
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  const n = findNode(state.nodes, id);
+  if (!n || !n.github_path) return;
+  if (!state.githubOrigin || !state.githubOrigin.owner || !state.githubOrigin.repo) {
+    toast(tr('resync_failed'), 'error');
+    return;
+  }
+  try {
+    const { resyncNodeFromGithub } = await import('./api-client.js');
+    const res = await resyncNodeFromGithub('main', id);
+    if (res && res.data) {
+      const merged = { ...n, ...res.data };
+      state.nodes.set(id, merged);
+      refreshPuzzleViewsInViewer();
+      if (editNodeModal && editNodeModal.isOpen() && editNodeModal.currentView && editNodeModal.currentView.id === id) {
+        editNodeModal.setNodeMeta(toViewShape(merged));
+      }
+    }
+    toast(tr('resync_done'));
+  } catch (e) {
+    toast(tr('resync_failed'), 'error');
+  }
+}
+
 function renderVideoOverlay() {
   if (videoOverlay) videoOverlay.requestDraw();
   if (audioOverlay) audioOverlay.requestDraw();
@@ -670,6 +795,7 @@ function setupAuthUI() {
       onOpenPresence:     () => openPresenceModal(),
       onManageBranches:   () => openManageBranches(),
       onOpenExport:       () => openExportDialog(),
+      onImportGithub:     () => triggerOpenGithubImport(),
     },
   });
   subscribeAuth((kind) => {
@@ -1066,6 +1192,12 @@ function setupEditNodeModal() {
     getNode: (id) => findNode(state.nodes, id),
     getBranches: () => (Array.isArray(state.branches) ? state.branches : []),
     canEdit: () => isLoggedIn(),
+    isAdmin: () => {
+      const u = getCurrentUser();
+      return !!(u && u.is_admin);
+    },
+    getGithubOrigin: () => state.githubOrigin || null,
+    onResyncFromGithub: (id) => triggerResyncNode(id),
     onSave: (payload) => persistRichEditSave(payload),
     onDelete: (id) => deletePuzzleNode(id),
     onCancel: () => {},
@@ -1139,6 +1271,19 @@ function setupEditNodeModal() {
       else delete n.locked;
       refreshPuzzleViewsInViewer();
       pushNodePatch(id, { locked: !!locked });
+      scheduleSave();
+    },
+    onMetadataChange: (id, patch) => {
+      if (!isLoggedIn()) {
+        const n0 = findNode(state.nodes, id);
+        if (n0 && editNodeModal) editNodeModal.setNodeMeta(toViewShape(n0));
+        if (authUI) authUI.openLogin();
+        return;
+      }
+      updatePuzzleNode(state.nodes, id, patch);
+      refreshPuzzleViewsInViewer();
+      if (bookmarksPanel) bookmarksPanel.refresh();
+      pushNodePatch(id, patch);
       scheduleSave();
     },
     onContentChange: (id, md, persist) => {
@@ -2267,6 +2412,12 @@ function nodePatchPayload(n) {
     translations: n.translations || null, text_style: n.text_style || null,
     media: n.media || null, branches: Array.isArray(n.branches) ? n.branches : [],
     kind: n.kind || null, locked: !!n.locked,
+    verification: n.verification || '',
+    source_url: n.source_url || '',
+    tool: n.tool || '',
+    technique: n.technique || '',
+    github_path: n.github_path || '',
+    bookmarked: !!n.bookmarked,
   };
   if (typeof n.file === 'string') payload.file = n.file;
   if (typeof n.text === 'string') payload.text = n.text;
@@ -2342,6 +2493,12 @@ function persistRichEditSave(payload) {
     text_style: payload.text_style || null,
     media: payload.media || null,
     branches: Array.isArray(payload.branches) ? payload.branches : [],
+    verification: payload.verification || '',
+    source_url: payload.source_url || '',
+    tool: payload.tool || '',
+    technique: payload.technique || '',
+    github_path: payload.github_path || '',
+    bookmarked: !!payload.bookmarked,
   };
   if (isPuzzleNode(n) || isStickyNode(n) || isTextNode(n)) {
     patch.md = payload.md;
@@ -2355,6 +2512,7 @@ function persistRichEditSave(payload) {
   const updated = findNode(state.nodes, payload.id);
   if (!updated) return;
   refreshPuzzleViewsInViewer();
+  if (bookmarksPanel) bookmarksPanel.refresh();
   const wireBody = {
     status: updated.status,
     tags: updated.tags || [],
@@ -2367,6 +2525,12 @@ function persistRichEditSave(payload) {
     media: updated.media || null,
     branches: Array.isArray(updated.branches) ? updated.branches : [],
     kind: updated.kind || null,
+    verification: updated.verification || '',
+    source_url: updated.source_url || '',
+    tool: updated.tool || '',
+    technique: updated.technique || '',
+    github_path: updated.github_path || '',
+    bookmarked: !!updated.bookmarked,
   };
   if (updated.type === 'text') wireBody.text = updated.text || '';
   pushNodePatch(payload.id, wireBody);
@@ -2533,6 +2697,7 @@ async function loadInitialData() {
         state.backendOnline = true;
         backendOfflineMode = 'online';
         state.revision = Number(remote.revision) || 0;
+        state.githubOrigin = remote.github_origin || null;
         await ingestCanvasData(remote.data);
         return;
       }
@@ -2624,6 +2789,7 @@ async function ingestCanvasData(data) {
   refreshPuzzleViewsInViewer();
   arrowLayer.setEdges(edges);
   arrowLayer.setMode(state.mode);
+  if (bookmarksPanel) bookmarksPanel.refresh();
   hideMigrationBanner();
   refreshOfflineBanner();
 }
@@ -2631,6 +2797,7 @@ async function ingestCanvasData(data) {
 function applyServerCanvas(payload) {
   if (!payload || !payload.data) return;
   state.revision = Number(payload.revision) || state.revision;
+  if (payload.github_origin !== undefined) state.githubOrigin = payload.github_origin || null;
   ingestCanvasData(payload.data).catch((e) => console.warn('[app] resync ingest', e));
 }
 

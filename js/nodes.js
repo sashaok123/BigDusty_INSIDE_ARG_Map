@@ -7,6 +7,32 @@ import { tr } from './i18n.js';
 
 export const STATUSES = ['solved', 'partial', 'unsolved', 'no-data', 'dead-end'];
 
+export const VERIFICATIONS = ['verified', 'hypothesis', 'disputed', 'falsified'];
+
+export const TECHNIQUES = [
+  'base64', 'caesar', 'rot13', 'rot47', 'vigenere', 'atbash', 'xor',
+  'lsb-stego', 'morse', 'frequency-analysis', 'mojibake-reversal',
+  'hash-lookup', 'wayback-archive', 'discord-screenshot', 'github-commit',
+  'manual-transcription', 'audio-spectrogram', 'image-pixel-grid', 'other',
+];
+
+export const VERIFICATION_STRIPE = {
+  'verified':   '#3de88a',
+  'hypothesis': '#e8c83d',
+  'disputed':   '#e88a3d',
+  'falsified':  '#e83d3d',
+};
+
+export function normaliseVerification(v) {
+  if (typeof v !== 'string') return '';
+  return VERIFICATIONS.includes(v) ? v : '';
+}
+
+export function normaliseTechnique(t) {
+  if (typeof t !== 'string') return '';
+  return TECHNIQUES.includes(t) ? t : '';
+}
+
 const STATUS_LABEL_KEY = {
   'solved':   'status_solved',
   'partial':  'status_partial',
@@ -130,6 +156,12 @@ export function toViewShape(n) {
     mime: n.mime || null,
     name: typeof n.name === 'string' ? n.name : '',
     branches: Array.isArray(n.branches) ? [...n.branches] : [],
+    verification: typeof n.verification === 'string' ? normaliseVerification(n.verification) : '',
+    source_url: typeof n.source_url === 'string' ? n.source_url : '',
+    tool: typeof n.tool === 'string' ? n.tool : '',
+    technique: typeof n.technique === 'string' ? normaliseTechnique(n.technique) : '',
+    github_path: typeof n.github_path === 'string' ? n.github_path : '',
+    bookmarked: !!n.bookmarked,
   };
 }
 
@@ -296,6 +328,32 @@ export function updatePuzzleNode(nodes, id, patch) {
   if (patch.name !== undefined) {
     if (typeof patch.name === 'string') n.name = patch.name;
     else delete n.name;
+  }
+  if (patch.verification !== undefined) {
+    const v = normaliseVerification(patch.verification);
+    if (v) n.verification = v;
+    else delete n.verification;
+  }
+  if (patch.source_url !== undefined) {
+    if (typeof patch.source_url === 'string' && patch.source_url) n.source_url = patch.source_url;
+    else delete n.source_url;
+  }
+  if (patch.tool !== undefined) {
+    if (typeof patch.tool === 'string' && patch.tool) n.tool = patch.tool;
+    else delete n.tool;
+  }
+  if (patch.technique !== undefined) {
+    const t = normaliseTechnique(patch.technique);
+    if (t) n.technique = t;
+    else delete n.technique;
+  }
+  if (patch.github_path !== undefined) {
+    if (typeof patch.github_path === 'string' && patch.github_path) n.github_path = patch.github_path;
+    else delete n.github_path;
+  }
+  if (patch.bookmarked !== undefined) {
+    if (patch.bookmarked) n.bookmarked = true;
+    else delete n.bookmarked;
   }
   return true;
 }

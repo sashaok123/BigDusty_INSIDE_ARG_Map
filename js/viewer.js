@@ -5,6 +5,7 @@
 import { lodFor } from './lod.js';
 import { pickTextColor, pickTextStroke, bgFromTheme } from './contrast.js';
 import { getActiveTool, isSpaceHeld, setActiveTool } from './tools.js';
+import { VERIFICATION_STRIPE } from './nodes.js';
 
 const COLOR_PRESET_BG = {
   '':  null,
@@ -885,6 +886,22 @@ export class Viewer {
     ctx.fillRect(x, y, w, hh);
     ctx.strokeRect(x, y, w, hh);
 
+    if (h.verification) {
+      const stripeColor = VERIFICATION_STRIPE[h.verification];
+      if (stripeColor) {
+        const sw = 3 / this.scale;
+        ctx.save();
+        ctx.fillStyle = stripeColor;
+        ctx.globalAlpha = alpha;
+        ctx.fillRect(x, y, sw, hh);
+        ctx.restore();
+      }
+    }
+
+    if (h.bookmarked && this.scale > 0.2) {
+      this._drawBookmarkStar(ctx, x + w, y, alpha);
+    }
+
     if (isOutlineHL || isSelected) {
       ctx.save();
       ctx.lineWidth = 3 / this.scale;
@@ -941,6 +958,38 @@ export class Viewer {
     const arcCx = bx + bodyW / 2;
     const arcCy = by;
     ctx.arc(arcCx, arcCy, arcR, Math.PI, 0, false);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  _drawBookmarkStar(ctx, cx, cy, alpha) {
+    ctx.save();
+    const s = 1 / this.scale;
+    const size = 12 * s;
+    const padX = 4 * s;
+    const offY = 4 * s;
+    const ax = cx - size - padX;
+    const ay = cy + offY;
+    const half = size / 2;
+    const inner = half * 0.42;
+    const outer = half * 0.95;
+    const px = ax + half;
+    const py = ay + half;
+    ctx.globalAlpha = typeof alpha === 'number' ? alpha : 1;
+    ctx.fillStyle = '#e8c83d';
+    ctx.strokeStyle = 'rgba(20,20,28,0.85)';
+    ctx.lineWidth = 1 * s;
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const r = i % 2 === 0 ? outer : inner;
+      const ang = -Math.PI / 2 + (i * Math.PI) / 5;
+      const xx = px + Math.cos(ang) * r;
+      const yy = py + Math.sin(ang) * r;
+      if (i === 0) ctx.moveTo(xx, yy);
+      else ctx.lineTo(xx, yy);
+    }
+    ctx.closePath();
+    ctx.fill();
     ctx.stroke();
     ctx.restore();
   }

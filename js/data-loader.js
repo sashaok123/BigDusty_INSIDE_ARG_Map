@@ -173,6 +173,12 @@ export function normaliseNode(raw) {
   if (typeof raw.name === 'string') node.name = raw.name;
   if (Array.isArray(raw.branches)) node.branches = raw.branches.filter((b) => typeof b === 'string');
   if (raw.locked === true) node.locked = true;
+  if (typeof raw.verification === 'string' && raw.verification) node.verification = raw.verification;
+  if (typeof raw.source_url === 'string' && raw.source_url) node.source_url = raw.source_url;
+  if (typeof raw.tool === 'string' && raw.tool) node.tool = raw.tool;
+  if (typeof raw.technique === 'string' && raw.technique) node.technique = raw.technique;
+  if (typeof raw.github_path === 'string' && raw.github_path) node.github_path = raw.github_path;
+  if (raw.bookmarked === true) node.bookmarked = true;
   return node;
 }
 
