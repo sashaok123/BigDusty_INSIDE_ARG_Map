@@ -1435,7 +1435,6 @@ function buildContextMenuItemsForNode(id) {
 
   if (nodeIsImageFile(n)) {
     items.push({ label: tr('ctx_view_image'), fn: () => viewImageFull(id) });
-    items.push({ label: tr('ctx_view_as_code'), fn: () => viewAsCode(id) });
     items.push({ label: tr('ctx_crop'), fn: () => doCropImage(id, n.file) });
     items.push({ label: tr('ctx_replace_image'), fn: () => doReplaceImage(id) });
     items.push({ kind: 'separator' });

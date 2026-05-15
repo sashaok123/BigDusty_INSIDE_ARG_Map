@@ -1,11 +1,13 @@
-/* Image compression pipeline. Downscales source to 2400 px long-side, then
-   encodes WebP at quality 0.85 / 0.7 / 0.55 until under 1.5 MB. Skips the
-   recompression hop for already-small WebP/JPEG/PNG under 200 KB. */
+/* Image compression pipeline. Keeps source dimensions unless the long side
+   exceeds 6000 px (browser memory safety cap), then encodes WebP at quality
+   0.92 / 0.8 / 0.7 until under 2 MB. Skips the recompression hop for already-
+   small WebP/JPEG/PNG under 500 KB. The user controls displayed size by
+   resizing the node on canvas; we only target weight, not resolution. */
 
-const MAX_LONG_SIDE = 2400;
-const TARGET_BYTES = 1.5 * 1024 * 1024;
-const SKIP_RECOMPRESS_BELOW = 200 * 1024;
-const QUALITY_LADDER = [0.85, 0.7, 0.55];
+const MAX_LONG_SIDE = 6000;
+const TARGET_BYTES = 2 * 1024 * 1024;
+const SKIP_RECOMPRESS_BELOW = 500 * 1024;
+const QUALITY_LADDER = [0.92, 0.8, 0.7];
 
 function loadImage(blob) {
   return new Promise((resolve, reject) => {
