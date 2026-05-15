@@ -23,6 +23,7 @@ const SVG_PATHS = {
   video:      '<rect x="3.5" y="6.5" width="13" height="11" rx="1.5"/><path d="M16.5 10 L21 7.5 L21 16.5 L16.5 14 Z"/>',
   audio:      '<path d="M5 9v6h3l5 4V5L8 9z"/><path d="M16 8a5 5 0 0 1 0 8"/><path d="M19 5a9 9 0 0 1 0 14"/>',
   arrow:      '<path d="M4 12h14"/><path d="M13 7l5 5l-5 5"/>',
+  transform:  '<rect x="2.5" y="6.5" width="6" height="11" rx="1"/><rect x="15.5" y="6.5" width="6" height="11" rx="1"/><path d="M9 12h6"/><path d="M13 9l3 3l-3 3"/>',
   group_sel:  '<rect x="3.5" y="5.5" width="17" height="13" rx="1.5" stroke-dasharray="3 2"/><rect x="7" y="9" width="4" height="3"/><rect x="13" y="12" width="4" height="3"/>',
   ungroup:    '<rect x="3.5" y="5.5" width="17" height="13" rx="1.5" stroke-dasharray="3 2"/><path d="M7 9 L17 15"/><path d="M17 9 L7 15"/>',
   trash:      '<path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1 -13"/>',
@@ -148,6 +149,10 @@ export class LeftRail {
     tools.appendChild(this._makeLabelBtn({
       id: 'rail-tool-arrow', icon: 'arrow', i18n: 'tool_arrow', tool: 'arrow', shortcut: 'A',
       onClick: () => setActiveTool('arrow'),
+    }));
+    tools.appendChild(this._makeLabelBtn({
+      id: 'rail-tool-transform', icon: 'transform', i18n: 'tool_transform', tool: 'transform', shortcut: 'R',
+      onClick: () => setActiveTool('transform'),
     }));
     rail.appendChild(tools);
     this.toolsEl = tools;

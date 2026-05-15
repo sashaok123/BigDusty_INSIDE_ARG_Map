@@ -9,6 +9,7 @@ import { tr, LANGS } from './i18n.js';
 import {
   STATUSES, statusVarName, isGroupNode, nodeMarkdown, isDocumentNode,
   isPuzzleNode, isStickyNode, isTextNode, isBlockNode, isVideoNode, isAudioNode,
+  isTransformNode, ANNOTATION_KINDS,
   VERIFICATIONS, TECHNIQUES,
 } from './nodes.js';
 import { renderMarkdown } from './markdown.js';
@@ -138,6 +139,9 @@ export class EditNodeModal {
     this.onResyncFromGithub = opts.onResyncFromGithub || null;
     this.getGithubOrigin = opts.getGithubOrigin || (() => null);
     this.isAdmin = opts.isAdmin || (() => false);
+    this.onProvenanceToggle = opts.onProvenanceToggle || (() => {});
+    this.isProvenanceActive = opts.isProvenanceActive || (() => false);
+    this.onAnnotationsChange = opts.onAnnotationsChange || (() => {});
     this._fileBodyCache = new Map();
     this._fileBytesCache = new Map();
     this._build();
@@ -416,8 +420,11 @@ export class EditNodeModal {
     body.appendChild(this._buildBranchesField());
     body.appendChild(translationsField);
     body.appendChild(imageField);
+    body.appendChild(this._buildTransformFields());
+    body.appendChild(this._buildAnnotationsField());
     body.appendChild(previewField);
     body.appendChild(this._buildMetadataSection());
+    body.appendChild(this._buildProvenanceField());
 
     const foot = el('div', { id: 'edit-node-foot' });
     const lockBtn = el('button', { type: 'button', class: 'modal-btn em-lock-btn', text: tr('ctx_lock') });
@@ -733,6 +740,10 @@ export class EditNodeModal {
       technique: typeof view.technique === 'string' ? view.technique : '',
       github_path: typeof view.github_path === 'string' ? view.github_path : '',
       bookmarked: !!view.bookmarked,
+      input: typeof view.input === 'string' ? view.input : '',
+      output: typeof view.output === 'string' ? view.output : '',
+      method: typeof view.method === 'string' ? view.method : '',
+      annotations: Array.isArray(view.annotations) ? view.annotations.map((a) => ({ ...a })) : [],
     };
     this.currentView = view;
     this._tags = [...this._state.tags];
@@ -952,6 +963,12 @@ export class EditNodeModal {
     if (view.technique !== undefined) this._state.technique = view.technique || '';
     if (view.github_path !== undefined) this._state.github_path = view.github_path || '';
     if (view.bookmarked !== undefined) this._state.bookmarked = !!view.bookmarked;
+    if (view.input !== undefined) this._state.input = view.input || '';
+    if (view.output !== undefined) this._state.output = view.output || '';
+    if (view.method !== undefined) this._state.method = view.method || '';
+    if (view.annotations !== undefined) {
+      this._state.annotations = Array.isArray(view.annotations) ? view.annotations.map((a) => ({ ...a })) : [];
+    }
     this._tags = [...this._state.tags];
     this._lastCommittedLabel = this._state.title;
     this._lastCommittedTagsKey = this._tagsKey(this._tags);
@@ -1054,15 +1071,19 @@ export class EditNodeModal {
     const isVideo = isVideoNode(probe);
     const isAudio = isAudioNode(probe);
     const isDocument = isDocumentNode(probe);
-    const showStatus = isBlock || isPuzzle || isVideo || isAudio || isDocument;
-    const showBody = isText || isSticky || isPuzzle || isVideo || isAudio;
-    const showCaption = (isBlock && isImage) || isPuzzle || isVideo || isDocument;
+    const isTransform = isTransformNode(probe);
+    const showStatus = isBlock || isPuzzle || isVideo || isAudio || isDocument || isTransform;
+    const showBody = !isTransform && (isText || isSticky || isPuzzle || isVideo || isAudio);
+    const showCaption = !isTransform && ((isBlock && isImage) || isPuzzle || isVideo || isDocument);
     const showParent = !isGroup;
     const showTextStyle = isText;
     const showVideo = isVideo;
     const showImage = isBlock && isImage;
-    const showExportMd = isText || isSticky || isPuzzle;
-    const showTranslations = isText || isSticky || isPuzzle || isVideo || isAudio;
+    const showAnnotations = isBlock && isImage;
+    const showTransform = isTransform;
+    const showExportMd = !isTransform && (isText || isSticky || isPuzzle);
+    const showTranslations = !isTransform && (isText || isSticky || isPuzzle || isVideo || isAudio);
+    const showProvenance = !isGroup;
     setDisp(this.statusFieldEl, showStatus);
     setDisp(this.bodyFieldEl, showBody);
     setDisp(this.captionFieldEl, showCaption);
@@ -1070,12 +1091,45 @@ export class EditNodeModal {
     setDisp(this.textStyleFieldEl, showTextStyle);
     setDisp(this.videoFieldEl, showVideo);
     setDisp(this.imageFieldEl, showImage);
+    setDisp(this.annotationsFieldEl, showAnnotations);
+    setDisp(this.transformFieldEl, showTransform);
     setDisp(this.translationsFieldEl, showTranslations);
+    setDisp(this.provenanceFieldEl, showProvenance);
     if (this.exportBtnEl) this.exportBtnEl.style.display = showExportMd ? '' : 'none';
     if (this.openFullImageBtnEl) {
       this.openFullImageBtnEl.style.display = showImage && typeof this.onOpenFullViewer === 'function' ? '' : 'none';
     }
+    if (showTransform) this._syncTransformFields();
+    if (showAnnotations) this._renderAnnotationsList();
+    if (showProvenance) this._syncProvenanceButton();
     this._applyMetadataVisibility();
+  }
+
+  _syncTransformFields() {
+    if (!this._state) return;
+    if (this.transformInputEl && document.activeElement !== this.transformInputEl) {
+      this.transformInputEl.value = this._state.input || '';
+    }
+    if (this.transformOutputEl && document.activeElement !== this.transformOutputEl) {
+      this.transformOutputEl.value = this._state.output || '';
+    }
+    const m = this._state.method || '';
+    if (this.transformMethodSelEl) {
+      const opts = Array.from(this.transformMethodSelEl.options).map((o) => o.value);
+      if (m && !opts.includes(m)) {
+        this.transformMethodSelEl.value = 'other';
+        if (this.transformMethodCustomEl) {
+          this.transformMethodCustomEl.style.display = '';
+          if (document.activeElement !== this.transformMethodCustomEl) this.transformMethodCustomEl.value = m;
+        }
+      } else {
+        this.transformMethodSelEl.value = m;
+        if (this.transformMethodCustomEl) {
+          this.transformMethodCustomEl.style.display = (m === 'other') ? '' : 'none';
+          if (m !== 'other' && document.activeElement !== this.transformMethodCustomEl) this.transformMethodCustomEl.value = '';
+        }
+      }
+    }
   }
 
   _setBodyTab(t) {
@@ -1226,6 +1280,207 @@ export class EditNodeModal {
     this._branchesHostEl = host;
     this._branchesLabelEl = lbl;
     return field;
+  }
+
+  _buildTransformFields() {
+    const wrap = el('div', { class: 'em-field em-transform' });
+    const inputLabel = el('label', { text: tr('transform_input_label') });
+    const inputTa = el('textarea', { rows: '3', class: 'em-transform-mono', placeholder: tr('transform_input_placeholder') });
+    inputTa.addEventListener('blur', () => this._commitTransformField('input', inputTa.value));
+    inputTa.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); inputTa.blur(); }
+    });
+    const methodLabel = el('label', { text: tr('transform_method_label') });
+    const methodSel = el('select', { class: 'em-transform-method' });
+    const methodNone = el('option', { value: '', text: tr('technique_none') });
+    methodSel.appendChild(methodNone);
+    for (const t of TECHNIQUES) {
+      const o = el('option', { value: t, text: this._techniqueLabel(t) });
+      methodSel.appendChild(o);
+    }
+    methodSel.addEventListener('change', () => this._commitTransformField('method', methodSel.value));
+    const methodCustom = el('input', { type: 'text', class: 'em-transform-method-custom', placeholder: tr('transform_method_custom_placeholder') });
+    methodCustom.addEventListener('blur', () => this._commitTransformField('method', methodCustom.value.trim()));
+    methodCustom.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); methodCustom.blur(); } });
+    methodCustom.style.display = 'none';
+    const outputLabel = el('label', { text: tr('transform_output_label') });
+    const outputTa = el('textarea', { rows: '3', class: 'em-transform-mono', placeholder: tr('transform_output_placeholder') });
+    outputTa.addEventListener('blur', () => this._commitTransformField('output', outputTa.value));
+    outputTa.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); outputTa.blur(); }
+    });
+    wrap.appendChild(inputLabel);
+    wrap.appendChild(inputTa);
+    wrap.appendChild(methodLabel);
+    wrap.appendChild(methodSel);
+    wrap.appendChild(methodCustom);
+    wrap.appendChild(outputLabel);
+    wrap.appendChild(outputTa);
+    wrap.style.display = 'none';
+    this.transformFieldEl = wrap;
+    this.transformInputLabelEl = inputLabel;
+    this.transformInputEl = inputTa;
+    this.transformMethodLabelEl = methodLabel;
+    this.transformMethodSelEl = methodSel;
+    this.transformMethodCustomEl = methodCustom;
+    this.transformOutputLabelEl = outputLabel;
+    this.transformOutputEl = outputTa;
+    return wrap;
+  }
+
+  _buildAnnotationsField() {
+    const wrap = el('div', { class: 'em-field em-annotations' });
+    const header = el('button', { type: 'button', class: 'em-annotations-header' });
+    const chev = el('span', { class: 'em-annotations-chev', text: '▸' });
+    const headerLabel = el('span', { class: 'em-annotations-header-label', text: tr('annotations_section') });
+    header.appendChild(chev); header.appendChild(headerLabel);
+    const body = el('div', { class: 'em-annotations-body' });
+    const list = el('div', { class: 'em-annotations-list' });
+    const addRow = el('div', { class: 'em-annotations-add' });
+    const kindSel = el('select', { class: 'em-annotation-kind' });
+    for (const k of ANNOTATION_KINDS) {
+      const o = el('option', { value: k, text: tr(`annotation_kind_${k}`) });
+      kindSel.appendChild(o);
+    }
+    const textIn = el('input', { type: 'text', class: 'em-annotation-text', placeholder: tr('annotations_text_placeholder') });
+    const colorIn = el('input', { type: 'color', class: 'em-annotation-color', value: '#e8c83d' });
+    const addBtn = el('button', { type: 'button', class: 'modal-btn', text: tr('annotations_add') });
+    addBtn.addEventListener('click', () => {
+      this._addAnnotation({
+        kind: kindSel.value,
+        text: textIn.value || '',
+        color: colorIn.value || '#e8c83d',
+        x: 32, y: 32, w: 120, h: 64,
+      });
+      textIn.value = '';
+    });
+    addRow.appendChild(kindSel); addRow.appendChild(textIn); addRow.appendChild(colorIn); addRow.appendChild(addBtn);
+    body.appendChild(list); body.appendChild(addRow);
+    wrap.appendChild(header); wrap.appendChild(body);
+    header.addEventListener('click', () => {
+      const open = wrap.classList.toggle('em-annotations-open');
+      chev.textContent = open ? '▾' : '▸';
+    });
+    wrap.style.display = 'none';
+    this.annotationsFieldEl = wrap;
+    this.annotationsHeaderLabelEl = headerLabel;
+    this.annotationsListEl = list;
+    this.annotationsKindSelEl = kindSel;
+    this.annotationsAddBtnEl = addBtn;
+    this.annotationsTextPlaceholderEl = textIn;
+    return wrap;
+  }
+
+  _buildProvenanceField() {
+    const wrap = el('div', { class: 'em-field em-provenance' });
+    const btn = el('button', { type: 'button', class: 'em-provenance-btn modal-btn' });
+    btn.textContent = tr('provenance_show');
+    btn.addEventListener('click', () => this._toggleProvenance());
+    wrap.appendChild(btn);
+    wrap.style.display = 'none';
+    this.provenanceFieldEl = wrap;
+    this.provenanceBtnEl = btn;
+    return wrap;
+  }
+
+  _renderAnnotationsList() {
+    const host = this.annotationsListEl;
+    if (!host) return;
+    host.innerHTML = '';
+    const items = (this._state && Array.isArray(this._state.annotations)) ? this._state.annotations : [];
+    if (!items.length) {
+      const empty = el('div', { class: 'em-annotations-empty', text: tr('annotations_empty') });
+      host.appendChild(empty);
+      return;
+    }
+    for (let i = 0; i < items.length; i++) {
+      const a = items[i];
+      const row = el('div', { class: 'em-annotation-row' });
+      const k = el('span', { class: 'em-annotation-kindlabel', text: tr(`annotation_kind_${a.kind}`) });
+      const swatch = el('span', { class: 'em-annotation-swatch' });
+      swatch.style.background = a.color || '#e8c83d';
+      const txt = el('input', { type: 'text', class: 'em-annotation-textin', value: a.text || '',
+        placeholder: tr('annotations_text_placeholder') });
+      txt.addEventListener('blur', () => this._patchAnnotation(i, { text: txt.value || '' }));
+      txt.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); txt.blur(); } });
+      const delBtn = el('button', { type: 'button', class: 'em-annotation-del', html: '&times;',
+        onclick: () => this._deleteAnnotation(i) });
+      row.appendChild(swatch); row.appendChild(k); row.appendChild(txt); row.appendChild(delBtn);
+      host.appendChild(row);
+    }
+  }
+
+  _addAnnotation(spec) {
+    if (this._readonly) { this.onUnauthedSubmit(); return; }
+    if (!this._state) return;
+    const items = Array.isArray(this._state.annotations) ? this._state.annotations.slice() : [];
+    const ann = {
+      id: `ann-${Date.now().toString(36)}-${items.length}`,
+      kind: spec.kind || 'rect',
+      x: Number.isFinite(spec.x) ? spec.x : 32,
+      y: Number.isFinite(spec.y) ? spec.y : 32,
+      w: Number.isFinite(spec.w) ? spec.w : 120,
+      h: Number.isFinite(spec.h) ? spec.h : 64,
+      text: typeof spec.text === 'string' ? spec.text : '',
+      color: typeof spec.color === 'string' ? spec.color : '#e8c83d',
+      strokeWidth: 2,
+    };
+    items.push(ann);
+    this._state.annotations = items;
+    this._renderAnnotationsList();
+    this._commitAnnotations();
+  }
+
+  _patchAnnotation(i, patch) {
+    if (this._readonly) { this.onUnauthedSubmit(); return; }
+    if (!this._state) return;
+    const items = Array.isArray(this._state.annotations) ? this._state.annotations.slice() : [];
+    if (!items[i]) return;
+    items[i] = { ...items[i], ...patch };
+    this._state.annotations = items;
+    this._commitAnnotations();
+  }
+
+  _deleteAnnotation(i) {
+    if (this._readonly) { this.onUnauthedSubmit(); return; }
+    if (!this._state) return;
+    const items = Array.isArray(this._state.annotations) ? this._state.annotations.slice() : [];
+    if (i < 0 || i >= items.length) return;
+    items.splice(i, 1);
+    this._state.annotations = items;
+    this._renderAnnotationsList();
+    this._commitAnnotations();
+  }
+
+  _commitAnnotations() {
+    if (this._suppressInlineCommits || !this._state) return;
+    if (this._readonly) { this.onUnauthedSubmit(); return; }
+    this.onAnnotationsChange(this._state.id, Array.isArray(this._state.annotations) ? this._state.annotations.slice() : []);
+  }
+
+  _commitTransformField(field, value) {
+    if (this._readonly) { this.onUnauthedSubmit(); return; }
+    if (!this._state) return;
+    if (this._suppressInlineCommits) return;
+    const next = typeof value === 'string' ? value : '';
+    if ((this._state[field] || '') === next) return;
+    this._state[field] = next;
+    if (typeof this.onMetadataChange === 'function') this.onMetadataChange(this._state.id, { [field]: next });
+  }
+
+  _toggleProvenance() {
+    if (!this._state) return;
+    const cur = !!this.isProvenanceActive(this._state.id);
+    const next = !cur;
+    this.onProvenanceToggle(this._state.id, next);
+    this._syncProvenanceButton();
+  }
+
+  _syncProvenanceButton() {
+    if (!this.provenanceBtnEl || !this._state) return;
+    const on = !!this.isProvenanceActive(this._state.id);
+    this.provenanceBtnEl.classList.toggle('on', on);
+    this.provenanceBtnEl.textContent = on ? tr('provenance_hide') : tr('provenance_show');
   }
 
   _buildMetadataSection() {
@@ -1515,6 +1770,9 @@ export class EditNodeModal {
   }
 
   _closeImmediate() {
+    if (this._state && typeof this.isProvenanceActive === 'function' && this.isProvenanceActive(this._state.id)) {
+      try { this.onProvenanceToggle(this._state.id, false); } catch (e) { void e; }
+    }
     if (this.panelEl) this.panelEl.classList.remove('open');
     this._state = null;
     this.currentView = null;
@@ -1591,6 +1849,12 @@ export class EditNodeModal {
     payload.technique = this._state.technique || '';
     payload.github_path = this._state.github_path || '';
     payload.bookmarked = !!this._state.bookmarked;
+    if (this._state.kind === 'transform') {
+      payload.input = typeof this._state.input === 'string' ? this._state.input : '';
+      payload.output = typeof this._state.output === 'string' ? this._state.output : '';
+      payload.method = typeof this._state.method === 'string' ? this._state.method : '';
+    }
+    payload.annotations = Array.isArray(this._state.annotations) ? this._state.annotations.map((a) => ({ ...a })) : [];
     this._state.md = payload.md;
     this.onSave(payload);
     if (typeof this.onContentChange === 'function') this.onContentChange(payload.id, payload.md, true);
@@ -1651,6 +1915,26 @@ export class EditNodeModal {
     if (this.metadataGhOpenBtnEl) this.metadataGhOpenBtnEl.textContent = tr('open_on_github');
     if (this.metadataGhResyncBtnEl) this.metadataGhResyncBtnEl.textContent = tr('resync_from_github');
     if (this.metadataBookmarkLabelEl) this.metadataBookmarkLabelEl.textContent = tr('bookmark_toggle');
+    if (this.transformInputLabelEl) this.transformInputLabelEl.textContent = tr('transform_input_label');
+    if (this.transformMethodLabelEl) this.transformMethodLabelEl.textContent = tr('transform_method_label');
+    if (this.transformOutputLabelEl) this.transformOutputLabelEl.textContent = tr('transform_output_label');
+    if (this.transformInputEl) this.transformInputEl.placeholder = tr('transform_input_placeholder');
+    if (this.transformOutputEl) this.transformOutputEl.placeholder = tr('transform_output_placeholder');
+    if (this.transformMethodCustomEl) this.transformMethodCustomEl.placeholder = tr('transform_method_custom_placeholder');
+    if (this.transformMethodSelEl) {
+      for (const opt of this.transformMethodSelEl.options) {
+        opt.textContent = opt.value ? this._techniqueLabel(opt.value) : tr('technique_none');
+      }
+    }
+    if (this.annotationsHeaderLabelEl) this.annotationsHeaderLabelEl.textContent = tr('annotations_section');
+    if (this.annotationsKindSelEl) {
+      for (const opt of this.annotationsKindSelEl.options) {
+        opt.textContent = tr(`annotation_kind_${opt.value}`);
+      }
+    }
+    if (this.annotationsAddBtnEl) this.annotationsAddBtnEl.textContent = tr('annotations_add');
+    if (this.annotationsTextPlaceholderEl) this.annotationsTextPlaceholderEl.placeholder = tr('annotations_text_placeholder');
+    this._syncProvenanceButton();
     if (this.metadataSourceInputEl) this.metadataSourceInputEl.placeholder = tr('source_url_placeholder');
     if (this.metadataToolInputEl) this.metadataToolInputEl.placeholder = tr('tool_placeholder');
     if (this.metadataVerifBtnEls) {

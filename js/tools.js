@@ -2,7 +2,7 @@
    rail, and keyboard module all read and write through this module so
    shortcuts, button clicks, and pointer behaviour stay in sync. */
 
-export const TOOLS = ['select', 'pan', 'block', 'sticky', 'group', 'text', 'image', 'video', 'arrow'];
+export const TOOLS = ['select', 'pan', 'block', 'sticky', 'group', 'text', 'image', 'video', 'arrow', 'transform'];
 
 const SPACE_PAN_TOOL = 'select';
 

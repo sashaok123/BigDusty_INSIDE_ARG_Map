@@ -119,6 +119,8 @@ export class Viewer {
     this.drawPreviewEl = options.drawPreviewEl || null;
     this.cursorPos = null;
 
+    this.provenance = null;
+
     this._raf = null;
     this._subscribers = new Set();
 
@@ -141,7 +143,10 @@ export class Viewer {
   getLod() { return lodFor(this.scale); }
 
   async setBlocks(blocks) {
-    this.blocks = blocks.map((b) => ({ id: b.id, rect: { ...b.rect }, file: b.file }));
+    this.blocks = blocks.map((b) => ({
+      id: b.id, rect: { ...b.rect }, file: b.file,
+      annotations: Array.isArray(b.annotations) ? b.annotations.map((a) => ({ ...a })) : null,
+    }));
     this._computeBounds();
     this.imageReady = true;
     this._refreshBg();
@@ -155,7 +160,10 @@ export class Viewer {
   async addBlock(block) {
     if (!block || !block.id) return;
     const existing = this.blocks.findIndex((b) => b.id === block.id);
-    const entry = { id: block.id, rect: { ...block.rect }, file: block.file };
+    const entry = {
+      id: block.id, rect: { ...block.rect }, file: block.file,
+      annotations: Array.isArray(block.annotations) ? block.annotations.map((a) => ({ ...a })) : null,
+    };
     if (existing >= 0) this.blocks[existing] = entry;
     else this.blocks.push(entry);
     this._computeBounds();
@@ -177,9 +185,19 @@ export class Viewer {
     if (!block || !block.id) return;
     const i = this.blocks.findIndex((b) => b.id === block.id);
     if (i < 0) { return this.addBlock(block); }
-    this.blocks[i] = { id: block.id, rect: { ...block.rect }, file: block.file };
+    this.blocks[i] = {
+      id: block.id, rect: { ...block.rect }, file: block.file,
+      annotations: Array.isArray(block.annotations) ? block.annotations.map((a) => ({ ...a })) : null,
+    };
     this.blockImages.delete(block.id);
     await this._loadBlockImage(this.blocks[i]);
+    this.requestDraw();
+  }
+
+  setBlockAnnotations(id, annotations) {
+    const i = this.blocks.findIndex((b) => b.id === id);
+    if (i < 0) return;
+    this.blocks[i].annotations = Array.isArray(annotations) ? annotations.map((a) => ({ ...a })) : null;
     this.requestDraw();
   }
 
@@ -337,6 +355,37 @@ export class Viewer {
     void id;
   }
 
+  setProvenance(p) {
+    if (!p || !p.active) {
+      this.provenance = null;
+    } else {
+      this.provenance = {
+        active: true,
+        selectedId: p.selectedId || null,
+        ancestors: p.ancestors instanceof Set ? p.ancestors : new Set(p.ancestors || []),
+        descendants: p.descendants instanceof Set ? p.descendants : new Set(p.descendants || []),
+      };
+    }
+    this.requestDraw();
+  }
+
+  _provenanceOpacityFor(id) {
+    if (!this.provenance || !this.provenance.active) return 1;
+    const p = this.provenance;
+    if (id === p.selectedId) return 1;
+    if (p.ancestors.has(id) || p.descendants.has(id)) return 1;
+    return 0.2;
+  }
+
+  _provenanceOutlineFor(id) {
+    if (!this.provenance || !this.provenance.active) return null;
+    const p = this.provenance;
+    if (id === p.selectedId) return this.accentColour;
+    if (p.ancestors.has(id)) return this.accentColour;
+    if (p.descendants.has(id)) return rgba(this.accentColour, 0.55);
+    return null;
+  }
+
   setSelection(ids) {
     if (ids instanceof Set) this.selection = new Set(ids);
     else if (Array.isArray(ids)) this.selection = new Set(ids);
@@ -396,7 +445,7 @@ export class Viewer {
     const t = getActiveTool();
     if (t === 'pan') { this.canvas.style.cursor = 'grab'; return; }
     if (t === 'arrow') { this.canvas.style.cursor = 'crosshair'; return; }
-    if (t === 'block' || t === 'sticky' || t === 'text' || t === 'group') {
+    if (t === 'block' || t === 'sticky' || t === 'text' || t === 'group' || t === 'transform') {
       this.canvas.style.cursor = 'crosshair';
       return;
     }
@@ -613,7 +662,24 @@ export class Viewer {
       for (const b of this.blocks) {
         const img = this.blockImages.get(b.id);
         if (!img) continue;
+        const provOpacity = this._provenanceOpacityFor(b.id);
+        if (provOpacity !== 1) {
+          ctx.save();
+          ctx.globalAlpha = provOpacity;
+        }
         ctx.drawImage(img, b.rect.x, b.rect.y, b.rect.w, b.rect.h);
+        if (Array.isArray(b.annotations) && b.annotations.length) {
+          this._drawBlockAnnotations(ctx, b);
+        }
+        if (provOpacity !== 1) ctx.restore();
+        const provOutline = this._provenanceOutlineFor(b.id);
+        if (provOutline) {
+          ctx.save();
+          ctx.lineWidth = 3 / this.scale;
+          ctx.strokeStyle = provOutline;
+          ctx.strokeRect(b.rect.x, b.rect.y, b.rect.w, b.rect.h);
+          ctx.restore();
+        }
         if (this.mode === 'editor' && this.selection.has(b.id)) {
           ctx.save();
           ctx.lineWidth = 2.4 / this.scale;
@@ -646,8 +712,18 @@ export class Viewer {
 
     for (const h of this.hotspots) {
       if (!this._isVisible(h)) continue;
+      if (this.provenance && this.provenance.active) {
+        const op = this._provenanceOpacityFor(h.id);
+        h.provenanceOpacity = op === 1 ? undefined : op;
+        const ol = this._provenanceOutlineFor(h.id);
+        h.provenanceOutline = ol || undefined;
+      } else if (h.provenanceOpacity !== undefined || h.provenanceOutline !== undefined) {
+        h.provenanceOpacity = undefined;
+        h.provenanceOutline = undefined;
+      }
       if (h.kind === 'sticky') this._drawSticky(ctx, h, lod);
       else if (h.kind === 'text') this._drawText(ctx, h, lod);
+      else if (h.kind === 'transform') this._drawTransform(ctx, h, lod);
       else this._drawHotspot(ctx, h, lod);
     }
 
@@ -691,6 +767,8 @@ export class Viewer {
   _drawGroup(ctx, g) {
     const { x, y, w, h } = g.rect;
     ctx.save();
+    const provOp = this._provenanceOpacityFor(g.id);
+    if (provOp !== 1) ctx.globalAlpha = provOp;
     ctx.fillStyle = rgba(this.accentColour, 0.06);
     ctx.fillRect(x, y, w, h);
     ctx.lineWidth = 1.6 / this.scale;
@@ -722,6 +800,7 @@ export class Viewer {
     const cx = x + w / 2;
     const cy = y + hh / 2;
     ctx.save();
+    if (typeof h.provenanceOpacity === 'number') ctx.globalAlpha = h.provenanceOpacity;
     ctx.translate(cx, cy);
     ctx.rotate(angleRad);
     ctx.translate(-cx, -cy);
@@ -761,6 +840,7 @@ export class Viewer {
     const isOutlineHL = this.outlineHighlightId === h.id;
     const ts = h.text_style || h.textStyle || {};
     ctx.save();
+    if (typeof h.provenanceOpacity === 'number') ctx.globalAlpha = h.provenanceOpacity;
     if (this.scale > 0.25 && lod && lod.edgeLabelsVisible) {
       const sizeMap = { S: 12, M: 16, L: 20, XL: 28 };
       const baseSize = sizeMap[ts.size] || 16;
@@ -878,12 +958,16 @@ export class Viewer {
     if (filterDim) alpha = 0.1;
     else if (searchDim) alpha = 0.3;
     if (typeof h.branchOpacity === 'number' && h.branchOpacity < alpha) alpha = h.branchOpacity;
+    if (typeof h.provenanceOpacity === 'number' && h.provenanceOpacity < alpha) alpha = h.provenanceOpacity;
 
     ctx.lineWidth = (isHover || isOutlineHL || isSelected ? 2.5 : 1.6) / this.scale;
     ctx.globalAlpha = alpha;
-    ctx.strokeStyle = c.stroke;
+    ctx.strokeStyle = h.provenanceOutline ? h.provenanceOutline : c.stroke;
     ctx.fillStyle = isHover ? c.fillHover : c.fill;
     ctx.fillRect(x, y, w, hh);
+    if (h.provenanceOutline) {
+      ctx.lineWidth = Math.max(ctx.lineWidth, 3 / this.scale);
+    }
     ctx.strokeRect(x, y, w, hh);
 
     if (h.verification) {
@@ -927,6 +1011,223 @@ export class Viewer {
       this._drawLockBadge(ctx, x + w, y);
     }
     ctx.globalAlpha = 1;
+  }
+
+  _drawBlockAnnotations(ctx, b) {
+    const img = this.blockImages.get(b.id);
+    if (!img || !img.naturalWidth || !img.naturalHeight) return;
+    const sx = b.rect.w / img.naturalWidth;
+    const sy = b.rect.h / img.naturalHeight;
+    ctx.save();
+    for (const a of b.annotations) {
+      if (!a || typeof a !== 'object') continue;
+      const dx = b.rect.x + (a.x || 0) * sx;
+      const dy = b.rect.y + (a.y || 0) * sy;
+      const dw = (a.w || 0) * sx;
+      const dh = (a.h || 0) * sy;
+      const col = (typeof a.color === 'string' && a.color) ? a.color : '#e8c83d';
+      const stroke = Number.isFinite(a.strokeWidth) ? a.strokeWidth : 2;
+      const w = (stroke * Math.max(sx, sy)) / this.scale;
+      ctx.strokeStyle = col;
+      ctx.fillStyle = col;
+      ctx.lineWidth = Math.max(0.6, w);
+      if (a.kind === 'rect') {
+        ctx.strokeRect(dx, dy, dw, dh);
+        if (a.text && this.scale > 0.4) {
+          const fontPx = Math.max(10, 12 / this.scale);
+          ctx.font = `600 ${fontPx}px var(--font-mono)`;
+          ctx.textBaseline = 'bottom';
+          ctx.fillStyle = col;
+          ctx.fillText(a.text, dx, dy - 2 / this.scale);
+        }
+      } else if (a.kind === 'circle') {
+        ctx.beginPath();
+        const rx = dw / 2; const ry = dh / 2;
+        if (rx > 0 && ry > 0) {
+          ctx.ellipse(dx + rx, dy + ry, rx, ry, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      } else if (a.kind === 'arrow') {
+        ctx.beginPath();
+        ctx.moveTo(dx, dy);
+        ctx.lineTo(dx + dw, dy + dh);
+        ctx.stroke();
+        const ang = Math.atan2(dh, dw);
+        const ah = 10 / this.scale;
+        const aw = 5 / this.scale;
+        const tipX = dx + dw;
+        const tipY = dy + dh;
+        ctx.beginPath();
+        ctx.moveTo(tipX, tipY);
+        ctx.lineTo(tipX - ah * Math.cos(ang) + aw * Math.sin(ang), tipY - ah * Math.sin(ang) - aw * Math.cos(ang));
+        ctx.lineTo(tipX - ah * Math.cos(ang) - aw * Math.sin(ang), tipY - ah * Math.sin(ang) + aw * Math.cos(ang));
+        ctx.closePath();
+        ctx.fillStyle = col;
+        ctx.fill();
+      } else if (a.kind === 'label') {
+        const text = a.text || '';
+        if (!text) continue;
+        const fontPx = Math.max(11, 13 / this.scale);
+        ctx.font = `600 ${fontPx}px var(--font-mono)`;
+        const tw = ctx.measureText(text).width;
+        const padX = 6 / this.scale;
+        const padY = 3 / this.scale;
+        const boxW = tw + padX * 2;
+        const boxH = fontPx + padY * 2;
+        ctx.fillStyle = col;
+        if (typeof ctx.roundRect === 'function') {
+          ctx.beginPath();
+          ctx.roundRect(dx, dy, boxW, boxH, 3 / this.scale);
+          ctx.fill();
+        } else {
+          ctx.fillRect(dx, dy, boxW, boxH);
+        }
+        ctx.fillStyle = pickTextColor(col, { dark: '#16181c', light: '#ffffff' });
+        ctx.textBaseline = 'top';
+        ctx.fillText(text, dx + padX, dy + padY);
+      }
+    }
+    ctx.restore();
+  }
+
+  _drawTransform(ctx, h, lod) {
+    const { x, y, w, h: hh } = h.rect;
+    const c = this.statusPalette[h.status] || this.statusPalette.unsolved || { stroke: this.borderColour, fill: 'transparent', fillHover: 'transparent' };
+    const isHover = this.hoverId === h.id || this.activeId === h.id;
+    const isOutlineHL = this.outlineHighlightId === h.id;
+    const isSelected = this.selection.has(h.id);
+    const searchDim = this.searchTerm && !this._matchesSearch(h);
+    const filterDim = this.fadeNonMatching && !this._matchesFilter(h);
+    let alpha = 1;
+    if (filterDim) alpha = 0.1;
+    else if (searchDim) alpha = 0.3;
+    if (typeof h.branchOpacity === 'number' && h.branchOpacity < alpha) alpha = h.branchOpacity;
+    if (typeof h.provenanceOpacity === 'number' && h.provenanceOpacity < alpha) alpha = h.provenanceOpacity;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#f8f5ed';
+    ctx.fillRect(x, y, w, hh);
+    ctx.strokeStyle = c.stroke;
+    ctx.lineWidth = (isHover || isOutlineHL || isSelected ? 2.5 : 1.6) / this.scale;
+    ctx.strokeRect(x, y, w, hh);
+
+    const titleH = (h.title && h.title.trim()) ? Math.min(20, hh * 0.18) : 0;
+    const remaining = hh - titleH;
+    const rowH = remaining / 3;
+    const midY = y + titleH + rowH;
+    const botY = y + titleH + rowH * 2;
+    ctx.strokeStyle = rgba(c.stroke, 0.55);
+    ctx.lineWidth = 1 / this.scale;
+    ctx.beginPath();
+    ctx.moveTo(x, midY); ctx.lineTo(x + w, midY);
+    ctx.moveTo(x, botY); ctx.lineTo(x + w, botY);
+    if (titleH > 0) { ctx.moveTo(x, y + titleH); ctx.lineTo(x + w, y + titleH); }
+    ctx.stroke();
+
+    if (h.verification) {
+      const stripeColor = VERIFICATION_STRIPE[h.verification];
+      if (stripeColor) {
+        const sw = 3 / this.scale;
+        ctx.fillStyle = stripeColor;
+        ctx.fillRect(x, y, sw, hh);
+      }
+    }
+
+    if (this.scale > 0.25 && lod && lod.edgeLabelsVisible) {
+      const fontPx = Math.max(10, Math.min(15, 12 / this.scale));
+      const padX = 8 / this.scale;
+      const padY = 4 / this.scale;
+      ctx.fillStyle = pickTextColor('#f8f5ed', { dark: '#1a1a22' });
+      ctx.textBaseline = 'top';
+
+      if (titleH > 0) {
+        ctx.font = `600 ${Math.min(fontPx, titleH * 0.7)}px var(--font-ui)`;
+        const tt = h.title || '';
+        const maxChars = Math.max(8, Math.floor(w / (fontPx * 0.55)));
+        const shown = tt.length > maxChars ? tt.slice(0, maxChars - 1) + '…' : tt;
+        ctx.fillText(shown, x + padX, y + padY);
+      }
+
+      ctx.font = `400 ${fontPx}px var(--font-mono)`;
+      const inp = h.input || '';
+      const inpMax = Math.max(8, Math.floor((w - padX * 2) / (fontPx * 0.6)));
+      const inpShown = inp.length > inpMax ? inp.slice(0, inpMax - 1) + '…' : inp;
+      ctx.fillText(inpShown, x + padX, y + titleH + padY);
+
+      const method = h.method || '';
+      if (method) {
+        const mFont = Math.max(9, Math.min(12, 10 / this.scale));
+        ctx.font = `600 ${mFont}px var(--font-mono)`;
+        const mw = ctx.measureText(method).width;
+        const pillW = mw + padX * 1.4;
+        const pillH = mFont + padY * 1.4;
+        const pillX = x + w / 2 - pillW / 2 - 8 / this.scale;
+        const pillY = midY + (rowH - pillH) / 2;
+        ctx.fillStyle = rgba(c.stroke, 0.18);
+        if (typeof ctx.roundRect === 'function') {
+          ctx.beginPath();
+          ctx.roundRect(pillX, pillY, pillW, pillH, 3 / this.scale);
+          ctx.fill();
+        } else {
+          ctx.fillRect(pillX, pillY, pillW, pillH);
+        }
+        ctx.fillStyle = c.stroke;
+        ctx.fillText(method, pillX + padX * 0.7, pillY + padY * 0.6);
+        ctx.fillStyle = c.stroke;
+        const arrowX = pillX + pillW + 4 / this.scale;
+        const arrowY = pillY + pillH / 2;
+        ctx.beginPath();
+        ctx.moveTo(arrowX, arrowY);
+        ctx.lineTo(arrowX + 10 / this.scale, arrowY);
+        ctx.lineTo(arrowX + 10 / this.scale - 4 / this.scale, arrowY - 3 / this.scale);
+        ctx.moveTo(arrowX + 10 / this.scale, arrowY);
+        ctx.lineTo(arrowX + 10 / this.scale - 4 / this.scale, arrowY + 3 / this.scale);
+        ctx.strokeStyle = c.stroke;
+        ctx.lineWidth = 1.4 / this.scale;
+        ctx.stroke();
+      } else {
+        const mFont = Math.max(9, Math.min(12, 10 / this.scale));
+        ctx.font = `400 ${mFont}px var(--font-mono)`;
+        ctx.fillStyle = rgba(c.stroke, 0.7);
+        ctx.fillText('→', x + w / 2 - 4 / this.scale, midY + (rowH - mFont) / 2);
+      }
+
+      ctx.font = `400 ${fontPx}px var(--font-mono)`;
+      ctx.fillStyle = pickTextColor('#f8f5ed', { dark: '#1a1a22' });
+      const outp = h.output || '';
+      const outpMax = Math.max(8, Math.floor((w - padX * 2) / (fontPx * 0.6)));
+      const outpShown = outp.length > outpMax ? outp.slice(0, outpMax - 1) + '…' : outp;
+      ctx.fillText(outpShown, x + padX, botY + padY);
+    }
+
+    if (h.bookmarked && this.scale > 0.2) {
+      this._drawBookmarkStar(ctx, x + w, y, alpha);
+    }
+
+    if (isOutlineHL || isSelected) {
+      ctx.lineWidth = 3 / this.scale;
+      ctx.strokeStyle = this.accentColour;
+      const pad = 3 / this.scale;
+      ctx.strokeRect(x - pad, y - pad, w + pad * 2, hh + pad * 2);
+    }
+
+    if (this.mode === 'editor' && lod && lod.handlesVisible && (isHover || this.activeId === h.id || isSelected) && !h.locked) {
+      ctx.fillStyle = this.accentColour;
+      ctx.strokeStyle = this.handleStrokeColour;
+      ctx.lineWidth = 1.5 / this.scale;
+      const handles = this._handlePositions(x, y, w, hh);
+      const hs = HANDLE_SIZE / this.scale;
+      for (const { hx, hy } of handles) {
+        ctx.fillRect(hx - hs / 2, hy - hs / 2, hs, hs);
+        ctx.strokeRect(hx - hs / 2, hy - hs / 2, hs, hs);
+      }
+    }
+
+    if (h.locked && this.scale > 0.2) {
+      this._drawLockBadge(ctx, x + w, y);
+    }
+    ctx.restore();
   }
 
   _drawLockBadge(ctx, cx, cy) {
@@ -1251,7 +1552,7 @@ export class Viewer {
         return;
       }
 
-      if (tool === 'block' || tool === 'sticky' || tool === 'text') {
+      if (tool === 'block' || tool === 'sticky' || tool === 'text' || tool === 'transform') {
         this.dragState = {
           kind: 'tool-click',
           tool,

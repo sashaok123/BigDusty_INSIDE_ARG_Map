@@ -142,6 +142,7 @@ export class KeyboardShortcuts {
         return;
       }
       if (k === 'a' || k === 'A') { ev.preventDefault(); setActiveTool('arrow'); return; }
+      if (k === 'r' || k === 'R') { ev.preventDefault(); setActiveTool('transform'); return; }
       if (k === 'g' || k === 'G') {
         ev.preventDefault();
         if (this._call('onGroupShortcut', ev)) return;

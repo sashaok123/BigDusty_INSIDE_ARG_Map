@@ -179,6 +179,32 @@ export function normaliseNode(raw) {
   if (typeof raw.technique === 'string' && raw.technique) node.technique = raw.technique;
   if (typeof raw.github_path === 'string' && raw.github_path) node.github_path = raw.github_path;
   if (raw.bookmarked === true) node.bookmarked = true;
+  if (typeof raw.input === 'string') node.input = raw.input;
+  if (typeof raw.output === 'string') node.output = raw.output;
+  if (typeof raw.method === 'string') node.method = raw.method;
+  if (typeof raw.label === 'string' && raw.label && raw.kind === 'transform') node.label = raw.label;
+  if (raw.kind === 'transform') node.kind = 'transform';
+  if (Array.isArray(raw.annotations)) {
+    const out = [];
+    for (const a of raw.annotations) {
+      if (!a || typeof a !== 'object') continue;
+      const ak = typeof a.kind === 'string' ? a.kind : '';
+      if (!['rect', 'circle', 'arrow', 'label'].includes(ak)) continue;
+      const ann = {
+        id: typeof a.id === 'string' && a.id ? a.id : `ann-${Date.now().toString(36)}-${out.length}`,
+        kind: ak,
+        x: numberOr(a.x, 0),
+        y: numberOr(a.y, 0),
+        w: numberOr(a.w, 0),
+        h: numberOr(a.h, 0),
+      };
+      if (typeof a.text === 'string') ann.text = a.text;
+      if (typeof a.color === 'string') ann.color = a.color;
+      if (Number.isFinite(a.strokeWidth)) ann.strokeWidth = a.strokeWidth;
+      out.push(ann);
+    }
+    if (out.length) node.annotations = out;
+  }
   return node;
 }
 

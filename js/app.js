@@ -36,6 +36,7 @@ import {
   addStickyNode,
   addGroupNode,
   addTextNode,
+  addTransformNode,
   updatePuzzleNode,
   removeNode,
   uniqueId,
@@ -58,6 +59,7 @@ import {
 } from './nodes.js';
 import { LeftRail } from './left-rail.js';
 import { EditNodeModal, detectVideoUrl } from './edit-node-modal.js';
+import { CompareModal } from './compare-modal.js';
 import { Uploader, validateImageFile, isVideoMime } from './uploader.js';
 import { openCropper } from './crop-tool.js';
 import { CropOverlay } from './crop-overlay.js';
@@ -116,6 +118,7 @@ const state = {
   history: { past: [], future: [] },
   hasUnsavedEdits: false,
   githubOrigin: null,
+  provenance: { active: false, selectedId: null, ancestors: new Set(), descendants: new Set() },
 };
 
 const HISTORY_LIMIT = 50;
@@ -154,6 +157,7 @@ let cropOverlay;
 let exportModal;
 let bookmarksPanel;
 let githubImportModal;
+let compareModal;
 let _resizeHistoryPushed = false;
 
 function $(id) { return document.getElementById(id); }
@@ -217,6 +221,7 @@ async function bootstrap() {
   setupBranchesPanel();
   setupBookmarksPanel();
   setupGithubImportModal();
+  compareModal = new CompareModal();
   setupToastBridge();
   setupPresence();
 
@@ -858,8 +863,8 @@ function setupViewer() {
       const items = buildContextMenuItemsForNode(id);
       if (items.length) contextMenu.open(ev.clientX, ev.clientY, items);
     },
-    onCanvasRightClick: (ev) => {
-      const items = buildContextMenuItemsForEmpty();
+    onCanvasRightClick: (ev, info) => {
+      const items = buildContextMenuItemsForEmpty(info && info.img ? info.img : null);
       if (items.length) contextMenu.open(ev.clientX, ev.clientY, items);
     },
     onCanvasDrawRect: (rect) => {
@@ -1324,6 +1329,25 @@ function setupEditNodeModal() {
       toast(tr('toast_md_downloaded', { filename: `${slug}.md` }));
     },
     onOpenFullViewer: (view) => { if (fileViewerModal && view) fileViewerModal.open(view); },
+    onProvenanceToggle: (id, active) => {
+      setProvenanceActive(active, active ? id : null);
+    },
+    isProvenanceActive: (id) => state.provenance && state.provenance.active && state.provenance.selectedId === id,
+    onAnnotationsChange: (id, annotations) => {
+      if (!isLoggedIn()) {
+        const n0 = findNode(state.nodes, id);
+        if (n0 && editNodeModal) editNodeModal.setNodeMeta(toViewShape(n0));
+        if (authUI) authUI.openLogin();
+        return;
+      }
+      updatePuzzleNode(state.nodes, id, { annotations });
+      const n = findNode(state.nodes, id);
+      if (n && viewer && typeof viewer.setBlockAnnotations === 'function') {
+        viewer.setBlockAnnotations(id, n.annotations || []);
+      }
+      pushNodePatch(id, { annotations: Array.isArray(annotations) ? annotations : [] });
+      scheduleSave();
+    },
   });
   const closeBtn = $('panel-close');
   if (closeBtn) closeBtn.addEventListener('click', () => editNodeModal && editNodeModal.requestClose());
@@ -1556,6 +1580,13 @@ function buildContextMenuItemsForNode(id) {
 
   if (selSize > 1 && selHasId) {
     items.push({ label: tr('ctx_group_selection'), fn: () => groupCurrentSelection() });
+    if (selSize === 2) {
+      items.push({ label: tr('ctx_wrap_as_transform'), fn: () => wrapSelectionAsTransform() });
+      items.push({ label: tr('ctx_compare'), fn: () => openCompareForSelection() });
+      items.push({ label: tr('ctx_diff'), fn: () => openDiffForSelection() });
+    } else if (selSize > 2) {
+      items.push({ label: tr('ctx_compare'), fn: () => openCompareForSelection() });
+    }
     items.push({ label: tr('ctx_delete_selected'), danger: true, fn: () => deleteCurrentSelection() });
     return items;
   }
@@ -1695,11 +1726,26 @@ function toggleNodeBranch(nodeId, branchId) {
   scheduleSave();
 }
 
-function buildContextMenuItemsForEmpty() {
+function buildContextMenuItemsForEmpty(imgPt) {
   const items = [];
+  if (imgPt && Number.isFinite(imgPt.x) && Number.isFinite(imgPt.y)) {
+    items.push({
+      label: tr('ctx_add_transform_here'),
+      fn: () => {
+        const rect = { x: Math.round(imgPt.x - 120), y: Math.round(imgPt.y - 70), w: 240, h: 140 };
+        createTransformFromRect(rect);
+      },
+    });
+  }
   if (state.selection.size === 0) return items;
+  if (items.length) items.push({ kind: 'separator' });
+  if (state.selection.size === 2) {
+    items.push({ label: tr('ctx_wrap_as_transform'), fn: () => wrapSelectionAsTransform() });
+  }
   if (state.selection.size > 1) {
     items.push({ label: tr('ctx_group_selection'), fn: () => groupCurrentSelection() });
+    items.push({ label: tr('ctx_compare'), fn: () => openCompareForSelection() });
+    items.push({ label: tr('ctx_diff'), fn: () => openDiffForSelection() });
     items.push({ label: tr('ctx_delete_selected'), danger: true, fn: () => deleteCurrentSelection() });
   } else {
     items.push({ label: tr('ctx_delete'), danger: true, fn: () => deleteCurrentSelection() });
@@ -1985,6 +2031,11 @@ function handleDrawRect(rect) {
       createTextFromRect(placed);
       return;
     }
+    if (createMode === 'transform') {
+      const placed = { x: Math.round(rect.x - 120), y: Math.round(rect.y - 70), w: 240, h: 140 };
+      createTransformFromRect(placed);
+      return;
+    }
     return;
   }
   if (createMode === 'group') {
@@ -1997,6 +2048,10 @@ function handleDrawRect(rect) {
   }
   if (createMode === 'text') {
     createTextFromRect(rect);
+    return;
+  }
+  if (createMode === 'transform') {
+    createTransformFromRect(rect);
     return;
   }
   editorModal.openCreate(rect, {
@@ -2070,6 +2125,173 @@ function createGroupFromRect(rect) {
   if (n) pushNodeCreate(toViewShape(n), '');
   scheduleSave();
   toast(tr('node_created'));
+}
+
+function createTransformFromRect(rect, opts) {
+  pushHistory();
+  const id = uniqueId(state.nodes, 'transform');
+  const parent = nodeAtParentLookup(state.nodes, rect);
+  const initRect = (rect && rect.w >= 60 && rect.h >= 60)
+    ? rect
+    : { x: rect.x, y: rect.y, w: Math.max(rect.w || 0, 240), h: Math.max(rect.h || 0, 140) };
+  addTransformNode(state.nodes, {
+    id,
+    rect: initRect,
+    label: (opts && opts.label) || '',
+    input: (opts && opts.input) || '',
+    output: (opts && opts.output) || '',
+    method: (opts && opts.method) || '',
+    parent,
+    status: 'unsolved',
+  });
+  refreshPuzzleViewsInViewer();
+  const newNode = findNode(state.nodes, id);
+  if (newNode) pushNodeCreate(toViewShape(newNode), '');
+  scheduleSave();
+  toast(tr('node_created'));
+  if (editNodeModal && !(opts && opts.skipOpen)) {
+    const view = toViewShape(newNode);
+    editNodeModal.open(view, '');
+  }
+  return id;
+}
+
+function wrapSelectionAsTransform() {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  if (state.selection.size !== 2) {
+    toast(tr('toast_wrap_needs_two'), 'error');
+    return;
+  }
+  const ids = Array.from(state.selection);
+  const a = findNode(state.nodes, ids[0]);
+  const b = findNode(state.nodes, ids[1]);
+  if (!a || !b) return;
+  const labelOf = (n) => {
+    const v = toViewShape(n);
+    return v.title || v.slug || v.id;
+  };
+  const midX = (a.x + a.width / 2 + b.x + b.width / 2) / 2;
+  const midY = (a.y + a.height / 2 + b.y + b.height / 2) / 2;
+  const rect = { x: Math.round(midX - 120), y: Math.round(midY - 70), w: 240, h: 140 };
+  const id = createTransformFromRect(rect, {
+    label: tr('transform_default_label'),
+    input: labelOf(a),
+    output: labelOf(b),
+    method: '',
+    skipOpen: true,
+  });
+  if (id && arrowLayer) {
+    arrowLayer.createEdgeFromPoints({
+      fromId: a.id,
+      fromPt: { x: a.x + a.width / 2, y: a.y + a.height / 2 },
+      toId: id,
+      toPt: { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 },
+    });
+    arrowLayer.createEdgeFromPoints({
+      fromId: id,
+      fromPt: { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 },
+      toId: b.id,
+      toPt: { x: b.x + b.width / 2, y: b.y + b.height / 2 },
+    });
+  }
+  state.selection = new Set([id]);
+  if (viewer) viewer.setSelection(state.selection);
+  refreshSelectionStatus();
+  const n = findNode(state.nodes, id);
+  if (n && editNodeModal) editNodeModal.open(toViewShape(n), '');
+}
+
+function computeProvenance(rootId) {
+  const ancestors = new Set();
+  const descendants = new Set();
+  if (!rootId) return { ancestors, descendants };
+  const edges = state.edges instanceof Map ? Array.from(state.edges.values()) : [];
+  const upIndex = new Map();
+  const downIndex = new Map();
+  for (const e of edges) {
+    if (!e) continue;
+    const from = e.fromNode || '';
+    const to = e.toNode || '';
+    if (from && to) {
+      if (!downIndex.has(from)) downIndex.set(from, []);
+      downIndex.get(from).push(to);
+      if (!upIndex.has(to)) upIndex.set(to, []);
+      upIndex.get(to).push(from);
+    }
+    if (Array.isArray(e.branches)) {
+      for (const b of e.branches) {
+        if (!b || !b.toNode) continue;
+        if (!downIndex.has(from)) downIndex.set(from, []);
+        downIndex.get(from).push(b.toNode);
+        if (!upIndex.has(b.toNode)) upIndex.set(b.toNode, []);
+        upIndex.get(b.toNode).push(from);
+      }
+    }
+  }
+  const refRe = /\[\[([a-zA-Z0-9_\-:.]+)\]\]/g;
+  for (const n of state.nodes.values()) {
+    if (!n) continue;
+    const text = (typeof n.text === 'string' ? n.text : '') + ' '
+      + (typeof n.input === 'string' ? n.input : '') + ' '
+      + (typeof n.output === 'string' ? n.output : '');
+    let m;
+    while ((m = refRe.exec(text)) !== null) {
+      const ref = m[1];
+      if (state.nodes.has(ref)) {
+        if (!upIndex.has(n.id)) upIndex.set(n.id, []);
+        upIndex.get(n.id).push(ref);
+        if (!downIndex.has(ref)) downIndex.set(ref, []);
+        downIndex.get(ref).push(n.id);
+      }
+    }
+  }
+  const walk = (start, index, out) => {
+    const stack = [start];
+    const visited = new Set([start]);
+    while (stack.length) {
+      const cur = stack.pop();
+      const next = index.get(cur);
+      if (!next) continue;
+      for (const nx of next) {
+        if (visited.has(nx)) continue;
+        visited.add(nx);
+        out.add(nx);
+        stack.push(nx);
+      }
+    }
+  };
+  walk(rootId, upIndex, ancestors);
+  walk(rootId, downIndex, descendants);
+  return { ancestors, descendants };
+}
+
+function setProvenanceActive(active, selectedId) {
+  if (!active || !selectedId) {
+    state.provenance = { active: false, selectedId: null, ancestors: new Set(), descendants: new Set() };
+  } else {
+    const { ancestors, descendants } = computeProvenance(selectedId);
+    state.provenance = { active: true, selectedId, ancestors, descendants };
+  }
+  if (viewer && typeof viewer.setProvenance === 'function') viewer.setProvenance(state.provenance);
+  if (arrowLayer && typeof arrowLayer.setProvenance === 'function') arrowLayer.setProvenance(state.provenance);
+}
+
+function openCompareForSelection() {
+  if (state.selection.size < 2) return;
+  const ids = Array.from(state.selection).slice(0, 2);
+  const a = findNode(state.nodes, ids[0]);
+  const b = findNode(state.nodes, ids[1]);
+  if (!a || !b) return;
+  if (compareModal) compareModal.open(toViewShape(a), toViewShape(b), { tab: 'compare' });
+}
+
+function openDiffForSelection() {
+  if (state.selection.size < 2) return;
+  const ids = Array.from(state.selection).slice(0, 2);
+  const a = findNode(state.nodes, ids[0]);
+  const b = findNode(state.nodes, ids[1]);
+  if (!a || !b) return;
+  if (compareModal) compareModal.open(toViewShape(a), toViewShape(b), { tab: 'diff' });
 }
 
 function applyDragSelection(ids, dx, dy, commit) {
@@ -3191,7 +3413,7 @@ async function pushNodeDelete(id) {
 }
 
 function nodeToServer(view, md) {
-  return {
+  const out = {
     id: view.id,
     type: 'text',
     x: view.rect.x, y: view.rect.y,
@@ -3199,10 +3421,17 @@ function nodeToServer(view, md) {
     text: md || '',
     status: view.status,
     tags: view.tags || [],
-    kind: 'puzzle',
+    kind: view.kind === 'transform' ? 'transform' : 'puzzle',
     slug: view.slug || view.id,
     parent: view.parent || undefined,
   };
+  if (view.kind === 'transform') {
+    if (typeof view.input === 'string') out.input = view.input;
+    if (typeof view.output === 'string') out.output = view.output;
+    if (typeof view.method === 'string') out.method = view.method;
+    if (typeof view.label === 'string' && view.label) out.label = view.label;
+  }
+  return out;
 }
 
 function applyImportedCanvas(imported) {

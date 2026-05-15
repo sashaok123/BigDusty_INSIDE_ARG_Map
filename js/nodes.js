@@ -16,6 +16,10 @@ export const TECHNIQUES = [
   'manual-transcription', 'audio-spectrogram', 'image-pixel-grid', 'other',
 ];
 
+export const TRANSFORM_KIND = 'transform';
+
+export const ANNOTATION_KINDS = ['rect', 'circle', 'arrow', 'label'];
+
 export const VERIFICATION_STRIPE = {
   'verified':   '#3de88a',
   'hypothesis': '#e8c83d',
@@ -82,6 +86,10 @@ export function isTextNode(n) {
   return n && n.kind === 'text';
 }
 
+export function isTransformNode(n) {
+  return n && n.kind === TRANSFORM_KIND;
+}
+
 export function isVideoNode(n) {
   if (!n) return false;
   if (n.kind === 'video') return true;
@@ -112,7 +120,7 @@ export function isDocumentNode(n) {
 }
 
 export function isEditableNode(n) {
-  return n && (isPuzzleNode(n) || isStickyNode(n) || isGroupNode(n) || isTextNode(n) || isVideoNode(n) || isAudioNode(n) || isDocumentNode(n));
+  return n && (isPuzzleNode(n) || isStickyNode(n) || isGroupNode(n) || isTextNode(n) || isVideoNode(n) || isAudioNode(n) || isDocumentNode(n) || isTransformNode(n));
 }
 
 export function nodeRect(n) {
@@ -121,6 +129,10 @@ export function nodeRect(n) {
 
 export function nodeTitle(n) {
   if (n.type === 'group') return (n.label || n.slug || n.id || '').trim();
+  if (isTransformNode(n)) {
+    if (typeof n.label === 'string' && n.label.trim()) return n.label.trim();
+    return n.slug || n.id;
+  }
   if (n.type === 'text' && typeof n.text === 'string') {
     const first = n.text.split('\n').find((line) => /^#{1,6}\s+/.test(line));
     if (first) return first.replace(/^#{1,6}\s+/, '').trim();
@@ -162,13 +174,17 @@ export function toViewShape(n) {
     technique: typeof n.technique === 'string' ? normaliseTechnique(n.technique) : '',
     github_path: typeof n.github_path === 'string' ? n.github_path : '',
     bookmarked: !!n.bookmarked,
+    input: typeof n.input === 'string' ? n.input : '',
+    output: typeof n.output === 'string' ? n.output : '',
+    method: typeof n.method === 'string' ? n.method : '',
+    annotations: Array.isArray(n.annotations) ? n.annotations.map((a) => ({ ...a })) : null,
   };
 }
 
 export function puzzleViews(nodes) {
   const out = [];
   for (const n of nodes.values()) {
-    if (isPuzzleNode(n) || isStickyNode(n) || isTextNode(n)) out.push(toViewShape(n));
+    if (isPuzzleNode(n) || isStickyNode(n) || isTextNode(n) || isTransformNode(n)) out.push(toViewShape(n));
   }
   return out;
 }
@@ -184,7 +200,14 @@ export function groupViews(nodes) {
 export function blockViews(nodes) {
   const out = [];
   for (const n of nodes.values()) {
-    if (isBlockNode(n)) out.push({ id: n.id, rect: nodeRect(n), file: n.file });
+    if (isBlockNode(n)) {
+      out.push({
+        id: n.id,
+        rect: nodeRect(n),
+        file: n.file,
+        annotations: Array.isArray(n.annotations) ? n.annotations.map((a) => ({ ...a })) : null,
+      });
+    }
   }
   return out;
 }
@@ -243,6 +266,32 @@ export function addTextNode(nodes, payload) {
   return node;
 }
 
+export function addTransformNode(nodes, payload) {
+  const id = payload.id;
+  if (!id || nodes.has(id)) return null;
+  const node = {
+    id,
+    type: 'text',
+    x: payload.rect.x,
+    y: payload.rect.y,
+    width: payload.rect.w,
+    height: payload.rect.h,
+    text: '',
+    status: normaliseStatus(payload.status || 'unsolved'),
+    tags: Array.isArray(payload.tags) ? [...payload.tags] : [],
+    kind: TRANSFORM_KIND,
+    slug: payload.slug || id,
+    input: typeof payload.input === 'string' ? payload.input : '',
+    output: typeof payload.output === 'string' ? payload.output : '',
+    method: typeof payload.method === 'string' ? payload.method : '',
+  };
+  if (typeof payload.label === 'string') node.label = payload.label;
+  if (payload.parent) node.parent = payload.parent;
+  if (payload.color) node.color = payload.color;
+  nodes.set(id, node);
+  return node;
+}
+
 export function addGroupNode(nodes, payload) {
   const id = payload.id;
   if (!id || nodes.has(id)) return null;
@@ -271,6 +320,7 @@ export function updatePuzzleNode(nodes, id, patch) {
   if (!n) return false;
   if (patch.title !== undefined) {
     if (n.type === 'group') n.label = patch.title;
+    else if (isTransformNode(n)) n.label = patch.title;
     else if (n.type === 'text') n.text = rewriteTitleInMarkdown(n.text || '', patch.title);
   }
   if (patch.slug !== undefined) n.slug = patch.slug;
@@ -296,6 +346,10 @@ export function updatePuzzleNode(nodes, id, patch) {
     else delete n.caption;
   }
   if (patch.label !== undefined && n.type === 'group') n.label = patch.label;
+  if (patch.label !== undefined && isTransformNode(n)) {
+    if (typeof patch.label === 'string') n.label = patch.label;
+    else delete n.label;
+  }
   if (patch.background !== undefined && n.type === 'group') {
     if (patch.background) n.background = patch.background;
     else delete n.background;
@@ -354,6 +408,25 @@ export function updatePuzzleNode(nodes, id, patch) {
   if (patch.bookmarked !== undefined) {
     if (patch.bookmarked) n.bookmarked = true;
     else delete n.bookmarked;
+  }
+  if (patch.input !== undefined) {
+    if (typeof patch.input === 'string') n.input = patch.input;
+    else delete n.input;
+  }
+  if (patch.output !== undefined) {
+    if (typeof patch.output === 'string') n.output = patch.output;
+    else delete n.output;
+  }
+  if (patch.method !== undefined) {
+    if (typeof patch.method === 'string') n.method = patch.method;
+    else delete n.method;
+  }
+  if (patch.annotations !== undefined) {
+    if (Array.isArray(patch.annotations) && patch.annotations.length) {
+      n.annotations = patch.annotations.map((a) => ({ ...a }));
+    } else {
+      delete n.annotations;
+    }
   }
   return true;
 }

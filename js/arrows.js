@@ -100,6 +100,7 @@ export class ArrowLayer {
     this.statusFilter = null;
     this.fadeNonMatching = false;
     this._pathCache = new Map();
+    this.provenance = null;
 
     this._installRoot();
     this._installEvents();
@@ -585,12 +586,50 @@ export class ArrowLayer {
   }
 
   _edgeOpacity(edge, nodes) {
-    if (!this.fadeNonMatching || !this.statusFilter) return 1;
-    const fromN = nodes.get(edge.fromNode);
-    const toN   = nodes.get(edge.toNode);
-    const fromMatch = fromN ? this._nodeMatchesFilter(fromN) : false;
-    const toMatch   = toN   ? this._nodeMatchesFilter(toN)   : false;
-    return (fromMatch || toMatch) ? 1 : 0.1;
+    let op = 1;
+    if (this.fadeNonMatching && this.statusFilter) {
+      const fromN = nodes.get(edge.fromNode);
+      const toN   = nodes.get(edge.toNode);
+      const fromMatch = fromN ? this._nodeMatchesFilter(fromN) : false;
+      const toMatch   = toN   ? this._nodeMatchesFilter(toN)   : false;
+      op = (fromMatch || toMatch) ? 1 : 0.1;
+    }
+    if (this.provenance && this.provenance.active) {
+      const pOp = this._provenanceEdgeOpacity(edge);
+      if (pOp < op) op = pOp;
+    }
+    return op;
+  }
+
+  setProvenance(p) {
+    if (!p || !p.active) {
+      this.provenance = null;
+    } else {
+      this.provenance = {
+        active: true,
+        selectedId: p.selectedId || null,
+        ancestors: p.ancestors instanceof Set ? p.ancestors : new Set(p.ancestors || []),
+        descendants: p.descendants instanceof Set ? p.descendants : new Set(p.descendants || []),
+      };
+    }
+    this.requestDraw();
+  }
+
+  _provenanceEdgeOpacity(edge) {
+    if (!this.provenance || !this.provenance.active) return 1;
+    const p = this.provenance;
+    const inChain = (id) => id && (id === p.selectedId || p.ancestors.has(id) || p.descendants.has(id));
+    const fromIn = inChain(edge.fromNode);
+    const toIn = inChain(edge.toNode);
+    if (fromIn && toIn) return 1;
+    let branchIn = false;
+    if (Array.isArray(edge.branches)) {
+      for (const b of edge.branches) {
+        if (b && inChain(b.toNode) && fromIn) { branchIn = true; break; }
+      }
+    }
+    if (branchIn) return 1;
+    return 0.2;
   }
 
   _nodeMatchesFilter(node) {
