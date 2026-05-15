@@ -535,7 +535,11 @@ export class EdgePropsPopover {
       if (this.el.contains(ev.target)) return;
       const t = ev.target;
       if (t && t.classList && t.classList.contains('arrow-path-interactive')) return;
-      if (t && typeof t.closest === 'function' && t.closest('.arrow-path-interactive')) return;
+      if (t && typeof t.closest === 'function') {
+        if (t.closest('.arrow-path-interactive')) return;
+        if (t.closest('.arrow-endpoint-handle, .arrow-waypoint-handle, .arrow-junction-handle, .arrow-label-bg, .arrow-label, .arrow-anchor-handle')) return;
+        if (t.hasAttribute && (t.hasAttribute('data-edge') || t.hasAttribute('data-block') || t.hasAttribute('data-branch'))) return;
+      }
       this.layer._deselect();
     };
     const onKey = (ev) => {

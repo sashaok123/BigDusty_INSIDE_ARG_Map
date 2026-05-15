@@ -309,6 +309,7 @@ export class ArrowLayer {
   notifyNodeDeleted(nodeId) {
     const ids = this.boundEdges.get(nodeId);
     if (!ids) return;
+    const touched = [];
     for (const eid of ids) {
       const e = this.edges.get(eid);
       if (!e) continue;
@@ -323,8 +324,17 @@ export class ArrowLayer {
         e.branches = e.branches.filter((b) => b.toNode !== nodeId);
       }
       this._pathCache.delete(eid);
+      touched.push(eid);
     }
-    this.boundEdges.delete(nodeId);
+    this._rebuildBoundIndex();
+    for (const eid of touched) {
+      const e = this.edges.get(eid);
+      if (e) this.onEdgeMutation('update', eid, e);
+    }
+    if (touched.length) {
+      this.onEdgesChange();
+      this.onScheduleSave();
+    }
     this.requestDraw();
   }
 
@@ -446,7 +456,6 @@ export class ArrowLayer {
   beginAddBranch(id) {
     const e = this.edges.get(id);
     if (!e) return;
-    this.onBeforeMutation('branch', id);
     const nodes = this.getNodes();
     const from = resolveAnchor(e, 'from', nodes, null).point;
     const to   = resolveAnchor(e, 'to',   nodes, null).point;
@@ -1140,6 +1149,7 @@ export class ArrowLayer {
   }
 
   _createEdgeFromDrag(d) {
+    this.onBeforeMutation('create');
     const id = this._nextId();
     const fromFP = d.fromFixedPoint;
     const newEdge = {
@@ -1170,6 +1180,7 @@ export class ArrowLayer {
   _addBranchFromDrag(d) {
     const e = this.edges.get(d.edgeId);
     if (!e) return;
+    this.onBeforeMutation('branch-add', d.edgeId);
     if (!Array.isArray(e.branches)) e.branches = [];
     if (e.branches.length === 0 && e.toNode) {
       e.branches.push({

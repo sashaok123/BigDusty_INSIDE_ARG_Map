@@ -1707,7 +1707,6 @@ function doCropImage(nodeId, currentUrl) {
   if (!cropOverlay) return doCropImageFallback(nodeId, currentUrl);
   if (cropOverlay.isActive()) return Promise.resolve(null);
   return new Promise((resolve) => {
-    _cropPendingNodeId = nodeId;
     const node = { x: n.x, y: n.y, width: n.width, height: n.height };
     cropOverlay.onApply = async (blob) => {
       if (!blob) { resolve(null); return; }
@@ -2066,11 +2065,11 @@ function ungroupCurrentSelection() {
   }
 }
 
-function ungroupGroup(groupId) {
+function ungroupGroup(groupId, opts) {
   if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
   const g = findNode(state.nodes, groupId);
   if (!g || !isGroupNode(g)) return;
-  pushHistory();
+  if (!opts || !opts.skipHistory) pushHistory();
   const children = [];
   for (const n of state.nodes.values()) {
     if (n.parent === groupId) {
@@ -2110,8 +2109,8 @@ function deleteGroupWithChildren(groupId) {
   scheduleSave();
 }
 
-function deleteGroupKeepChildren(groupId) {
-  ungroupGroup(groupId);
+function deleteGroupKeepChildren(groupId, opts) {
+  ungroupGroup(groupId, opts);
 }
 
 function deleteCurrentSelection() {
@@ -2142,7 +2141,7 @@ function _performDeleteSelection() {
     const n = findNode(state.nodes, id);
     if (!n) continue;
     if (n.locked) { skippedLocked++; continue; }
-    if (isGroupNode(n)) deleteGroupKeepChildren(id);
+    if (isGroupNode(n)) deleteGroupKeepChildren(id, { skipHistory: true });
     else deletePuzzleNode(id);
   }
   state.selection = new Set();
@@ -2154,6 +2153,7 @@ function _performDeleteSelection() {
 function toggleLockSelection() {
   if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
   if (state.selection.size === 0) return;
+  pushHistory();
   const ids = Array.from(state.selection);
   const anyUnlocked = ids.some((id) => {
     const n = findNode(state.nodes, id);

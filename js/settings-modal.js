@@ -71,7 +71,7 @@ export class SettingsModal {
     const anthropicLabel = el('label', { text: tr('settings_anthropic_key') });
     const anthropicIn = el('input', { type: 'password', autocomplete: 'off', spellcheck: 'false' });
     const anthropicModelLabel = el('label', { text: tr('settings_anthropic_model') });
-    const anthropicModelIn = el('input', { type: 'text', placeholder: 'claude-opus-4-7-20251001', spellcheck: 'false' });
+    const anthropicModelIn = el('input', { type: 'text', placeholder: 'claude-opus-4-7', spellcheck: 'false' });
     const anthropicField = el('div', { class: 'auth-settings-field' }, [anthropicLabel, anthropicIn, anthropicModelLabel, anthropicModelIn]);
 
     const refreshVisibility = () => {
@@ -109,7 +109,7 @@ export class SettingsModal {
         openaiApiKey: openaiIn.value,
         openaiModel: openaiModelIn.value.trim() || 'gpt-4o-mini',
         anthropicApiKey: anthropicIn.value,
-        anthropicModel: anthropicModelIn.value.trim() || 'claude-opus-4-7-20251001',
+        anthropicModel: anthropicModelIn.value.trim() || 'claude-opus-4-7',
       });
       this.close();
     });
@@ -123,7 +123,7 @@ export class SettingsModal {
         openaiApiKey: openaiIn.value,
         openaiModel: openaiModelIn.value.trim() || 'gpt-4o-mini',
         anthropicApiKey: anthropicIn.value,
-        anthropicModel: anthropicModelIn.value.trim() || 'claude-opus-4-7-20251001',
+        anthropicModel: anthropicModelIn.value.trim() || 'claude-opus-4-7',
       };
       try {
         const result = await translateOne('Hello, world.', 'en', 'ru', provider);
@@ -162,7 +162,7 @@ export class SettingsModal {
     this.openaiIn.value = s.openaiApiKey || '';
     this.openaiModelIn.value = s.openaiModel || 'gpt-4o-mini';
     this.anthropicIn.value = s.anthropicApiKey || '';
-    this.anthropicModelIn.value = s.anthropicModel || 'claude-opus-4-7-20251001';
+    this.anthropicModelIn.value = s.anthropicModel || 'claude-opus-4-7';
     this.langSelEl.value = getLang();
     this._refreshVisibility();
     this.modalEl.classList.add('open');

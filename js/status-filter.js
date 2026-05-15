@@ -101,7 +101,7 @@ export class StatusFilter {
   }
 
   cycle() {
-    const order = [ALL, 'solved', 'partial', 'unsolved', 'dead-end'];
+    const order = [ALL, 'solved', 'partial', 'unsolved', 'no-data', 'dead-end'];
     const idx = order.indexOf(this.activeKey);
     const next = idx === -1 ? ALL : order[(idx + 1) % order.length];
     if (next === ALL) {

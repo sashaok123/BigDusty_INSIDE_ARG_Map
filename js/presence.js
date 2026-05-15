@@ -64,8 +64,9 @@ export class PresencePanel {
     this.mountEl.innerHTML = '';
     const seen = new Set();
     for (const u of this.users) {
-      if (seen.has(u.username)) continue;
-      seen.add(u.username);
+      const dedupKey = u.client_id || u.username;
+      if (seen.has(dedupKey)) continue;
+      seen.add(dedupKey);
       const isAnon = !u.username || u.username.toLowerCase() === 'anonymous';
       const avatar = el('span', {
         class: isAnon ? 'presence-avatar anon' : 'presence-avatar',

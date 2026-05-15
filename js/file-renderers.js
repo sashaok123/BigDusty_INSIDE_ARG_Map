@@ -43,14 +43,12 @@ export function renderHtmlInto(el, text) {
   if (!el) return;
   el.innerHTML = '';
   const iframe = document.createElement('iframe');
-  iframe.sandbox = 'allow-same-origin';
+  iframe.setAttribute('sandbox', '');
+  iframe.referrerPolicy = 'no-referrer';
   iframe.style.cssText = 'width:100%;height:100%;border:0;background:#fff;display:block';
   iframe.className = 'fr-iframe';
+  iframe.srcdoc = text || '';
   el.appendChild(iframe);
-  try {
-    const doc = iframe.contentDocument || (iframe.contentWindow && iframe.contentWindow.document);
-    if (doc) { doc.open(); doc.write(text || ''); doc.close(); }
-  } catch (e) { void e; }
 }
 
 export function renderTextInto(el, text, mime, filename) {

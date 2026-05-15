@@ -123,7 +123,7 @@ async function anthropicTranslate(text, source, target, provider) {
     err.kind = 'anthropic_no_key';
     throw err;
   }
-  const model = provider.anthropicModel || 'claude-opus-4-7-20251001';
+  const model = provider.anthropicModel || 'claude-opus-4-7';
   const srcName = LANG_NAMES[source] || source;
   const tgtName = LANG_NAMES[target] || target;
   const prompt = `Translate the following text from ${srcName} to ${tgtName}. Return only the translation, no explanation.\n\n---\n${text}`;

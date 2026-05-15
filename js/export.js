@@ -680,13 +680,33 @@ export function exportAsCytoscapeJson(model, opts) {
   return JSON.stringify({ elements, meta: model.meta }, null, 2);
 }
 
-function mermaidSanitiseId(id) {
-  return String(id).replace(/[^A-Za-z0-9_]/g, '_');
+function makeMermaidIdMapper() {
+  const used = new Set();
+  const cache = new Map();
+  return (id) => {
+    if (cache.has(id)) return cache.get(id);
+    let base = String(id).replace(/[^A-Za-z0-9_]/g, '_');
+    if (!base) base = 'n';
+    if (/^\d/.test(base)) base = `n_${base}`;
+    let candidate = base;
+    let suffix = 2;
+    while (used.has(candidate)) {
+      candidate = `${base}_${suffix}`;
+      suffix += 1;
+    }
+    used.add(candidate);
+    cache.set(id, candidate);
+    return candidate;
+  };
 }
 
 function mermaidQuoteLabel(text) {
   const safe = String(text || '')
     .replace(/"/g, '#quot;')
+    .replace(/\[/g, '#91;')
+    .replace(/\]/g, '#93;')
+    .replace(/</g, '#60;')
+    .replace(/>/g, '#62;')
     .replace(/\n/g, '<br/>');
   return `"${safe}"`;
 }
@@ -708,21 +728,22 @@ export function exportAsMermaid(model, opts) {
     lines.push(`%% WARNING: graph truncated to first ${limit} of ${model.nodes.length} nodes for readability.`);
   }
   lines.push('flowchart LR');
+  const sanitiseId = makeMermaidIdMapper();
   for (const n of nodes) {
-    const id = mermaidSanitiseId(n.id);
+    const id = sanitiseId(n.id);
     const label = mermaidQuoteLabel(n.label || n.id);
     const cls = n.status ? `:::status_${n.status.replace(/-/g, '_')}` : '';
     lines.push(`  ${id}[${label}]${cls}`);
   }
   for (const e of edges) {
-    const from = mermaidSanitiseId(e.fromId);
-    const to = mermaidSanitiseId(e.toId);
+    const from = sanitiseId(e.fromId);
+    const to = sanitiseId(e.toId);
     const lbl = e.label ? ` ${mermaidQuoteLabel(e.label)} ` : ' ';
     const arrow = e.style === 'dashed' ? '-.->' : '-->';
     lines.push(`  ${from} --${lbl}${arrow} ${to}`);
     for (const target of e.branchTargets) {
       if (target === e.toId) continue;
-      const t = mermaidSanitiseId(target);
+      const t = sanitiseId(target);
       lines.push(`  ${from} --${lbl}${arrow} ${t}`);
     }
   }

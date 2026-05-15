@@ -1414,10 +1414,13 @@ export class Viewer {
       if (!d.moved && d.candidateHotspot) {
         this.onHotspotClick(d.candidateHotspot, ev);
       } else if (!d.moved && this.mode === 'editor') {
-        if (this.selection && this.selection.size > 0) {
-          this.setSelection(new Set());
+        const mouseupOnCanvas = ev.target === this.canvas;
+        if (mouseupOnCanvas) {
+          if (this.selection && this.selection.size > 0) {
+            this.setSelection(new Set());
+          }
+          this.onSelectionChange({ ids: [] });
         }
-        this.onSelectionChange({ ids: [] });
       }
       return;
     }

@@ -49,13 +49,26 @@ const RULES_JS = [
   { re: /[{}()\[\];,.]/y, cls: 'hl-punct' },
 ];
 
+const JS_REGEX_PRECEDING_KEYWORDS = new Set([
+  'return', 'typeof', 'in', 'of', 'instanceof', 'delete', 'void',
+  'throw', 'yield', 'await', 'new', 'case', 'do', 'else',
+]);
+
 function jsRegexGuard(text, pos) {
   if (pos === 0) return true;
   let i = pos - 1;
   while (i >= 0 && /\s/.test(text[i])) i -= 1;
   if (i < 0) return true;
   const c = text[i];
-  if (/[\w$)\]]/.test(c)) return false;
+  if (/[\w$)\]]/.test(c)) {
+    if (/[\w$]/.test(c)) {
+      let j = i;
+      while (j >= 0 && /[\w$]/.test(text[j])) j -= 1;
+      const ident = text.slice(j + 1, i + 1);
+      if (JS_REGEX_PRECEDING_KEYWORDS.has(ident)) return true;
+    }
+    return false;
+  }
   return true;
 }
 
