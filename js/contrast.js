@@ -54,7 +54,10 @@ export function pickTextStroke(bgColor, opts) {
 
 export function bgFromTheme() {
   try {
-    const v = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+    const style = getComputedStyle(document.documentElement);
+    const canvas = style.getPropertyValue('--canvas-bg').trim();
+    if (canvas) return canvas;
+    const v = style.getPropertyValue('--bg').trim();
     return v || '#ffffff';
   } catch (e) {
     void e;

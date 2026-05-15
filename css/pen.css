@@ -1,0 +1,57 @@
+.pen-toolbar {
+  position: fixed;
+  left: calc(200px + 12px);
+  top: calc(var(--toolbar-h) + 12px);
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+  padding: 8px 10px;
+  z-index: 1150;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text);
+  min-width: 220px;
+}
+
+body.rail-collapsed .pen-toolbar { left: calc(60px + 12px); }
+
+.pen-toolbar-row { display: flex; align-items: center; gap: 6px; }
+.pen-colors { flex-wrap: wrap; gap: 4px; }
+
+.pen-swatch {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--panel-border);
+  border-radius: 50%;
+  cursor: pointer;
+  padding: 0;
+  transition: transform .12s, border-color .12s;
+}
+.pen-swatch:hover { transform: scale(1.1); border-color: var(--accent); }
+.pen-swatch.active { border-color: var(--accent); transform: scale(1.15); box-shadow: 0 0 0 2px var(--accent-soft-bg-strong); }
+
+.pen-width-row { gap: 8px; }
+.pen-label { color: var(--text-dim); letter-spacing: 0.04em; text-transform: uppercase; font-size: 10px; }
+.pen-width-slider { flex: 1; height: 4px; }
+.pen-width-value { min-width: 1.6em; text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+
+.pen-actions { gap: 6px; }
+.pen-actions button {
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  padding: 4px 10px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font: 11px/1.2 var(--font-mono);
+}
+.pen-actions button:hover { background: var(--hover); border-color: var(--accent); color: var(--accent); }
+.pen-actions button.active { background: var(--accent-soft-bg-strong); border-color: var(--accent); color: var(--accent); }
+.pen-eraser.active { background: var(--unsolved-soft-bg); border-color: var(--unsolved); color: var(--unsolved); }
+.pen-clear:hover { background: var(--unsolved-soft-bg); border-color: var(--unsolved); color: var(--unsolved); }
+
+#pen-layer .pen-strokes { vector-effect: non-scaling-stroke; }

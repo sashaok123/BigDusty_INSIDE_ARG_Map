@@ -29,6 +29,11 @@
   --status-deadend:  #666b78;
   --tooltip-bg:   rgba(255,255,255,0.96);
   --tooltip-text: #16181c;
+  --canvas-bg:    #ffffff;
+  --card-bg:      #ffffff;
+  --card-text:    #16181c;
+  --card-border:  #d8d8e0;
+  --transform-bg: #f8f5ed;
   --shadow-soft:  0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.06);
   --shadow-modal: 0 8px 24px rgba(0,0,0,0.16), 0 24px 60px rgba(0,0,0,0.12);
   --shadow-panel: -8px 0 24px rgba(0,0,0,0.08);
@@ -79,6 +84,11 @@
   --status-deadend:  #5a5a72;
   --tooltip-bg:   rgba(10,10,14,0.94);
   --tooltip-text: #d4d4e8;
+  --canvas-bg:    #16181c;
+  --card-bg:      #1f2228;
+  --card-text:    #f0f0f0;
+  --card-border:  #2a2e38;
+  --transform-bg: #1a1d24;
   --shadow-soft:  0 4px 12px rgba(0,0,0,0.45);
   --shadow-modal: 0 8px 24px rgba(0,0,0,0.55), 0 20px 60px rgba(0,0,0,0.7);
   --shadow-panel: -16px 0 32px rgba(0,0,0,0.55);
@@ -123,6 +133,11 @@
   --status-deadend:  #7080a0;
   --tooltip-bg:   rgba(42,44,51,0.95);
   --tooltip-text: #d8dae0;
+  --canvas-bg:    #2a2c33;
+  --card-bg:      #353841;
+  --card-text:    #d8dae0;
+  --card-border:  #4a4d57;
+  --transform-bg: #3a3d46;
   --shadow-soft:  0 2px 6px rgba(0,0,0,0.22), 0 6px 18px rgba(0,0,0,0.16);
   --shadow-modal: 0 8px 24px rgba(0,0,0,0.35), 0 20px 48px rgba(0,0,0,0.45);
   --shadow-panel: -10px 0 26px rgba(0,0,0,0.30);

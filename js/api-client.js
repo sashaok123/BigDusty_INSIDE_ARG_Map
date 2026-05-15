@@ -309,6 +309,13 @@ export async function getAuditLog() {
   return _request('/admin/audit', { auth: true });
 }
 
+export async function getCanvasActivity(canvasId, limit) {
+  const cid = encodeURIComponent(canvasId || CANVAS_ID);
+  const n = Number(limit);
+  const cap = Number.isFinite(n) && n > 0 ? Math.min(200, Math.floor(n)) : 50;
+  return _request(`/admin/canvas/${cid}/activity?limit=${cap}`, { auth: true });
+}
+
 export async function listSnapshots(canvasId) {
   const cid = encodeURIComponent(canvasId || CANVAS_ID);
   return _request(`/admin/canvas/${cid}/snapshots`, { auth: true });

@@ -143,6 +143,7 @@ export class KeyboardShortcuts {
       }
       if (k === 'a' || k === 'A') { ev.preventDefault(); setActiveTool('arrow'); return; }
       if (k === 'r' || k === 'R') { ev.preventDefault(); setActiveTool('transform'); return; }
+      if (k === 'p' || k === 'P') { ev.preventDefault(); setActiveTool('pen'); return; }
       if (k === 'g' || k === 'G') {
         ev.preventDefault();
         if (this._call('onGroupShortcut', ev)) return;
@@ -265,6 +266,7 @@ export class KeyboardShortcuts {
         { keys: ['I'],           descKey: 'shortcut_desc_image' },
         { keys: ['V'],           descKey: 'shortcut_desc_video' },
         { keys: ['A'],           descKey: 'shortcut_desc_arrow' },
+        { keys: ['P'],           descKey: 'shortcut_desc_pen' },
       ]},
       { titleKey: 'shortcut_section_navigation', rows: [
         { keys: ['M'],           descKey: 'shortcut_desc_minimap' },

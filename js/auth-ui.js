@@ -219,6 +219,7 @@ export class AuthUI {
     this.menuEl.appendChild(mk(tr('dropdown_change_password'), () => this._openChangePw()));
     const h = this.adminHandlers || {};
     this.menuEl.appendChild(mk(tr('user_menu_export'), () => { if (h.onOpenExport) h.onOpenExport(); }, { divider: true }));
+    this.menuEl.appendChild(mk(tr('pdf_export_menu'), () => { if (h.onOpenPdfExport) h.onOpenPdfExport(); }));
     if (u && u.is_admin) {
       this.menuEl.appendChild(mk(tr('dropdown_manage_users'), () => this._openManageUsers()));
       this.menuEl.appendChild(mk(tr('dropdown_activity_log'), () => { if (h.onOpenActivityLog) h.onOpenActivityLog(); }));

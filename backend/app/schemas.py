@@ -142,6 +142,17 @@ class AuditEntryOut(BaseModel):
     created_at: Any
 
 
+class ActivityEntryOut(BaseModel):
+    id: uuid.UUID
+    user_id: uuid.UUID | None = None
+    username_display: str | None = None
+    action: str
+    target_id: str | None = None
+    target_label: str | None = None
+    payload: dict[str, Any] | None = None
+    created_at: Any
+
+
 class CommentCreateRequest(BaseModel):
     x: float
     y: float

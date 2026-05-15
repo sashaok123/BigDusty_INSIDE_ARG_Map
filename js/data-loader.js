@@ -48,6 +48,27 @@ export async function loadCanvas() {
   return finaliseCanvas(legacyToCanvas(legacy), { fellBack: true });
 }
 
+export function normalisePenStrokes(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const s of raw) {
+    if (!s || typeof s !== 'object') continue;
+    const points = Array.isArray(s.points) ? s.points.filter((p) => p && Number.isFinite(p.x) && Number.isFinite(p.y)).map((p) => ({ x: Number(p.x), y: Number(p.y) })) : [];
+    if (!points.length) continue;
+    const id = typeof s.id === 'string' && s.id ? s.id : `stroke-${Date.now().toString(36)}-${out.length}`;
+    const color = typeof s.color === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(s.color) ? s.color : '#e83d3d';
+    const w = Number(s.width);
+    const width = Number.isFinite(w) ? Math.max(1, Math.min(12, w)) : 3;
+    out.push({ id, color, width, points });
+  }
+  return out;
+}
+
+export function normalisePen(raw) {
+  if (!raw || typeof raw !== 'object') return { strokes: [] };
+  return { strokes: normalisePenStrokes(raw.strokes) };
+}
+
 function validCanvas(obj) {
   return !!obj && Array.isArray(obj.nodes) && Array.isArray(obj.edges);
 }
@@ -69,7 +90,8 @@ function finaliseCanvas(obj, { fellBack }) {
     }
   }
   const branches = normaliseBranches(obj.branches);
-  return { nodes, edges, branches, fellBack };
+  const pen = normalisePen(obj.pen);
+  return { nodes, edges, branches, pen, fellBack };
 }
 
 export function normaliseBranches(raw) {
@@ -454,13 +476,21 @@ export function restoreMarkdownCache(obj) {
   }
 }
 
-export function serializeCanvas(nodes, edges, branches) {
+export function serializeCanvas(nodes, edges, branches, pen) {
   const out = {
     nodes: Array.from(nodes.values()).map((n) => ({ ...n })),
     edges: Array.from(edges.values()).map((e) => ({ ...e })),
   };
   if (Array.isArray(branches) && branches.length) {
     out.branches = branches.map((b) => ({ ...b }));
+  }
+  if (pen && Array.isArray(pen.strokes) && pen.strokes.length) {
+    out.pen = { strokes: pen.strokes.map((s) => ({
+      id: s.id,
+      color: s.color,
+      width: s.width,
+      points: Array.isArray(s.points) ? s.points.map((p) => ({ x: p.x, y: p.y })) : [],
+    })) };
   }
   return out;
 }

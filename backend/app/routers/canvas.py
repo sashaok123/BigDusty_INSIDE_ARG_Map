@@ -60,6 +60,15 @@ def _mark_dirty(canvas: Canvas, key: str = "data") -> None:
     flag_modified(canvas, key)
 
 
+def _resolve_label(item_data: dict | None, fallback_id: str | None) -> str | None:
+    if isinstance(item_data, dict):
+        for key in ("label", "title", "slug", "name"):
+            val = item_data.get(key)
+            if isinstance(val, str) and val.strip():
+                return val.strip()[:128]
+    return fallback_id
+
+
 async def _bump_and_broadcast(
     db: AsyncSession,
     canvas: Canvas,
@@ -74,6 +83,13 @@ async def _bump_and_broadcast(
     _mark_dirty(canvas)
     await write_snapshot(db, canvas, user, kind)
     await prune_snapshots(db, canvas.id)
+    target_label = _resolve_label(item_data, item_id)
+    audit_payload = {
+        "canvas_id": canvas.id,
+        "target_id": item_id,
+        "target_label": target_label,
+    }
+    await log_action(db, user.id, kind, audit_payload)
     await db.commit()
     await db.refresh(canvas)
     change: dict[str, object] = {"kind": kind, "id": item_id, "data": item_data}
@@ -86,6 +102,19 @@ async def _bump_and_broadcast(
             "revision": canvas.revision,
             "change": change,
             "by": user.username_display,
+        },
+    )
+    await manager.broadcast(
+        canvas.id,
+        {
+            "type": "audit_log",
+            "entry": {
+                "action": kind,
+                "target_id": item_id,
+                "target_label": target_label,
+                "username_display": user.username_display,
+                "user_id": str(user.id),
+            },
         },
     )
     return canvas.revision
@@ -293,6 +322,13 @@ async def canvas_socket(
     try:
         await ws.send_json({"type": "hello", "revision": revision})
         await ws.send_json({"type": "presence", "users": manager.presence_users(canvas_id)})
+        for snap in manager.snapshot_locks(canvas_id):
+            await ws.send_json({
+                "type": "node_locked",
+                "node_id": snap.get("node_id"),
+                "username": snap.get("username"),
+                "client_id": snap.get("client_id"),
+            })
         while True:
             raw = await ws.receive_text()
             try:
@@ -308,6 +344,25 @@ async def canvas_socket(
                     continue
                 uname = authed_username if authed_username else "anonymous"
                 await manager.register_presence(canvas_id, ws, cid, uname)
+            elif ptype == "node_locked":
+                node_id = payload.get("node_id")
+                client_id = payload.get("client_id")
+                if not isinstance(node_id, str) or not isinstance(client_id, str):
+                    continue
+                uname = payload.get("username") or authed_username or "anonymous"
+                await manager.register_node_lock(canvas_id, node_id, client_id, uname, exclude_ws=ws)
+            elif ptype == "node_unlocked":
+                node_id = payload.get("node_id")
+                client_id = payload.get("client_id")
+                if not isinstance(node_id, str) or not isinstance(client_id, str):
+                    continue
+                await manager.release_node_lock(canvas_id, node_id, client_id, exclude_ws=ws)
+            elif ptype == "node_lock_heartbeat":
+                node_id = payload.get("node_id")
+                client_id = payload.get("client_id")
+                if not isinstance(node_id, str) or not isinstance(client_id, str):
+                    continue
+                await manager.refresh_node_lock(canvas_id, node_id, client_id)
     except WebSocketDisconnect:
         pass
     finally:

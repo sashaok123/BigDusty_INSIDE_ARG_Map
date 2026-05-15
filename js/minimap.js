@@ -18,6 +18,23 @@ const STATUS_TOKEN = {
   'dead-end': '--status-deadend',
 };
 
+const BRANCH_COLOR_PRESET = {
+  '1': '#e83d3d',
+  '2': '#e88a3d',
+  '3': '#e8c83d',
+  '4': '#3de88a',
+  '5': '#3dc8e8',
+  '6': '#9a6ce8',
+};
+
+function branchColor(branch) {
+  if (!branch) return null;
+  const raw = typeof branch.color === 'string' ? branch.color : '';
+  if (!raw) return null;
+  if (raw.startsWith('#')) return raw;
+  return BRANCH_COLOR_PRESET[raw] || null;
+}
+
 function readCssVar(name, fallback) {
   try {
     const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -52,6 +69,7 @@ export class Minimap {
   constructor(opts) {
     this.viewer = opts.viewer;
     this.container = opts.container || document.body;
+    this.getBranches = opts.getBranches || (() => []);
 
     this.imageW = 0;
     this.imageH = 0;
@@ -87,7 +105,7 @@ export class Minimap {
   }
 
   _refreshPalette() {
-    this.bgColour = readCssVar('--bg', this.bgColour);
+    this.bgColour = readCssVar('--canvas-bg', readCssVar('--bg', this.bgColour));
     this.borderColour = readCssVar('--panel-border', this.borderColour);
     this.accentColour = readCssVar('--accent', this.accentColour);
     const next = {};
@@ -109,6 +127,7 @@ export class Minimap {
       </div>
       <div class="minimap-body">
         <canvas class="minimap-canvas" width="${W}" height="${H}"></canvas>
+        <div class="minimap-legend"></div>
       </div>
     `;
     this.container.appendChild(root);
@@ -116,6 +135,27 @@ export class Minimap {
     this.canvas = root.querySelector('.minimap-canvas');
     this.ctx = this.canvas.getContext('2d');
     this.closeBtn = root.querySelector('.minimap-close');
+    this.legendEl = root.querySelector('.minimap-legend');
+  }
+
+  _renderLegend() {
+    if (!this.legendEl) return;
+    const branches = (typeof this.getBranches === 'function') ? this.getBranches() : [];
+    if (!Array.isArray(branches) || !branches.length) {
+      this.legendEl.style.display = 'none';
+      this.legendEl.innerHTML = '';
+      return;
+    }
+    const shown = branches.slice(0, 5);
+    const truncated = branches.length > 5;
+    this.legendEl.style.display = '';
+    const items = shown.map((b) => {
+      const color = branchColor(b) || '#888';
+      const label = (b.label || b.id || '').replace(/[<>"&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '"': '&quot;', '&': '&amp;' })[c]);
+      return `<span class="minimap-legend-item" title="${label}"><span class="minimap-legend-dot" style="background:${color}"></span><span class="minimap-legend-label">${label}</span></span>`;
+    }).join('');
+    const more = truncated ? `<span class="minimap-legend-more">+${branches.length - 5}</span>` : '';
+    this.legendEl.innerHTML = items + more;
   }
 
   _wireViewer() {
@@ -234,8 +274,16 @@ export class Minimap {
     }
 
     const hotspots = this.viewer.getHotspots();
+    const branches = (typeof this.getBranches === 'function') ? this.getBranches() : [];
+    const branchById = new Map();
+    if (Array.isArray(branches)) for (const b of branches) if (b && b.id) branchById.set(b.id, b);
     for (const h of hotspots) {
-      const fill = this.statusFill[h.status] || this.statusFill.unsolved || this.borderColour;
+      let fill = null;
+      if (Array.isArray(h.branches) && h.branches.length) {
+        const first = branchById.get(h.branches[0]);
+        if (first) fill = branchColor(first);
+      }
+      if (!fill) fill = this.statusFill[h.status] || this.statusFill.unsolved || this.borderColour;
       const matches = !this.fadeNonMatching || !this.statusFilter || this.statusFilter.has(h.status);
       ctx.globalAlpha = matches ? 0.95 : 0.3;
       ctx.fillStyle = fill;
@@ -246,6 +294,7 @@ export class Minimap {
       ctx.fillRect(x, y, w, hh);
     }
     ctx.globalAlpha = 1;
+    this._renderLegend();
 
     const rect = this._viewportRectWorld();
     const vx = this.offsetX + rect.x * this.scale;

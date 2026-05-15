@@ -123,6 +123,7 @@ export class EditNodeModal {
     this.onSave = opts.onSave || (() => {});
     this.onDelete = opts.onDelete || (() => {});
     this.onClose = opts.onClose || (() => {});
+    this.onOpenNode = opts.onOpenNode || (() => {});
     this.onUnauthedSubmit = opts.onUnauthedSubmit || (() => {});
     this.onCropImage = opts.onCropImage || null;
     this.onReplaceImage = opts.onReplaceImage || null;
@@ -795,6 +796,7 @@ export class EditNodeModal {
     this._loadPreview();
     if (this.panelEl) this.panelEl.classList.add('open');
     this._suppressInlineCommits = false;
+    try { this.onOpenNode(view.id); } catch (e) { void e; }
   }
 
   _loadPreview() {
@@ -1770,6 +1772,7 @@ export class EditNodeModal {
   }
 
   _closeImmediate() {
+    const prevId = this._state ? this._state.id : null;
     if (this._state && typeof this.isProvenanceActive === 'function' && this.isProvenanceActive(this._state.id)) {
       try { this.onProvenanceToggle(this._state.id, false); } catch (e) { void e; }
     }
@@ -1795,7 +1798,7 @@ export class EditNodeModal {
     this._previewKind = '';
     if (this.previewFieldEl) this.previewFieldEl.style.display = 'none';
     if (this.previewHostEl) this.previewHostEl.innerHTML = '';
-    if (typeof this.onClose === 'function') this.onClose();
+    if (typeof this.onClose === 'function') this.onClose(prevId);
   }
 
   _save() {

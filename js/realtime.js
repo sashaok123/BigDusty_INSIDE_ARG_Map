@@ -48,6 +48,17 @@ export class Realtime {
 
   isConnected() { return !!(this._ws && this._ws.readyState === WebSocket.OPEN); }
 
+  send(message) {
+    if (!this.isConnected() || !message) return false;
+    try {
+      this._ws.send(JSON.stringify(message));
+      return true;
+    } catch (e) {
+      console.warn('[realtime] send failed', e);
+      return false;
+    }
+  }
+
   _setStatus(s) {
     if (s === this._lastStatus) return;
     this._lastStatus = s;
@@ -129,6 +140,26 @@ export class Realtime {
       try {
         document.dispatchEvent(new CustomEvent('presence:update', {
           detail: { users: Array.isArray(msg.users) ? msg.users : [] },
+        }));
+      } catch (e) { void e; }
+      return;
+    }
+    if (msg.type === 'audit_log') {
+      try {
+        document.dispatchEvent(new CustomEvent('audit:log', { detail: { entry: msg.entry || {} } }));
+      } catch (e) { void e; }
+      return;
+    }
+    if (msg.type === 'node_locked' || msg.type === 'node_unlocked') {
+      try {
+        document.dispatchEvent(new CustomEvent('node:lock', {
+          detail: {
+            kind: msg.type,
+            nodeId: msg.node_id || msg.nodeId || null,
+            username: msg.username || '',
+            clientId: msg.client_id || msg.clientId || null,
+            selfClientId: getClientId(),
+          },
         }));
       } catch (e) { void e; }
       return;

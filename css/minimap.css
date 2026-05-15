@@ -50,8 +50,23 @@
   width: 220px;
   height: 160px;
   display: block;
-  background: var(--bg);
+  background: var(--canvas-bg, var(--bg));
   border-radius: 2px;
   cursor: crosshair;
 }
 .minimap-canvas:active { cursor: grabbing; }
+
+.minimap-legend {
+  margin-top: 4px;
+  padding: 4px 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 6px;
+  font-size: 9px;
+  color: var(--text-dim);
+  border-top: 1px solid var(--panel-border);
+}
+.minimap-legend-item { display: inline-flex; align-items: center; gap: 4px; max-width: 70px; }
+.minimap-legend-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 8px; }
+.minimap-legend-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.minimap-legend-more { color: var(--text-muted); font-style: italic; }

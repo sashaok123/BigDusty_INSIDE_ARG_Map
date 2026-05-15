@@ -82,6 +82,10 @@ export class Viewer {
     this.borderColour = '#d8d8e0';
     this.accentColour = '#2e6fe8';
     this.handleStrokeColour = '#ffffff';
+    this.cardBg = '#ffffff';
+    this.cardText = '#16181c';
+    this.cardBorder = '#d8d8e0';
+    this.transformBg = '#f8f5ed';
     this._refreshPalette();
 
     this.scale = 1;
@@ -120,6 +124,8 @@ export class Viewer {
     this.cursorPos = null;
 
     this.provenance = null;
+    this.lockedNodes = options.lockedNodes || new Map();
+    this.getLockedNodes = options.getLockedNodes || null;
 
     this._raf = null;
     this._subscribers = new Set();
@@ -282,7 +288,10 @@ export class Viewer {
 
   _refreshBg() {
     try {
-      const v = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+      const style = getComputedStyle(document.documentElement);
+      const canvasBg = style.getPropertyValue('--canvas-bg').trim();
+      const fallback = style.getPropertyValue('--bg').trim();
+      const v = canvasBg || fallback;
       if (v) this.bgColour = v;
     } catch (e) {
       void e;
@@ -290,9 +299,13 @@ export class Viewer {
   }
 
   _refreshPalette() {
-    this.borderColour = readCssVar('--panel-border', this.borderColour);
+    this.borderColour = readCssVar('--card-border', readCssVar('--panel-border', this.borderColour));
     this.accentColour = readCssVar('--accent', this.accentColour);
     this.handleStrokeColour = readCssVar('--panel-bg', this.handleStrokeColour);
+    this.cardBg = readCssVar('--card-bg', readCssVar('--panel-bg', this.cardBg));
+    this.cardText = readCssVar('--card-text', readCssVar('--text', this.cardText));
+    this.cardBorder = readCssVar('--card-border', this.borderColour);
+    this.transformBg = readCssVar('--transform-bg', this.transformBg);
     const next = {};
     for (const [status, token] of Object.entries(STATUS_TOKEN)) {
       const stroke = readCssVar(token, '#888888');
@@ -353,6 +366,17 @@ export class Viewer {
   invalidateNode(id) {
     this.requestDraw();
     void id;
+  }
+
+  setLockedNodes(map) {
+    this.lockedNodes = map instanceof Map ? map : new Map();
+    this.requestDraw();
+  }
+
+  _getLockInfo(id) {
+    const map = (typeof this.getLockedNodes === 'function') ? this.getLockedNodes() : this.lockedNodes;
+    if (!map || typeof map.get !== 'function') return null;
+    return map.get(id) || null;
   }
 
   setProvenance(p) {
@@ -962,6 +986,8 @@ export class Viewer {
 
     ctx.lineWidth = (isHover || isOutlineHL || isSelected ? 2.5 : 1.6) / this.scale;
     ctx.globalAlpha = alpha;
+    ctx.fillStyle = this.cardBg;
+    ctx.fillRect(x, y, w, hh);
     ctx.strokeStyle = h.provenanceOutline ? h.provenanceOutline : c.stroke;
     ctx.fillStyle = isHover ? c.fillHover : c.fill;
     ctx.fillRect(x, y, w, hh);
@@ -1010,7 +1036,37 @@ export class Viewer {
     if (h.locked && this.scale > 0.2) {
       this._drawLockBadge(ctx, x + w, y);
     }
+    const lockInfo = this._getLockInfo(h.id);
+    if (lockInfo && this.scale > 0.25) {
+      this._drawEditingBadge(ctx, x, y, lockInfo.username || '');
+    }
     ctx.globalAlpha = 1;
+  }
+
+  _drawEditingBadge(ctx, x, y, username) {
+    ctx.save();
+    const s = 1 / this.scale;
+    const padX = 6 * s;
+    const padY = 3 * s;
+    const fontPx = Math.max(10, Math.min(13, 11 / this.scale));
+    ctx.font = `600 ${fontPx}px var(--font-mono)`;
+    const prefix = '🔒 ';
+    const label = `${prefix}@${username || 'anon'}`;
+    const tw = ctx.measureText(label).width;
+    const boxW = tw + padX * 2;
+    const boxH = fontPx + padY * 2;
+    ctx.fillStyle = 'rgba(232,107,46,0.92)';
+    if (typeof ctx.roundRect === 'function') {
+      ctx.beginPath();
+      ctx.roundRect(x, y - boxH - 2 * s, boxW, boxH, 3 * s);
+      ctx.fill();
+    } else {
+      ctx.fillRect(x, y - boxH - 2 * s, boxW, boxH);
+    }
+    ctx.fillStyle = '#ffffff';
+    ctx.textBaseline = 'top';
+    ctx.fillText(label, x + padX, y - boxH - 2 * s + padY);
+    ctx.restore();
   }
 
   _drawBlockAnnotations(ctx, b) {
@@ -1106,7 +1162,7 @@ export class Viewer {
 
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.fillStyle = '#f8f5ed';
+    ctx.fillStyle = this.transformBg;
     ctx.fillRect(x, y, w, hh);
     ctx.strokeStyle = c.stroke;
     ctx.lineWidth = (isHover || isOutlineHL || isSelected ? 2.5 : 1.6) / this.scale;
@@ -1138,7 +1194,7 @@ export class Viewer {
       const fontPx = Math.max(10, Math.min(15, 12 / this.scale));
       const padX = 8 / this.scale;
       const padY = 4 / this.scale;
-      ctx.fillStyle = pickTextColor('#f8f5ed', { dark: '#1a1a22' });
+      ctx.fillStyle = pickTextColor(this.transformBg, { dark: '#1a1a22', light: this.cardText });
       ctx.textBaseline = 'top';
 
       if (titleH > 0) {
@@ -1194,7 +1250,7 @@ export class Viewer {
       }
 
       ctx.font = `400 ${fontPx}px var(--font-mono)`;
-      ctx.fillStyle = pickTextColor('#f8f5ed', { dark: '#1a1a22' });
+      ctx.fillStyle = pickTextColor(this.transformBg, { dark: '#1a1a22', light: this.cardText });
       const outp = h.output || '';
       const outpMax = Math.max(8, Math.floor((w - padX * 2) / (fontPx * 0.6)));
       const outpShown = outp.length > outpMax ? outp.slice(0, outpMax - 1) + '…' : outp;

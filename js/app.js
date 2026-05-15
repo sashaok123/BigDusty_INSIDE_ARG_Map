@@ -10,6 +10,10 @@ import { ArrowLayer } from './arrows.js';
 import { Minimap } from './minimap.js';
 import { KeyboardShortcuts } from './keyboard.js';
 import { StatusFilter } from './status-filter.js';
+import { PenLayer } from './pen-layer.js';
+import { LayoutMenu } from './layout-menu.js';
+import { ActivityFeed } from './activity-feed.js';
+import { openPdfExportDialog } from './pdf-export.js';
 import {
   loadCanvas,
   setCachedMarkdown,
@@ -20,6 +24,7 @@ import {
   serializeCanvas,
   normaliseBranches,
   defaultBranchSeed,
+  normalisePen,
 } from './data-loader.js';
 import {
   saveState,
@@ -91,6 +96,7 @@ import {
   createNode as apiCreateNode, patchNode as apiPatchNode, deleteNode as apiDeleteNode,
   createEdge as apiCreateEdge, patchEdge as apiPatchEdge, deleteEdge as apiDeleteEdge,
   uploadImage as apiUploadImage,
+  getClientId as getClientIdFromApi,
 } from './api-client.js';
 import { isPlaceholderApiBase } from './config.js';
 
@@ -119,6 +125,9 @@ const state = {
   hasUnsavedEdits: false,
   githubOrigin: null,
   provenance: { active: false, selectedId: null, ancestors: new Set(), descendants: new Set() },
+  pen: { strokes: [] },
+  lockedNodes: new Map(),
+  currentlyEditingNodeId: null,
 };
 
 const HISTORY_LIMIT = 50;
@@ -158,6 +167,10 @@ let exportModal;
 let bookmarksPanel;
 let githubImportModal;
 let compareModal;
+let penLayer;
+let layoutMenu;
+let activityFeed;
+let lockHeartbeatTimer = null;
 let _resizeHistoryPushed = false;
 
 function $(id) { return document.getElementById(id); }
@@ -174,7 +187,7 @@ function toast(msg, kind) {
 function snapshot() {
   return {
     version: STATE_VERSION,
-    canvas: serializeCanvas(state.nodes, state.edges, state.branches),
+    canvas: serializeCanvas(state.nodes, state.edges, state.branches, state.pen),
     lang: getLang(),
     puzzles: snapshotMarkdownCache(),
   };
@@ -224,6 +237,9 @@ async function bootstrap() {
   compareModal = new CompareModal();
   setupToastBridge();
   setupPresence();
+  setupPenLayer();
+  setupLayoutMenu();
+  setupActivityFeed();
 
   await loadInitialData();
   applyFilters();
@@ -359,6 +375,16 @@ function setupExportModal() {
 function openExportDialog() {
   if (!exportModal) return;
   exportModal.open();
+}
+
+function triggerPdfExport() {
+  openPdfExportDialog({
+    getNodes: () => state.nodes,
+    getEdges: () => state.edges,
+    getBranches: () => state.branches,
+    canvasId: 'main',
+    onToast: (msg, kind) => toast(msg, kind),
+  });
 }
 
 function setupSnapGuides() {
@@ -513,6 +539,104 @@ function setupBookmarksPanel() {
     getNodes: () => state.nodes,
     onPick: (id) => focusBookmark(id),
   });
+}
+
+function setupPenLayer() {
+  penLayer = new PenLayer({
+    viewport: $('viewport'),
+    viewer,
+    getTransform: () => viewer ? viewer.getTransform() : { scale: 1, panX: 0, panY: 0 },
+    getStrokes: () => (state.pen && Array.isArray(state.pen.strokes)) ? state.pen.strokes : [],
+    isEditMode: () => state.mode === 'editor',
+    onCommitStroke: (stroke) => commitPenStroke(stroke),
+    onDeleteStroke: (id) => deletePenStroke(id),
+    onClearAll: () => clearAllPenStrokes(),
+    onConfirm: (msg) => window.confirm(msg),
+  });
+  if (viewer && typeof viewer.subscribe === 'function') {
+    viewer.subscribe((kind) => {
+      if (kind === 'transform') penLayer.requestDraw();
+    });
+  }
+}
+
+function commitPenStroke(stroke) {
+  if (!stroke || !stroke.id) return;
+  if (!state.pen) state.pen = { strokes: [] };
+  state.pen.strokes.push({
+    id: stroke.id,
+    color: stroke.color,
+    width: stroke.width,
+    points: stroke.points.map((p) => ({ x: p.x, y: p.y })),
+  });
+  pushHistory();
+  if (penLayer) penLayer.requestDraw();
+  scheduleSave();
+  pushPenToBackend();
+}
+
+function deletePenStroke(id) {
+  if (!state.pen || !Array.isArray(state.pen.strokes)) return;
+  const idx = state.pen.strokes.findIndex((s) => s.id === id);
+  if (idx < 0) return;
+  pushHistory();
+  state.pen.strokes.splice(idx, 1);
+  if (penLayer) penLayer.requestDraw();
+  scheduleSave();
+  pushPenToBackend();
+}
+
+function clearAllPenStrokes() {
+  if (!state.pen || !Array.isArray(state.pen.strokes) || !state.pen.strokes.length) return;
+  pushHistory();
+  state.pen = { strokes: [] };
+  if (penLayer) penLayer.requestDraw();
+  scheduleSave();
+  pushPenToBackend();
+}
+
+async function pushPenToBackend() {
+  if (!state.backendOnline || !isLoggedIn()) return;
+  try {
+    const data = serializeCanvas(state.nodes, state.edges, state.branches, state.pen);
+    const res = await apiPutCanvas(data, state.revision);
+    if (res && typeof res.revision === 'number') state.revision = res.revision;
+  } catch (e) {
+    if (e && e.kind !== 'auth_expired') console.warn('[app] pen push failed', e);
+  }
+}
+
+function setupLayoutMenu() {
+  layoutMenu = new LayoutMenu({
+    anchorEl: $('btn-layout'),
+    onApply: (algo, opts) => applyLayoutAlgorithm(algo, opts),
+  });
+}
+
+function setupActivityFeed() {
+  activityFeed = new ActivityFeed({
+    viewport: $('viewport'),
+    canvasId: 'main',
+    getNodes: () => state.nodes,
+    onFocusNode: (id) => focusNodeFromActivity(id),
+    isLoggedIn,
+  });
+  const btn = $('btn-activity-toggle');
+  if (btn) btn.addEventListener('click', () => activityFeed && activityFeed.toggle());
+}
+
+function focusNodeFromActivity(id) {
+  if (!id) return;
+  const n = findNode(state.nodes, id);
+  if (!n) return;
+  const view = toViewShape(n);
+  if (viewer) {
+    if (typeof viewer.centerOnHotspot === 'function') viewer.centerOnHotspot(view);
+    viewer.setActiveId(id);
+    state.selection = new Set([id]);
+    viewer.setSelection(state.selection);
+  }
+  refreshSelectionStatus();
 }
 
 function focusBookmark(id) {
@@ -679,7 +803,7 @@ function applyBranchesUpdate(nextList) {
 async function pushBranchesToBackend() {
   if (!state.backendOnline || !isLoggedIn()) return;
   try {
-    const data = serializeCanvas(state.nodes, state.edges, state.branches);
+    const data = serializeCanvas(state.nodes, state.edges, state.branches, state.pen);
     const res = await apiPutCanvas(data, state.revision);
     if (res && typeof res.revision === 'number') state.revision = res.revision;
   } catch (e) {
@@ -731,6 +855,55 @@ function createVideoNode(rect, media) {
   scheduleSave();
   toast(tr('node_created'));
   renderVideoOverlay();
+}
+
+async function applyLayoutAlgorithm(algo, opts) {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  const { applyForceDirected, applyHierarchical, applyGrid, applyCircle, computeBounds } = await import('./layout.js');
+  let targetIds = Array.from(state.selection);
+  if (!targetIds.length) {
+    targetIds = [];
+    for (const n of state.nodes.values()) {
+      if (!n || !n.id) continue;
+      if (n.type === 'group' || n.kind === 'group') continue;
+      targetIds.push(n.id);
+    }
+  }
+  if (!targetIds.length) {
+    toast(tr('layout_no_nodes'));
+    return;
+  }
+  const targets = targetIds.map((id) => findNode(state.nodes, id)).filter(Boolean);
+  if (!targets.length) {
+    toast(tr('layout_no_nodes'));
+    return;
+  }
+  const idSet = new Set(targets.map((n) => n.id));
+  const relEdges = [];
+  for (const e of state.edges.values()) {
+    if (idSet.has(e.fromNode) && idSet.has(e.toNode)) relEdges.push(e);
+  }
+  const bounds = computeBounds(targets);
+  let positions;
+  if (algo === 'force-directed') positions = applyForceDirected(targets, relEdges, bounds);
+  else if (algo === 'hierarchical') positions = applyHierarchical(targets, relEdges, bounds);
+  else if (algo === 'grid') positions = applyGrid(targets, bounds, (opts && opts.cols) || 5);
+  else if (algo === 'circle') positions = applyCircle(targets, bounds);
+  else return;
+  if (!positions || !positions.size) return;
+  pushHistory();
+  for (const [id, pos] of positions.entries()) {
+    const n = findNode(state.nodes, id);
+    if (!n) continue;
+    n.x = pos.x;
+    n.y = pos.y;
+    pushNodePatch(id, { x: pos.x, y: pos.y });
+  }
+  refreshPuzzleViewsInViewer();
+  if (viewer) viewer.notifyNodesChanged();
+  if (arrowLayer) arrowLayer.requestDraw();
+  scheduleSave();
+  toast(tr('layout_applied', { n: positions.size }));
 }
 
 function applyAlignmentOperation(op) {
@@ -801,6 +974,7 @@ function setupAuthUI() {
       onManageBranches:   () => openManageBranches(),
       onOpenExport:       () => openExportDialog(),
       onImportGithub:     () => triggerOpenGithubImport(),
+      onOpenPdfExport:    () => triggerPdfExport(),
     },
   });
   subscribeAuth((kind) => {
@@ -835,11 +1009,89 @@ function setupRealtime() {
     onResync: (data) => applyServerCanvas(data),
   });
   realtime.start();
+  document.addEventListener('node:lock', (ev) => {
+    if (!ev || !ev.detail) return;
+    applyNodeLockEvent(ev.detail);
+  });
+}
+
+function applyNodeLockEvent(detail) {
+  if (!detail || !detail.nodeId) return;
+  if (detail.clientId && detail.selfClientId && detail.clientId === detail.selfClientId) return;
+  if (detail.kind === 'node_locked') {
+    state.lockedNodes.set(detail.nodeId, {
+      username: detail.username || 'anonymous',
+      clientId: detail.clientId || '',
+      at: Date.now(),
+    });
+    if (viewer) viewer.invalidateNode(detail.nodeId);
+  } else if (detail.kind === 'node_unlocked') {
+    state.lockedNodes.delete(detail.nodeId);
+    if (viewer) viewer.invalidateNode(detail.nodeId);
+  }
+}
+
+function onEditorOpenedForNode(nodeId) {
+  if (!nodeId) return;
+  state.currentlyEditingNodeId = nodeId;
+  sendNodeLockMessage('node_locked', nodeId);
+  startLockHeartbeat();
+}
+
+function onEditorClosedForNode(prevId) {
+  if (!prevId) {
+    state.currentlyEditingNodeId = null;
+    stopLockHeartbeat();
+    return;
+  }
+  if (state.currentlyEditingNodeId === prevId) {
+    state.currentlyEditingNodeId = null;
+  }
+  sendNodeLockMessage('node_unlocked', prevId);
+  stopLockHeartbeat();
+}
+
+function sendNodeLockMessage(type, nodeId) {
+  if (!realtime || !nodeId) return;
+  const u = getCurrentUser();
+  const username = (u && u.username) ? u.username : 'anonymous';
+  const msg = {
+    type,
+    node_id: nodeId,
+    client_id: getRealtimeClientId(),
+    username,
+  };
+  realtime.send(msg);
+}
+
+function getRealtimeClientId() {
+  try { return getClientIdFromApi(); } catch (e) { void e; return ''; }
+}
+
+function startLockHeartbeat() {
+  stopLockHeartbeat();
+  lockHeartbeatTimer = setInterval(() => {
+    const id = state.currentlyEditingNodeId;
+    if (!id || !realtime) { stopLockHeartbeat(); return; }
+    realtime.send({
+      type: 'node_lock_heartbeat',
+      node_id: id,
+      client_id: getRealtimeClientId(),
+    });
+  }, 30000);
+}
+
+function stopLockHeartbeat() {
+  if (lockHeartbeatTimer) {
+    clearInterval(lockHeartbeatTimer);
+    lockHeartbeatTimer = null;
+  }
 }
 
 function setupViewer() {
   viewer = new Viewer($('map-canvas'), {
     drawPreviewEl: $('draw-preview'),
+    getLockedNodes: () => state.lockedNodes,
     isNodeLocked: (id) => {
       const n = findNode(state.nodes, id);
       return !!(n && n.locked);
@@ -1313,7 +1565,11 @@ function setupEditNodeModal() {
         ],
       });
     },
-    onClose: () => {
+    onOpenNode: (id) => {
+      onEditorOpenedForNode(id);
+    },
+    onClose: (prevId) => {
+      onEditorClosedForNode(prevId);
       if (viewer) viewer.setActiveId(null);
     },
     onExportMd: (slug, md) => {
@@ -2571,6 +2827,7 @@ function serializeFullState() {
     nodes: Array.from(state.nodes.entries()).map(([id, n]) => [id, JSON.parse(JSON.stringify(n))]),
     edges: arrowLayer && typeof arrowLayer.serializeEdges === 'function' ? arrowLayer.serializeEdges() : [],
     branches: Array.isArray(state.branches) ? JSON.parse(JSON.stringify(state.branches)) : [],
+    pen: state.pen ? JSON.parse(JSON.stringify(state.pen)) : { strokes: [] },
   };
 }
 
@@ -2584,6 +2841,7 @@ function restoreFullState(snap) {
   const prevEdges = arrowLayer ? new Map(arrowLayer.edges) : new Map();
   if (Array.isArray(snap.nodes)) state.nodes = new Map(snap.nodes);
   if (Array.isArray(snap.branches)) state.branches = JSON.parse(JSON.stringify(snap.branches));
+  if (snap.pen && typeof snap.pen === 'object') state.pen = JSON.parse(JSON.stringify(snap.pen));
   if (arrowLayer && Array.isArray(snap.edges)) {
     arrowLayer.replaceAllEdges(snap.edges);
     state.edges = arrowLayer.edges;
@@ -2592,6 +2850,7 @@ function restoreFullState(snap) {
   if (viewer) viewer.notifyNodesChanged();
   if (arrowLayer) arrowLayer.requestDraw();
   if (branchesPanel) branchesPanel.setBranches();
+  if (penLayer) penLayer.requestDraw();
   syncRestoredStateToBackend(prevNodes, prevEdges);
 }
 
@@ -2862,7 +3121,7 @@ function confirmWithWord(opts) {
 }
 
 function exportCanvasSnapshot() {
-  downloadCanvasFile(state.nodes, state.edges, 'canvas.canvas', state.branches);
+  downloadCanvasFile(state.nodes, state.edges, 'canvas.canvas', state.branches, state.pen);
   toast(tr('toast_exported'));
 }
 
@@ -2943,6 +3202,7 @@ async function loadInitialData() {
   let nodes;
   let edges;
   let branches = null;
+  let pen = null;
   if (useStored) {
     nodes = new Map();
     for (const n of stored.canvas.nodes) {
@@ -2955,17 +3215,20 @@ async function loadInitialData() {
       if (ee.id) edges.set(ee.id, ee);
     }
     if (Array.isArray(stored.canvas.branches)) branches = normaliseBranches(stored.canvas.branches);
+    if (stored.canvas.pen) pen = normalisePen(stored.canvas.pen);
     if (stored.puzzles) restoreMarkdownCache(stored.puzzles);
     toast(tr('toast_loaded_local'));
   } else {
     nodes = loaded.nodes;
     edges = loaded.edges;
     branches = Array.isArray(loaded.branches) ? loaded.branches : null;
+    pen = loaded.pen ? normalisePen(loaded.pen) : null;
   }
 
   state.nodes = nodes;
   state.edges = edges;
   state.branches = (branches && branches.length) ? branches : defaultBranchSeed();
+  state.pen = pen || { strokes: [] };
   if (branchesPanel) branchesPanel.setBranches();
 
   const blocks = blockViews(nodes);
@@ -3002,6 +3265,7 @@ async function ingestCanvasData(data) {
   state.edges = edges;
   const incomingBranches = normaliseBranches(data.branches);
   state.branches = incomingBranches.length ? incomingBranches : defaultBranchSeed();
+  state.pen = normalisePen(data.pen);
   if (branchesPanel) branchesPanel.setBranches();
   const blocks = blockViews(nodes);
   await viewer.setBlocks(blocks);
@@ -3012,6 +3276,7 @@ async function ingestCanvasData(data) {
   arrowLayer.setEdges(edges);
   arrowLayer.setMode(state.mode);
   if (bookmarksPanel) bookmarksPanel.refresh();
+  if (penLayer) penLayer.requestDraw();
   hideMigrationBanner();
   refreshOfflineBanner();
 }
@@ -3443,9 +3708,11 @@ function applyImportedCanvas(imported) {
     const b = normaliseBranches(imported.branches);
     state.branches = b.length ? b : state.branches;
   }
+  if (imported.pen) state.pen = normalisePen(imported.pen);
   if (branchesPanel) branchesPanel.setBranches();
   refreshPuzzleViewsInViewer();
   arrowLayer.setEdges(state.edges);
+  if (penLayer) penLayer.requestDraw();
   scheduleSave();
 }
 
@@ -3453,7 +3720,7 @@ function setupMigrationBanner() {
   const banner = $('migration-banner');
   if (!banner) return;
   $('migration-banner-button').addEventListener('click', () => {
-    downloadCanvasFile(state.nodes, state.edges, 'canvas.canvas', state.branches);
+    downloadCanvasFile(state.nodes, state.edges, 'canvas.canvas', state.branches, state.pen);
     toast(tr('toast_exported'));
     hideMigrationBanner();
   });
@@ -3498,6 +3765,7 @@ function setupMinimap() {
   minimap = new Minimap({
     viewer,
     container: document.body,
+    getBranches: () => state.branches,
   });
   const mmBtn = $('btn-minimap-toggle');
   if (mmBtn) mmBtn.addEventListener('click', () => minimap && minimap.toggle());

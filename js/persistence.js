@@ -55,8 +55,8 @@ export function clearState() {
   }
 }
 
-export function downloadCanvasFile(nodes, edges, filename = 'canvas.canvas', branches = null) {
-  const payload = serializeCanvas(nodes, edges, branches);
+export function downloadCanvasFile(nodes, edges, filename = 'canvas.canvas', branches = null, pen = null) {
+  const payload = serializeCanvas(nodes, edges, branches, pen);
   const blob = new Blob([JSON.stringify(payload, null, 2) + '\n'], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -87,11 +87,21 @@ export function importCanvasFile(file) {
 function parseImported(data) {
   if (!data || typeof data !== 'object') throw new Error('Not an object');
   if (Array.isArray(data.nodes) && Array.isArray(data.edges)) {
-    return { nodes: data.nodes, edges: data.edges, branches: Array.isArray(data.branches) ? data.branches : null };
+    return {
+      nodes: data.nodes,
+      edges: data.edges,
+      branches: Array.isArray(data.branches) ? data.branches : null,
+      pen: data.pen && typeof data.pen === 'object' ? data.pen : null,
+    };
   }
   if (data.version === STATE_VERSION && data.canvas
       && Array.isArray(data.canvas.nodes) && Array.isArray(data.canvas.edges)) {
-    return { nodes: data.canvas.nodes, edges: data.canvas.edges, branches: Array.isArray(data.canvas.branches) ? data.canvas.branches : null };
+    return {
+      nodes: data.canvas.nodes,
+      edges: data.canvas.edges,
+      branches: Array.isArray(data.canvas.branches) ? data.canvas.branches : null,
+      pen: data.canvas.pen && typeof data.canvas.pen === 'object' ? data.canvas.pen : null,
+    };
   }
   if (Array.isArray(data.hotspots)) {
     const legacy = {

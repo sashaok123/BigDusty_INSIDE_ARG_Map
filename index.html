@@ -23,6 +23,10 @@
   <link rel="stylesheet" href="css/export.css">
   <link rel="stylesheet" href="css/github-import.css">
   <link rel="stylesheet" href="css/compare-modal.css">
+  <link rel="stylesheet" href="css/pen.css">
+  <link rel="stylesheet" href="css/activity-feed.css">
+  <link rel="stylesheet" href="css/layout-menu.css">
+  <link rel="stylesheet" href="css/pdf-export.css">
 </head>
 <body>
 
@@ -59,6 +63,12 @@
       </button>
       <button class="tb-icon-btn" id="btn-branches-toggle" type="button" data-i18n-title="branches_panel_title" data-i18n-aria="branches_panel_title" title="Branches" aria-label="Branches">
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="6" cy="6" r="2.2"/><circle cx="6" cy="18" r="2.2"/><circle cx="18" cy="12" r="2.2"/><path d="M8 6h4a2 2 0 0 1 2 2v3"/><path d="M8 18h4a2 2 0 0 0 2-2v-3"/></svg>
+      </button>
+      <button class="tb-icon-btn" id="btn-layout" type="button" data-i18n-title="toolbar_layout" data-i18n-aria="toolbar_layout" title="Layout" aria-label="Layout">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      </button>
+      <button class="tb-icon-btn" id="btn-activity-toggle" type="button" data-i18n-title="activity_toggle" data-i18n-aria="activity_toggle" title="Activity" aria-label="Activity">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
       </button>
       <button class="tb-icon-btn" id="btn-settings" type="button" data-i18n-title="settings_title" data-i18n-aria="settings_title" title="Settings" aria-label="Settings">
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
@@ -185,6 +195,7 @@
   <button id="migration-banner-dismiss" type="button" data-i18n="migration_banner_dismiss">Dismiss</button>
 </div>
 
+<script src="vendor/jspdf.umd.min.js" defer></script>
 <script type="module" src="js/app.js"></script>
 </body>
 </html>

@@ -22,6 +22,7 @@ from ..github_import import (
 )
 from ..models import AuditLog, Canvas, Invitation, User
 from ..schemas import (
+    ActivityEntryOut,
     AuditEntryOut,
     CreateUserRequest,
     GitHubImportPlan,
@@ -226,6 +227,66 @@ async def delete_invitation(
 async def get_audit_log(db: Annotated[AsyncSession, Depends(get_db)]) -> list[AuditEntryOut]:
     result = await db.scalars(select(AuditLog).order_by(AuditLog.created_at.desc()).limit(200))
     return [AuditEntryOut.model_validate(e) for e in result.all()]
+
+
+_CANVAS_ACTIONS = {
+    "node_created",
+    "node_updated",
+    "node_deleted",
+    "edge_created",
+    "edge_updated",
+    "edge_deleted",
+    "canvas_replaced",
+    "canvas_restored",
+    "github_import",
+    "github_resync_node",
+}
+
+
+@router.get("/canvas/{canvas_id}/activity", response_model=list[ActivityEntryOut])
+async def get_canvas_activity(
+    canvas_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    limit: int = 50,
+) -> list[ActivityEntryOut]:
+    capped = max(1, min(200, limit))
+    rows = (await db.scalars(
+        select(AuditLog)
+        .where(AuditLog.action.in_(_CANVAS_ACTIONS))
+        .order_by(AuditLog.created_at.desc())
+        .limit(capped * 4)
+    )).all()
+    filtered: list[AuditLog] = []
+    for r in rows:
+        pl = r.payload or {}
+        if not isinstance(pl, dict):
+            continue
+        cid = pl.get("canvas_id")
+        if cid is None or cid == canvas_id:
+            filtered.append(r)
+        if len(filtered) >= capped:
+            break
+    user_ids = {r.user_id for r in filtered if r.user_id is not None}
+    user_map: dict[uuid.UUID, str] = {}
+    if user_ids:
+        users = (await db.scalars(select(User).where(User.id.in_(user_ids)))).all()
+        user_map = {u.id: u.username_display for u in users}
+    out: list[ActivityEntryOut] = []
+    for r in filtered:
+        payload = r.payload if isinstance(r.payload, dict) else None
+        target_id = payload.get("target_id") if payload else None
+        target_label = payload.get("target_label") if payload else None
+        out.append(ActivityEntryOut(
+            id=r.id,
+            user_id=r.user_id,
+            username_display=user_map.get(r.user_id) if r.user_id else None,
+            action=r.action,
+            target_id=target_id if isinstance(target_id, str) else None,
+            target_label=target_label if isinstance(target_label, str) else None,
+            payload=payload,
+            created_at=r.created_at,
+        ))
+    return out
 
 
 @router.get("/canvas/{canvas_id}/snapshots", response_model=list[SnapshotSummary])
