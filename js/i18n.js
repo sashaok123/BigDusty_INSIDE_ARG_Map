@@ -286,6 +286,7 @@ const _I18N_DATA = {
     'Modifica etichetta',
     'Rediger etiket',
   ],
+  edge_props_title: ['Arrow', 'Стрелка', 'Pfeil', 'Freccia', 'Pil'],
   edge_routing: ['Routing', 'Маршрут', 'Routing', 'Instradamento', 'Rute'],
   edge_routing_straight: ['Straight', 'Прямая', 'Gerade', 'Diritta', 'Lige'],
   edge_routing_orthogonal: ['Orthogonal', 'Прямые углы', 'Orthogonal', 'Ortogonale', 'Ortogonal'],

@@ -22,12 +22,53 @@ body.space-held #viewport #arrow-layer * { pointer-events: none !important; curs
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
   border-radius: var(--radius);
-  padding: 12px 14px 10px;
+  padding: 0 14px 10px;
   min-width: 260px;
   z-index: 1600;
   box-shadow: var(--shadow-modal);
   font-family: var(--font-mono);
   font-size: 11px;
+}
+
+.arrow-props-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0 8px;
+  margin: 0 -14px 8px;
+  padding-left: 14px;
+  padding-right: 8px;
+  border-bottom: 1px solid var(--panel-border);
+  cursor: move;
+  user-select: none;
+  background: var(--bg-input, var(--panel-bg));
+  border-top-left-radius: var(--radius);
+  border-top-right-radius: var(--radius);
+}
+
+.arrow-props-title {
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.arrow-props-close {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 8px;
+  border-radius: 4px;
+  transition: background .12s, color .12s;
+}
+.arrow-props-close:hover {
+  background: var(--hover, rgba(0,0,0,0.06));
+  color: var(--text);
 }
 
 .arrow-props-row {

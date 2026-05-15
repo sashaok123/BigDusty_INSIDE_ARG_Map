@@ -400,8 +400,35 @@ export class EdgePropsPopover {
     this.hide();
     const popover = document.createElement('div');
     popover.className = 'arrow-props';
-    popover.style.left = `${Math.max(8, Math.min(window.innerWidth - 290, screenPt.x - 145))}px`;
-    popover.style.top  = `${Math.max(8, Math.min(window.innerHeight - 260, screenPt.y + 14))}px`;
+    const stored = this._readStoredPos();
+    const W = 290;
+    const H = 260;
+    const defaultLeft = Math.max(8, Math.min(window.innerWidth - W, screenPt.x - 145));
+    const defaultTop  = Math.max(8, Math.min(window.innerHeight - H, screenPt.y + 14));
+    const left = stored ? Math.max(8, Math.min(window.innerWidth - 80, stored.x)) : defaultLeft;
+    const top  = stored ? Math.max(8, Math.min(window.innerHeight - 60, stored.y)) : defaultTop;
+    popover.style.left = `${left}px`;
+    popover.style.top  = `${top}px`;
+
+    const header = document.createElement('div');
+    header.className = 'arrow-props-header';
+    const title = document.createElement('span');
+    title.className = 'arrow-props-title';
+    title.textContent = tr('edge_props_title');
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'arrow-props-close';
+    closeBtn.setAttribute('aria-label', tr('side_panel_close'));
+    closeBtn.innerHTML = '&times;';
+    closeBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.layer._deselect();
+    });
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+    popover.appendChild(header);
+    this._wireDrag(popover, header);
 
     popover.appendChild(this._buildSelectRow('edge_routing', ROUTINGS, edge.routing, (v) => {
       this.layer.applyEdgePatch(edge.id, { routing: v });
@@ -526,6 +553,66 @@ export class EdgePropsPopover {
     document.body.appendChild(popover);
     this.el = popover;
     this._installDismissHandlers();
+  }
+
+  _readStoredPos() {
+    try {
+      const raw = localStorage.getItem('arg.arrowPropsPos');
+      if (!raw) return null;
+      const obj = JSON.parse(raw);
+      if (!obj || typeof obj.x !== 'number' || typeof obj.y !== 'number') return null;
+      return obj;
+    } catch (e) { void e; return null; }
+  }
+
+  _writeStoredPos(x, y) {
+    try { localStorage.setItem('arg.arrowPropsPos', JSON.stringify({ x, y })); }
+    catch (e) { void e; }
+  }
+
+  _wireDrag(popover, handle) {
+    handle.style.cursor = 'move';
+    let startX = 0;
+    let startY = 0;
+    let originLeft = 0;
+    let originTop = 0;
+    let dragging = false;
+    const onMove = (ev) => {
+      if (!dragging) return;
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      const w = popover.offsetWidth || 280;
+      const h = popover.offsetHeight || 200;
+      const nx = Math.max(0, Math.min(window.innerWidth - 40, originLeft + dx));
+      const ny = Math.max(0, Math.min(window.innerHeight - 30, originTop + dy));
+      popover.style.left = `${nx}px`;
+      popover.style.top  = `${ny}px`;
+      void w; void h;
+    };
+    const onUp = (ev) => {
+      if (!dragging) return;
+      dragging = false;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      const left = parseInt(popover.style.left, 10) || 0;
+      const top = parseInt(popover.style.top, 10) || 0;
+      this._writeStoredPos(left, top);
+      void ev;
+    };
+    handle.addEventListener('mousedown', (ev) => {
+      if (ev.button !== 0) return;
+      if (ev.target && ev.target.closest && ev.target.closest('.arrow-props-close')) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      startX = ev.clientX;
+      startY = ev.clientY;
+      const rect = popover.getBoundingClientRect();
+      originLeft = rect.left;
+      originTop = rect.top;
+      dragging = true;
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
   }
 
   _installDismissHandlers() {
