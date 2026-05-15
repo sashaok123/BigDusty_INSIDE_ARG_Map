@@ -20,6 +20,7 @@ import {
   pickRenderer, renderHtmlInto, renderTextInto, renderJsonInto,
   renderPdfInto, renderImageInto, renderHexInto, fetchAsText, fetchAsBytes,
 } from './file-renderers.js';
+import { formatBytes } from './image-pipeline.js';
 
 const TEXT_SIZES = ['S', 'M', 'L', 'XL'];
 const TEXT_FAMILIES = ['system', 'mono', 'serif'];
@@ -225,6 +226,7 @@ export class EditNodeModal {
     this.onResyncFromGithub = opts.onResyncFromGithub || null;
     this.getGithubOrigin = opts.getGithubOrigin || (() => null);
     this.isAdmin = opts.isAdmin || (() => false);
+    this.onRecompressFile = opts.onRecompressFile || null;
     this.onProvenanceToggle = opts.onProvenanceToggle || (() => {});
     this.isProvenanceActive = opts.isProvenanceActive || (() => false);
     this.onAnnotationsChange = opts.onAnnotationsChange || (() => {});
@@ -394,6 +396,19 @@ export class EditNodeModal {
     imageField.appendChild(imageRow);
     imageField.style.display = 'none';
 
+    const fileInfoField = el('div', { class: 'em-field em-file-info' });
+    const fileInfoSizeRow = el('div', { class: 'em-file-info-row em-file-info-size' });
+    const fileInfoOriginalRow = el('div', { class: 'em-file-info-row em-file-info-original' });
+    const fileInfoActions = el('div', { class: 'em-file-info-actions' });
+    const recompressBtn = el('button', { type: 'button', class: 'modal-btn em-file-recompress',
+      text: tr('file_info_recompress') });
+    recompressBtn.addEventListener('click', () => this._recompressFile());
+    fileInfoActions.appendChild(recompressBtn);
+    fileInfoField.appendChild(fileInfoSizeRow);
+    fileInfoField.appendChild(fileInfoOriginalRow);
+    fileInfoField.appendChild(fileInfoActions);
+    fileInfoField.style.display = 'none';
+
     const textStyleField = el('div', { class: 'em-field em-text-style' });
     const textStyleLabel = el('label', { text: tr('edit_modal_text_style') });
     const textStyleRow = el('div', { class: 'em-text-style-row' });
@@ -506,6 +521,7 @@ export class EditNodeModal {
     body.appendChild(this._buildBranchesField());
     body.appendChild(translationsField);
     body.appendChild(imageField);
+    body.appendChild(fileInfoField);
     body.appendChild(this._buildTransformFields());
     body.appendChild(this._buildAnnotationsField());
     body.appendChild(previewField);
@@ -597,6 +613,10 @@ export class EditNodeModal {
     this.cropBtnEl = cropBtn;
     this.replaceBtnEl = replaceBtn;
     this.openFullImageBtnEl = openFullImageBtn;
+    this.fileInfoFieldEl = fileInfoField;
+    this.fileInfoSizeRowEl = fileInfoSizeRow;
+    this.fileInfoOriginalRowEl = fileInfoOriginalRow;
+    this.recompressBtnEl = recompressBtn;
     this.textStyleFieldEl = textStyleField;
     this.textStyleLabelEl = textStyleLabel;
     this.sizeBtnEls = sizeBtns;
@@ -750,6 +770,55 @@ export class EditNodeModal {
     }
   }
 
+  _syncFileInfo() {
+    const s = this._state;
+    if (!s || !this.fileInfoSizeRowEl || !this.fileInfoOriginalRowEl || !this.recompressBtnEl) return;
+    const size = Number.isFinite(s.size) ? s.size : null;
+    const originalSize = Number.isFinite(s.originalSize) ? s.originalSize : null;
+    if (size != null) {
+      this.fileInfoSizeRowEl.textContent = tr('file_info_size', { size: formatBytes(size) });
+      this.fileInfoSizeRowEl.style.display = '';
+    } else {
+      this.fileInfoSizeRowEl.textContent = '';
+      this.fileInfoSizeRowEl.style.display = 'none';
+    }
+    if (originalSize != null && size != null && originalSize > size) {
+      this.fileInfoOriginalRowEl.textContent = tr('file_info_original', { size: formatBytes(originalSize) });
+      this.fileInfoOriginalRowEl.style.display = '';
+    } else {
+      this.fileInfoOriginalRowEl.textContent = '';
+      this.fileInfoOriginalRowEl.style.display = 'none';
+    }
+    const isImage = looksLikeImage(s);
+    const canRecompress = isImage && typeof this.onRecompressFile === 'function' && !!this.isAdmin();
+    this.recompressBtnEl.style.display = canRecompress ? '' : 'none';
+    this.recompressBtnEl.disabled = !!this._readonly || !s.file;
+  }
+
+  _recompressFile() {
+    if (this._readonly) { this.onUnauthedSubmit(); return; }
+    if (!this._state || !this._state.file) return;
+    if (typeof this.onRecompressFile !== 'function') return;
+    const raw = window.prompt(tr('file_info_recompress_prompt'), '0.7');
+    if (raw == null) return;
+    const q = parseFloat(raw);
+    if (!Number.isFinite(q) || q < 0.4 || q > 0.95) {
+      try { document.dispatchEvent(new CustomEvent('toast', { detail: { msg: tr('file_info_recompress_invalid'), kind: 'error' } })); } catch (e) { void e; }
+      return;
+    }
+    const id = this._state.id;
+    Promise.resolve(this.onRecompressFile(id, q)).then((res) => {
+      if (!res || !this._state || this._state.id !== id) return;
+      if (res.url) {
+        this._state.file = res.url;
+        if (looksLikeImage(this._state)) this._setImagePreview(res.url);
+      }
+      if (Number.isFinite(res.size)) this._state.size = res.size;
+      if (Number.isFinite(res.originalSize)) this._state.originalSize = res.originalSize;
+      this._syncFileInfo();
+    }).catch((e) => { void e; });
+  }
+
   _cropImage() {
     if (this._readonly) { this.onUnauthedSubmit(); return; }
     if (!this._state || !this._state.file) return;
@@ -830,6 +899,8 @@ export class EditNodeModal {
       output: typeof view.output === 'string' ? view.output : '',
       method: typeof view.method === 'string' ? view.method : '',
       annotations: Array.isArray(view.annotations) ? view.annotations.map((a) => ({ ...a })) : [],
+      size: Number.isFinite(view.size) ? view.size : null,
+      originalSize: Number.isFinite(view.originalSize) ? view.originalSize : null,
     };
     this.currentView = view;
     this._tags = [...this._state.tags];
@@ -1171,6 +1242,7 @@ export class EditNodeModal {
     const showExportMd = !isTransform && (isText || isSticky || isPuzzle);
     const showTranslations = !isTransform && (isText || isSticky || isPuzzle || isVideo || isAudio);
     const showProvenance = !isGroup;
+    const showFileInfo = !!s.file && (isBlock || isVideo || isAudio || isDocument);
     setDisp(this.statusFieldEl, showStatus);
     setDisp(this.bodyFieldEl, showBody);
     setDisp(this.captionFieldEl, showCaption);
@@ -1182,6 +1254,8 @@ export class EditNodeModal {
     setDisp(this.transformFieldEl, showTransform);
     setDisp(this.translationsFieldEl, showTranslations);
     setDisp(this.provenanceFieldEl, showProvenance);
+    setDisp(this.fileInfoFieldEl, showFileInfo);
+    if (showFileInfo) this._syncFileInfo();
     if (this.exportBtnEl) this.exportBtnEl.style.display = showExportMd ? '' : 'none';
     if (this.openFullImageBtnEl) {
       this.openFullImageBtnEl.style.display = showImage && typeof this.onOpenFullViewer === 'function' ? '' : 'none';

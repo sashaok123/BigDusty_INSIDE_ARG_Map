@@ -3,7 +3,7 @@
    < 5 px between mousedown and mouseup. */
 
 import { lodFor } from './lod.js';
-import { pickTextColor, pickTextStroke, bgFromTheme } from './contrast.js';
+import { pickTextColor, pickTextStroke, bgFromTheme, relativeLuminance } from './contrast.js';
 import { getActiveTool, isSpaceHeld, setActiveTool } from './tools.js';
 import { VERIFICATION_STRIPE } from './nodes.js';
 
@@ -65,6 +65,13 @@ function rgba(hex, alpha) {
   return `rgba(${rgb.r},${rgb.g},${rgb.b},${alpha})`;
 }
 
+function pickSelectionStroke(fillColor, accentColor) {
+  const lum = relativeLuminance(fillColor);
+  if (lum > 0.55) return '#0b1a3a';
+  if (lum < 0.18) return '#ffffff';
+  return accentColor;
+}
+
 const HANDLE_SIZE = 8;
 const HANDLE_KEYS = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
 
@@ -118,6 +125,8 @@ export class Viewer {
     this.onMarqueeSelect = options.onMarqueeSelect || (() => {});
     this.onDragSelection = options.onDragSelection || (() => {});
     this.onDragSelectionEnd = options.onDragSelectionEnd || (() => {});
+    this.onSelectStrokeAtPoint = options.onSelectStrokeAtPoint || null;
+    this.onClearStrokeSelection = options.onClearStrokeSelection || null;
 
     this.dragState = null;
     this.drawPreviewEl = options.drawPreviewEl || null;
@@ -706,6 +715,9 @@ export class Viewer {
         }
         if (this.mode === 'editor' && this.selection.has(b.id)) {
           ctx.save();
+          ctx.lineWidth = 4.2 / this.scale;
+          ctx.strokeStyle = 'rgba(255,255,255,0.92)';
+          ctx.strokeRect(b.rect.x, b.rect.y, b.rect.w, b.rect.h);
           ctx.lineWidth = 2.4 / this.scale;
           ctx.strokeStyle = this.accentColour;
           ctx.strokeRect(b.rect.x, b.rect.y, b.rect.w, b.rect.h);
@@ -838,6 +850,11 @@ export class Viewer {
     ctx.fillRect(x, y, w, hh);
     ctx.shadowBlur = 0;
     ctx.shadowOffsetY = 0;
+    if (isHover) {
+      ctx.lineWidth = 4.2 / this.scale;
+      ctx.strokeStyle = 'rgba(255,255,255,0.92)';
+      ctx.strokeRect(x, y, w, hh);
+    }
     ctx.strokeStyle = isHover ? this.accentColour : stickyEdge;
     ctx.lineWidth = (isHover ? 2.4 : 1.4) / this.scale;
     ctx.strokeRect(x, y, w, hh);
@@ -918,9 +935,12 @@ export class Viewer {
       ctx.textAlign = 'left';
     }
     if (this.mode === 'editor' && (isHover || isOutlineHL || this.selection.has(h.id))) {
+      ctx.lineWidth = 3 / this.scale;
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+      ctx.setLineDash([6 / this.scale, 4 / this.scale]);
+      ctx.strokeRect(x, y, w, hh);
       ctx.lineWidth = 1.4 / this.scale;
       ctx.strokeStyle = this.accentColour;
-      ctx.setLineDash([6 / this.scale, 4 / this.scale]);
       ctx.strokeRect(x, y, w, hh);
       ctx.setLineDash([]);
       if (lod && lod.handlesVisible && !h.locked) {
@@ -1014,10 +1034,13 @@ export class Viewer {
 
     if (isOutlineHL || isSelected) {
       ctx.save();
-      ctx.lineWidth = 3 / this.scale;
-      ctx.strokeStyle = this.accentColour;
       ctx.globalAlpha = alpha;
       const pad = 3 / this.scale;
+      ctx.lineWidth = 5 / this.scale;
+      ctx.strokeStyle = 'rgba(255,255,255,0.92)';
+      ctx.strokeRect(x - pad, y - pad, w + pad * 2, hh + pad * 2);
+      ctx.lineWidth = 3 / this.scale;
+      ctx.strokeStyle = pickSelectionStroke(c.stroke, this.accentColour);
       ctx.strokeRect(x - pad, y - pad, w + pad * 2, hh + pad * 2);
       ctx.restore();
     }
@@ -1262,9 +1285,12 @@ export class Viewer {
     }
 
     if (isOutlineHL || isSelected) {
-      ctx.lineWidth = 3 / this.scale;
-      ctx.strokeStyle = this.accentColour;
       const pad = 3 / this.scale;
+      ctx.lineWidth = 5 / this.scale;
+      ctx.strokeStyle = 'rgba(255,255,255,0.92)';
+      ctx.strokeRect(x - pad, y - pad, w + pad * 2, hh + pad * 2);
+      ctx.lineWidth = 3 / this.scale;
+      ctx.strokeStyle = pickSelectionStroke(c.stroke, this.accentColour);
       ctx.strokeRect(x - pad, y - pad, w + pad * 2, hh + pad * 2);
     }
 
@@ -1586,6 +1612,17 @@ export class Viewer {
           };
           return;
         }
+        if (typeof this.onSelectStrokeAtPoint === 'function') {
+          const strokeId = this.onSelectStrokeAtPoint(img, !!ev.shiftKey);
+          if (strokeId) {
+            if (!ev.shiftKey) {
+              this.setSelection(new Set());
+              this.onSelectionChange({ ids: [] });
+            }
+            this.dragState = { kind: 'stroke-click', strokeId, startScreen: screen, moved: false };
+            return;
+          }
+        }
         if (ev.shiftKey) {
           this.dragState = {
             kind: 'marquee',
@@ -1596,6 +1633,9 @@ export class Viewer {
             moved: false,
           };
           return;
+        }
+        if (typeof this.onClearStrokeSelection === 'function') {
+          this.onClearStrokeSelection();
         }
         this.dragState = {
           kind: 'pan',
@@ -1899,6 +1939,9 @@ export class Viewer {
       this.setSelection(next);
       this.onMarqueeSelect({ rect, ids: Array.from(next), shiftKey: !!d.shiftKey });
       this.onSelectionChange({ ids: Array.from(next) });
+      if (typeof this.editorOptions.onMarqueeStrokes === 'function') {
+        try { this.editorOptions.onMarqueeStrokes(rect, !!d.shiftKey); } catch (e) { void e; }
+      }
       return;
     }
     if (d.kind === 'drag-selection') {
@@ -1918,12 +1961,18 @@ export class Viewer {
           this.onSelectionChange({ ids: Array.from(next) });
           return;
         }
+        if (typeof this.onClearStrokeSelection === 'function') {
+          this.onClearStrokeSelection();
+        }
         this.setSelection(new Set([d.id]));
         this.onSelectionChange({ ids: [d.id] });
         if (d.kindOfTarget !== 'group') {
           this.onHotspotClick(d.id, ev);
         }
       }
+      return;
+    }
+    if (d.kind === 'stroke-click') {
       return;
     }
     if (d.kind === 'resize') {

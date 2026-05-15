@@ -104,20 +104,35 @@ body.comment-arm { cursor: crosshair; }
   border-radius: var(--radius);
   box-shadow: var(--shadow-soft);
   display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
   gap: 2px;
   padding: 4px;
+  white-space: nowrap;
 }
 .align-floater-btn {
   background: transparent;
   border: 1px solid transparent;
   color: var(--text);
   cursor: pointer;
-  width: 28px;
-  height: 28px;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius);
+  font-size: 0;
+  line-height: 0;
+  overflow: hidden;
+  text-indent: -9999px;
+  white-space: nowrap;
+}
+.align-floater-btn > svg {
+  flex: 0 0 auto;
+  font-size: 0;
+  text-indent: 0;
 }
 .align-floater-btn:hover {
   background: var(--accent-soft-bg);
@@ -125,11 +140,12 @@ body.comment-arm { cursor: crosshair; }
   border-color: var(--field-border);
 }
 .align-floater-sep {
+  flex: 0 0 1px;
   display: inline-block;
   width: 1px;
   height: 20px;
   background: var(--panel-border);
-  margin: 4px 4px;
+  margin: 0 4px;
 }
 
 .auth-settings-field {

@@ -251,6 +251,7 @@ export class Uploader {
           sha256: result.sha256 || null,
           mime: result.mime || displayMime || 'application/octet-stream',
           size: result.size || (toUpload && toUpload.size) || 0,
+          originalSize: compressed && origSize > finalSize ? origSize : null,
           name: f.name || kind,
           kind,
           rect: {

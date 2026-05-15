@@ -66,6 +66,7 @@ import { LeftRail } from './left-rail.js';
 import { EditNodeModal, detectVideoUrl } from './edit-node-modal.js';
 import { CompareModal } from './compare-modal.js';
 import { Uploader, validateImageFile, isVideoMime } from './uploader.js';
+import { formatBytes } from './image-pipeline.js';
 import { openCropper } from './crop-tool.js';
 import { CropOverlay } from './crop-overlay.js';
 import { TouchHandler } from './touch.js';
@@ -562,6 +563,7 @@ function setupPenLayer() {
 
 function commitPenStroke(stroke) {
   if (!stroke || !stroke.id) return;
+  pushHistory();
   if (!state.pen) state.pen = { strokes: [] };
   state.pen.strokes.push({
     id: stroke.id,
@@ -569,17 +571,16 @@ function commitPenStroke(stroke) {
     width: stroke.width,
     points: stroke.points.map((p) => ({ x: p.x, y: p.y })),
   });
-  pushHistory();
   if (penLayer) penLayer.requestDraw();
   scheduleSave();
   pushPenToBackend();
 }
 
-function deletePenStroke(id) {
+function deletePenStroke(id, opts) {
   if (!state.pen || !Array.isArray(state.pen.strokes)) return;
   const idx = state.pen.strokes.findIndex((s) => s.id === id);
   if (idx < 0) return;
-  pushHistory();
+  if (!opts || !opts.skipHistory) pushHistory();
   state.pen.strokes.splice(idx, 1);
   if (penLayer) penLayer.requestDraw();
   scheduleSave();
@@ -1176,6 +1177,29 @@ function setupViewer() {
     onDragSelectionEnd: ({ ids, dx, dy }) => {
       applyDragSelection(ids, dx, dy, true);
     },
+    onSelectStrokeAtPoint: (worldPt, shiftKey) => {
+      if (!penLayer) return null;
+      const id = penLayer.hitTestStrokeAt(worldPt, 5);
+      if (!id) return null;
+      const cur = shiftKey ? penLayer.getSelectedStrokeIds() : new Set();
+      cur.add(id);
+      penLayer.setSelectedStrokeIds(cur);
+      return id;
+    },
+    onClearStrokeSelection: () => {
+      if (penLayer) penLayer.clearStrokeSelection();
+    },
+    onMarqueeStrokes: (rect, shiftKey) => {
+      if (!penLayer) return;
+      const ids = penLayer.strokeIdsInsideRect(rect);
+      if (!ids.length && !shiftKey) {
+        penLayer.clearStrokeSelection();
+        return;
+      }
+      const next = shiftKey ? penLayer.getSelectedStrokeIds() : new Set();
+      for (const id of ids) next.add(id);
+      penLayer.setSelectedStrokeIds(next);
+    },
   });
   viewer.attachTooltip($('hotspot-tooltip'));
   onActiveToolChange(() => { if (viewer) viewer.refreshCursor(); });
@@ -1461,6 +1485,7 @@ function setupEditNodeModal() {
     onUnauthedSubmit: () => { if (authUI) authUI.openLogin(); },
     onCropImage: (id, currentUrl) => doCropImage(id, currentUrl),
     onReplaceImage: (id) => doReplaceImage(id),
+    onRecompressFile: (id, quality) => doRecompressFile(id, quality),
     onStatusChange: (id, status) => {
       if (!isLoggedIn()) {
         const n0 = findNode(state.nodes, id);
@@ -1537,6 +1562,7 @@ function setupEditNodeModal() {
         if (authUI) authUI.openLogin();
         return;
       }
+      pushHistory();
       updatePuzzleNode(state.nodes, id, patch);
       refreshPuzzleViewsInViewer();
       if (bookmarksPanel) bookmarksPanel.refresh();
@@ -1596,6 +1622,7 @@ function setupEditNodeModal() {
         if (authUI) authUI.openLogin();
         return;
       }
+      pushHistory();
       updatePuzzleNode(state.nodes, id, { annotations });
       const n = findNode(state.nodes, id);
       if (n && viewer && typeof viewer.setBlockAnnotations === 'function') {
@@ -2116,6 +2143,7 @@ async function placeUploadedImageNode(placement) {
   if (typeof placement.imageId === 'string' && placement.imageId) base.imageId = placement.imageId;
   if (typeof placement.sha256 === 'string' && placement.sha256) base.sha256 = placement.sha256;
   if (Number.isFinite(placement.size)) base.size = placement.size;
+  if (Number.isFinite(placement.originalSize)) base.originalSize = placement.originalSize;
   let node;
   if (placementKind === 'video') {
     node = { ...base, kind: 'video', mime: placement.mime,
@@ -2247,6 +2275,76 @@ function doReplaceImage(nodeId) {
     };
     input.click();
   });
+}
+
+async function doRecompressFile(nodeId, quality) {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return null; }
+  const n = findNode(state.nodes, nodeId);
+  if (!n || !n.file) return null;
+  const q = Number(quality);
+  if (!Number.isFinite(q) || q < 0.4 || q > 0.95) return null;
+  try {
+    const resp = await fetch(n.file, { credentials: 'include' });
+    if (!resp.ok) throw new Error('fetch_failed');
+    const sourceBlob = await resp.blob();
+    const url = URL.createObjectURL(sourceBlob);
+    const img = await new Promise((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = (e) => { reject(e); };
+      i.src = url;
+    }).catch((e) => { void e; return null; });
+    try { URL.revokeObjectURL(url); } catch (e) { void e; }
+    if (!img) throw new Error('image_load_failed');
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth || img.width;
+    canvas.height = img.naturalHeight || img.height;
+    const cx = canvas.getContext('2d');
+    cx.drawImage(img, 0, 0);
+    const out = await new Promise((resolve) => { canvas.toBlob((b) => resolve(b), 'image/webp', q); });
+    if (!out) throw new Error('encode_failed');
+    const baseName = (n.name || 'image').replace(/\.[^.]+$/, '') + '.webp';
+    const file = new File([out], baseName, { type: 'image/webp' });
+    const uploaded = await apiUploadImage(file, baseName);
+    if (!uploaded || !uploaded.url) throw new Error('upload_failed');
+    pushHistory();
+    const prevSize = Number.isFinite(n.size) ? n.size : sourceBlob.size;
+    const prevOriginal = Number.isFinite(n.originalSize) ? n.originalSize : prevSize;
+    const nextOriginal = Math.max(prevOriginal, prevSize);
+    n.file = uploaded.url;
+    n.imageId = uploaded.id || n.imageId || null;
+    n.sha256 = uploaded.sha256 || n.sha256 || null;
+    n.mime = uploaded.mime || 'image/webp';
+    n.size = Number.isFinite(uploaded.size) ? uploaded.size : out.size;
+    n.originalSize = nextOriginal;
+    if (viewer) {
+      await viewer.refreshBlock({ id: nodeId, rect: { x: n.x, y: n.y, w: n.width, h: n.height }, file: n.file });
+    }
+    refreshPuzzleViewsInViewer();
+    if (viewer) viewer.notifyNodesChanged();
+    if (state.backendOnline && isLoggedIn()) {
+      trackSelfMutation('node_updated', nodeId);
+      try {
+        const res = await apiPatchNode(nodeId, {
+          file: n.file, imageId: n.imageId, sha256: n.sha256, mime: n.mime, size: n.size, originalSize: n.originalSize,
+        });
+        if (res && typeof res.revision === 'number') state.revision = res.revision;
+      } catch (e) {
+        if (e && e.kind !== 'auth_expired') console.warn('[app] recompress patch failed', e);
+      }
+    }
+    scheduleSave();
+    toast(tr('file_info_recompress_done', { from: formatBytes(prevSize), to: formatBytes(n.size) }));
+    return { url: n.file, size: n.size, originalSize: n.originalSize };
+  } catch (e) {
+    if (e && e.kind === 'auth_expired') {
+      if (authUI) authUI.openLogin();
+    } else {
+      console.warn('[app] recompress failed', e);
+      toast(tr('file_info_recompress_failed'), 'error');
+    }
+    return null;
+  }
 }
 
 async function replaceImageForNode(nodeId, newUrl) {
@@ -2740,26 +2838,29 @@ function deleteGroupKeepChildren(groupId, opts) {
 
 function deleteCurrentSelection() {
   if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
-  if (state.selection.size === 0) return;
-  const n = state.selection.size;
-  if (n > 1) {
+  const strokeIds = penLayer ? Array.from(penLayer.getSelectedStrokeIds()) : [];
+  const edgeId = (arrowLayer && arrowLayer.selectedId) ? arrowLayer.selectedId : null;
+  if (state.selection.size === 0 && strokeIds.length === 0 && !edgeId) return;
+  const totalNodes = state.selection.size;
+  const total = totalNodes + strokeIds.length + (edgeId ? 1 : 0);
+  if (total > 1) {
     editorModal.showConfirm({
       title: tr('editor_delete_title'),
-      message: tr('delete_selection_prompt', { n }),
+      message: tr('delete_selection_prompt', { n: total }),
       actions: [
         { label: tr('editor_cancel_button'), kind: 'cancel', fn: () => editorModal.hideConfirm() },
         { label: tr('editor_delete_button'), kind: 'danger', fn: () => {
           editorModal.hideConfirm();
-          _performDeleteSelection();
+          _performDeleteSelection(strokeIds, edgeId);
         } },
       ],
     });
     return;
   }
-  _performDeleteSelection();
+  _performDeleteSelection(strokeIds, edgeId);
 }
 
-function _performDeleteSelection() {
+function _performDeleteSelection(strokeIds, edgeId) {
   pushHistory();
   let skippedLocked = 0;
   for (const id of Array.from(state.selection)) {
@@ -2771,6 +2872,12 @@ function _performDeleteSelection() {
   }
   state.selection = new Set();
   if (viewer) viewer.setSelection(state.selection);
+  if (Array.isArray(strokeIds) && strokeIds.length && penLayer) {
+    penLayer.deleteStrokeIds(strokeIds, { skipHistory: true });
+  }
+  if (edgeId && arrowLayer) {
+    arrowLayer.deleteEdge(edgeId);
+  }
   refreshSelectionStatus();
   if (skippedLocked > 0) toast(tr('node_locked_toast'));
 }
@@ -3710,6 +3817,10 @@ function nodeToServer(view, md) {
   if (typeof view.file === 'string' && view.file) out.file = view.file;
   if (typeof view.mime === 'string' && view.mime) out.mime = view.mime;
   if (typeof view.name === 'string' && view.name) out.name = view.name;
+  if (Number.isFinite(view.size)) out.size = view.size;
+  if (Number.isFinite(view.originalSize)) out.originalSize = view.originalSize;
+  if (typeof view.imageId === 'string' && view.imageId) out.imageId = view.imageId;
+  if (typeof view.sha256 === 'string' && view.sha256) out.sha256 = view.sha256;
   if (view.media && typeof view.media === 'object') out.media = { ...view.media };
   if (view.caption && typeof view.caption === 'object') out.caption = { ...view.caption };
   if (typeof view.color === 'string' && view.color) out.color = view.color;
@@ -3847,9 +3958,14 @@ function setupKeyboard() {
         return createSiblingNode();
       },
       onDeleteSelected: () => {
-        if (state.mode === 'editor' && state.selection.size > 0) {
-          deleteCurrentSelection();
-          return true;
+        if (state.mode === 'editor') {
+          const hasNodes = state.selection.size > 0;
+          const hasStrokes = !!(penLayer && penLayer.getSelectedStrokeIds().size > 0);
+          const hasEdge = !!(arrowLayer && arrowLayer.selectedId);
+          if (hasNodes || hasStrokes || hasEdge) {
+            deleteCurrentSelection();
+            return true;
+          }
         }
         return confirmDeleteSelected();
       },
@@ -3993,12 +4109,12 @@ function confirmDeleteSelected() {
   const id = viewer.activeId;
   if (!id) return false;
   const n = findNode(state.nodes, id);
-  if (!n || !isPuzzleNode(n)) return false;
+  if (!n) return false;
   const view = toViewShape(n);
-  let message = tr('delete_node_prompt', { label: view.title });
+  let message = tr('delete_node_prompt', { label: view.title || view.label || view.id });
   if (isGroupNode(n)) {
     const descCount = groupDescendantIds(state.nodes, id).size;
-    message = tr('delete_group_prompt', { label: view.title, n: descCount });
+    message = tr('delete_group_prompt', { label: view.title || view.label || view.id, n: descCount });
   }
   editorModal.showConfirm({
     title: tr('editor_delete_title'),
@@ -4007,7 +4123,8 @@ function confirmDeleteSelected() {
       { label: tr('editor_cancel_button'), kind: 'cancel', fn: () => editorModal.hideConfirm() },
       { label: tr('editor_delete_button'), kind: 'danger', fn: () => {
         editorModal.hideConfirm();
-        deletePuzzleNode(id);
+        if (isGroupNode(n)) deleteGroupKeepChildren(id);
+        else deletePuzzleNode(id);
       } },
     ],
   });

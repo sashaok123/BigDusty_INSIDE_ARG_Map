@@ -228,6 +228,26 @@
   align-items: flex-start;
   flex-wrap: wrap;
 }
+.em-file-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.em-file-info-row {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.3px;
+}
+.em-file-info-row.em-file-info-size { color: var(--text); }
+.em-file-info-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+.em-file-recompress {
+  font-size: 11px;
+}
 .em-image-preview {
   width: 160px;
   height: 120px;

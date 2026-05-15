@@ -180,6 +180,10 @@ export function toViewShape(n) {
     output: typeof n.output === 'string' ? n.output : '',
     method: typeof n.method === 'string' ? n.method : '',
     annotations: Array.isArray(n.annotations) ? n.annotations.map((a) => ({ ...a })) : null,
+    size: Number.isFinite(n.size) ? n.size : null,
+    originalSize: Number.isFinite(n.originalSize) ? n.originalSize : null,
+    imageId: typeof n.imageId === 'string' ? n.imageId : null,
+    sha256: typeof n.sha256 === 'string' ? n.sha256 : null,
   };
 }
 

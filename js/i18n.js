@@ -1086,6 +1086,14 @@ const _I18N_DATA = {
   upload_large_audio_continue: ['Upload anyway','Загрузить как есть','Trotzdem hochladen','Carica comunque','Upload alligevel'],
   upload_large_audio_cancel:   ['Cancel',     'Отмена',            'Abbrechen',           'Annulla',            'Annullér'],
 
+  file_info_size: ['Size: {size}', 'Размер: {size}', 'Größe: {size}', 'Dimensione: {size}', 'Størrelse: {size}'],
+  file_info_original: ['Original: {size} (compressed)', 'Оригинал: {size} (сжат)', 'Original: {size} (komprimiert)', 'Originale: {size} (compresso)', 'Original: {size} (komprimeret)'],
+  file_info_recompress: ['Re-compress', 'Пересжать', 'Neu komprimieren', 'Ricomprimi', 'Komprimér igen'],
+  file_info_recompress_prompt: ['Quality 0.40-0.95 (smaller = lower quality)', 'Качество 0.40-0.95 (меньше = ниже качество)', 'Qualität 0.40-0.95 (kleiner = niedriger)', 'Qualità 0.40-0.95 (minore = peggiore)', 'Kvalitet 0.40-0.95 (mindre = lavere)'],
+  file_info_recompress_done: ['Re-compressed {from} to {to}', 'Пересжато {from} до {to}', 'Neu komprimiert: {from} zu {to}', 'Ricompresso da {from} a {to}', 'Komprimeret {from} til {to}'],
+  file_info_recompress_failed: ['Re-compression failed', 'Не удалось пересжать', 'Neu-Komprimierung fehlgeschlagen', 'Ricompressione fallita', 'Komprimering mislykkedes'],
+  file_info_recompress_invalid: ['Invalid quality (use 0.40-0.95)', 'Неверное качество (0.40-0.95)', 'Ungültige Qualität (0.40-0.95)', 'Qualità non valida (0.40-0.95)', 'Ugyldig kvalitet (0.40-0.95)'],
+
   branches_panel_title:  ['Branches',      'Ветви',             'Stränge',             'Filoni',             'Spor'],
   branches_all:          ['All',           'Все',               'Alle',                'Tutti',              'Alle'],
   branches_focus:        ['Focus',         'Фокус',             'Fokus',               'Focalizza',          'Fokus'],

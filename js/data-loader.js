@@ -156,6 +156,7 @@ export function normaliseNode(raw) {
   if (typeof raw.imageId === 'string' && raw.imageId) node.imageId = raw.imageId;
   if (typeof raw.sha256 === 'string' && raw.sha256) node.sha256 = raw.sha256;
   if (Number.isFinite(raw.size)) node.size = raw.size;
+  if (Number.isFinite(raw.originalSize)) node.originalSize = raw.originalSize;
   if (typeof raw.status === 'string') node.status = raw.status;
   if (Array.isArray(raw.tags)) node.tags = raw.tags.filter((t) => typeof t === 'string');
   if (typeof raw.owner === 'string') node.owner = raw.owner;

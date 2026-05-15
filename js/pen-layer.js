@@ -81,12 +81,88 @@ export class PenLayer {
     this._drawing = null;
     this._lastSampleAt = 0;
     this._raf = null;
+    this._selectedIds = new Set();
 
     this._build();
     this._wire();
     this._applyActiveTool(getActiveTool());
     onActiveToolChange((t) => this._applyActiveTool(t));
     document.addEventListener('i18n:changed', () => this._retranslate());
+  }
+
+  getSelectedStrokeIds() {
+    return new Set(this._selectedIds);
+  }
+
+  setSelectedStrokeIds(ids) {
+    const next = new Set();
+    if (ids && typeof ids[Symbol.iterator] === 'function') {
+      for (const id of ids) if (id) next.add(id);
+    }
+    this._selectedIds = next;
+    this.requestDraw();
+  }
+
+  clearStrokeSelection() {
+    if (this._selectedIds.size === 0) return;
+    this._selectedIds = new Set();
+    this.requestDraw();
+  }
+
+  hitTestStrokeAt(worldPoint, tolerancePx) {
+    if (!worldPoint) return null;
+    const t = this.getTransform();
+    const tol = (Number.isFinite(tolerancePx) ? tolerancePx : 5) / Math.max(0.0001, t.scale);
+    const list = this.getStrokes();
+    if (!Array.isArray(list) || !list.length) return null;
+    for (let i = list.length - 1; i >= 0; i--) {
+      const s = list[i];
+      if (!s || !Array.isArray(s.points) || s.points.length === 0) continue;
+      const hitDist = (s.width || 1) / Math.max(0.0001, t.scale) / 2 + tol;
+      if (s.points.length === 1) {
+        const dx = s.points[0].x - worldPoint.x;
+        const dy = s.points[0].y - worldPoint.y;
+        if (Math.sqrt(dx * dx + dy * dy) <= hitDist) return s.id;
+        continue;
+      }
+      for (let j = 1; j < s.points.length; j++) {
+        const a = s.points[j - 1];
+        const b = s.points[j];
+        if (distancePointToSegment(worldPoint.x, worldPoint.y, a.x, a.y, b.x, b.y) <= hitDist) return s.id;
+      }
+    }
+    return null;
+  }
+
+  strokeIdsInsideRect(rect) {
+    const out = [];
+    if (!rect || !Number.isFinite(rect.x) || !Number.isFinite(rect.y)
+        || !Number.isFinite(rect.w) || !Number.isFinite(rect.h)) return out;
+    const minX = rect.x;
+    const minY = rect.y;
+    const maxX = rect.x + rect.w;
+    const maxY = rect.y + rect.h;
+    const list = this.getStrokes();
+    if (!Array.isArray(list) || !list.length) return out;
+    for (const s of list) {
+      if (!s || !Array.isArray(s.points) || !s.points.length) continue;
+      for (const p of s.points) {
+        if (p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY) { out.push(s.id); break; }
+      }
+    }
+    return out;
+  }
+
+  deleteStrokeIds(ids, opts) {
+    if (!ids || !ids.length) return 0;
+    let removed = 0;
+    for (const id of ids) {
+      if (!id) continue;
+      try { this.onDeleteStroke(id, opts || {}); removed += 1; } catch (e) { void e; }
+    }
+    this._selectedIds = new Set();
+    this.requestDraw();
+    return removed;
   }
 
   _build() {
@@ -324,6 +400,11 @@ export class PenLayer {
       const safeColor = c.replace(/[<>"']/g, '');
       const d = pointsToPath(s.points);
       const widthPx = w / Math.max(0.0001, t.scale);
+      const isSelected = s.id && this._selectedIds.has(s.id);
+      if (isSelected) {
+        const haloWidth = widthPx * 2.2 + 4 / Math.max(0.0001, t.scale);
+        html += `<path d="${d}" stroke="#e86b2e" stroke-opacity="0.45" stroke-width="${haloWidth}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+      }
       html += `<path d="${d}" stroke="${safeColor}" stroke-width="${widthPx}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
     }
     this.transformGroup.innerHTML = html;

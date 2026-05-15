@@ -688,17 +688,32 @@ export class ArrowLayer {
   }
 
   _appendEdgePath(edge, d, colour, scale, vertices, opts) {
+    const stroke = strokeFor(edge, colour);
+    const selectedBoost = this.selectedId === edge.id ? 1.0 : 0;
+    const baseWidth = stroke.width + selectedBoost;
+    const dash = dashFor(edge.style, scale);
+    const halo = document.createElementNS(SVG_NS, 'path');
+    halo.setAttribute('d', d);
+    halo.setAttribute('fill', 'none');
+    halo.style.stroke = 'rgba(255,255,255,0.85)';
+    halo.setAttribute('stroke-linecap',  'round');
+    halo.setAttribute('stroke-linejoin', 'round');
+    halo.setAttribute('stroke-width', String((baseWidth * 1.5 + 1) / scale));
+    if (dash) halo.setAttribute('stroke-dasharray', dash);
+    if (opts && Number.isFinite(opts.opacity) && opts.opacity < 1) {
+      halo.setAttribute('opacity', String(Math.min(opts.opacity, 0.85)));
+    } else {
+      halo.setAttribute('opacity', '0.85');
+    }
+    halo.setAttribute('pointer-events', 'none');
+    this.edgesGroup.appendChild(halo);
     const path = document.createElementNS(SVG_NS, 'path');
     path.setAttribute('d', d);
     path.setAttribute('fill', 'none');
-    const stroke = strokeFor(edge, colour);
     path.style.stroke = stroke.colour;
     path.setAttribute('stroke-linecap',  'round');
     path.setAttribute('stroke-linejoin', 'round');
-    const selectedBoost = this.selectedId === edge.id ? 1.0 : 0;
-    const baseWidth = stroke.width + selectedBoost;
     path.setAttribute('stroke-width', String(baseWidth / scale));
-    const dash = dashFor(edge.style, scale);
     if (dash) path.setAttribute('stroke-dasharray', dash);
     if (!opts || !opts.isTrunk) {
       path.setAttribute('marker-end', this._markerEndUrlFor(edge, colour));
@@ -737,16 +752,28 @@ export class ArrowLayer {
   }
 
   _appendBranchPath(edge, branchIdx, d, colour, scale, vertices, opacity) {
+    const stroke = strokeFor(edge, colour);
+    const branchWidth = stroke.width * 0.9;
+    const dash = dashFor(edge.style, scale);
+    const halo = document.createElementNS(SVG_NS, 'path');
+    halo.setAttribute('d', d);
+    halo.setAttribute('fill', 'none');
+    halo.style.stroke = 'rgba(255,255,255,0.85)';
+    halo.setAttribute('stroke-width', String((branchWidth * 1.5 + 1) / scale));
+    halo.setAttribute('stroke-linecap', 'round');
+    halo.setAttribute('stroke-linejoin', 'round');
+    if (dash) halo.setAttribute('stroke-dasharray', dash);
+    halo.setAttribute('opacity', String(Number.isFinite(opacity) && opacity < 0.85 ? opacity : 0.85));
+    halo.setAttribute('pointer-events', 'none');
+    this.edgesGroup.appendChild(halo);
     const path = document.createElementNS(SVG_NS, 'path');
     path.setAttribute('d', d);
     path.setAttribute('fill', 'none');
-    const stroke = strokeFor(edge, colour);
     path.style.stroke = stroke.colour;
-    path.setAttribute('stroke-width', String((stroke.width * 0.9) / scale));
+    path.setAttribute('stroke-width', String(branchWidth / scale));
     path.setAttribute('stroke-linecap', 'round');
     path.setAttribute('stroke-linejoin', 'round');
     path.setAttribute('marker-end', this._markerEndUrlFor(edge, colour));
-    const dash = dashFor(edge.style, scale);
     if (dash) path.setAttribute('stroke-dasharray', dash);
     if (Number.isFinite(opacity) && opacity < 1) path.setAttribute('opacity', String(opacity));
     path.setAttribute('data-id', edge.id);
@@ -1164,6 +1191,10 @@ export class ArrowLayer {
           const img = this._imgPointFromClient(ev.clientX, ev.clientY);
           setEndpointDangling(e, d.which, img);
         }
+        if (Array.isArray(e.waypoints) && e.waypoints.length) {
+          delete e.waypoints;
+        }
+        this._pathCache.delete(d.edgeId);
         this._rebuildBoundIndex();
         this.onEdgesChange();
         this.onScheduleSave();
