@@ -15,6 +15,7 @@ import { KeyboardShortcuts } from './keyboard.js';
 import { StatusFilter } from './status-filter.js';
 import { PenLayer } from './pen-layer.js';
 import { LayoutMenu } from './layout-menu.js';
+import { ThemePicker, THEME_PICKER_IDS } from './theme-picker.js';
 import { ActivityFeed } from './activity-feed.js';
 import { openPdfExportDialog } from './pdf-export.js';
 import {
@@ -115,7 +116,7 @@ import { isPlaceholderApiBase } from './config.js';
 
 const STATE_VERSION = 3;
 const THEME_KEY = 'arg.theme';
-const THEME_CHOICES = ['white', 'dark', 'graphite', 'auto'];
+const THEME_CHOICES = [...THEME_PICKER_IDS, 'auto'];
 const SELF_ECHO_WINDOW_MS = 250;
 const BACKEND_RETRY_MS = 30000;
 
@@ -186,6 +187,7 @@ let githubImportModal;
 let compareModal;
 let penLayer;
 let layoutMenu;
+let themePicker;
 let activityFeed;
 let lockHeartbeatTimer = null;
 let _resizeHistoryPushed = false;
@@ -1608,6 +1610,14 @@ function setupViewer() {
     },
   });
   viewer.attachTooltip($('hotspot-tooltip'));
+  if (typeof viewer.setResizeHints === 'function') {
+    viewer.setResizeHints(tr('resize_hint_image'), tr('resize_hint_locked'));
+  }
+  document.addEventListener('i18n:changed', () => {
+    if (viewer && typeof viewer.setResizeHints === 'function') {
+      viewer.setResizeHints(tr('resize_hint_image'), tr('resize_hint_locked'));
+    }
+  });
   onActiveToolChange(() => { if (viewer) viewer.refreshCursor(); });
   onSpaceHeldChange((held) => {
     document.body.classList.toggle('space-held', !!held);
@@ -1863,6 +1873,7 @@ function setupTouch() {
       }
     },
     onLongPress: (cx, cy) => {
+      if (!viewer || viewer.mode !== 'editor') return;
       const pt = viewer.imagePointFromClient(cx, cy);
       const target = viewer.selectableAtImagePoint ? viewer.selectableAtImagePoint(pt) : null;
       if (target) {
@@ -2118,6 +2129,8 @@ function setupGlobalContextMenu() {
     if (!tgt) return;
     if (tgt.closest && tgt.closest('input, textarea, select, [contenteditable="true"]')) return;
     if (!isInOwnedSurface(tgt)) return;
+    if (_shareViewerMode) return;
+    if (viewer && viewer.mode !== 'editor' && tgt.closest && tgt.closest('#viewport')) return;
     ev.preventDefault();
   }, true);
 }
@@ -2257,7 +2270,8 @@ function triggerMediaPlay(id) {
   if (btn && typeof btn.click === 'function') btn.click();
 }
 
-function appendCommonItems(items, id, n, view) {
+function appendCommonItems(items, id, n, view, canEdit) {
+  if (!canEdit) return;
   const selSize = state.selection.size;
   const selHasId = state.selection.has(id);
   items.push({
@@ -2296,83 +2310,97 @@ function buildContextMenuItemsForNode(id) {
   const items = [];
   const selSize = state.selection.size;
   const selHasId = state.selection.has(id);
+  const canEdit = isLoggedIn();
 
   if (selSize > 1 && selHasId) {
-    items.push({ label: tr('ctx_group_selection'), fn: () => groupCurrentSelection() });
+    if (canEdit) {
+      items.push({ label: tr('ctx_group_selection'), fn: () => groupCurrentSelection() });
+      if (selSize === 2) {
+        items.push({ label: tr('ctx_wrap_as_transform'), fn: () => wrapSelectionAsTransform() });
+      }
+    }
     if (selSize === 2) {
-      items.push({ label: tr('ctx_wrap_as_transform'), fn: () => wrapSelectionAsTransform() });
       items.push({ label: tr('ctx_compare'), fn: () => openCompareForSelection() });
       items.push({ label: tr('ctx_diff'), fn: () => openDiffForSelection() });
     } else if (selSize > 2) {
       items.push({ label: tr('ctx_compare'), fn: () => openCompareForSelection() });
     }
-    items.push({ label: tr('ctx_delete_selected'), danger: true, fn: () => deleteCurrentSelection() });
+    if (canEdit) {
+      items.push({ label: tr('ctx_delete_selected'), danger: true, fn: () => deleteCurrentSelection() });
+    }
     return items;
   }
 
   if (isGroupNode(n)) {
-    items.push({ label: tr('ctx_edit'), fn: () => openRichEdit(id) });
-    items.push({ label: tr('ctx_group_rename'), fn: () => renameGroupPrompt(id) });
-    items.push({ label: tr('ctx_group_set_background'), fn: () => setGroupBackgroundPrompt(id) });
-    items.push({ label: tr('ctx_group_set_color'), fn: () => setGroupColorPrompt(id) });
-    items.push({ kind: 'separator' });
-    items.push({ label: tr('ctx_group_ungroup'), fn: () => ungroupGroup(id) });
-    items.push({ label: tr('ctx_group_delete_keep_children'), fn: () => deleteGroupKeepChildren(id) });
-    items.push({ label: tr('ctx_group_delete_with_children'), danger: true, fn: () => deleteGroupWithChildren(id) });
+    if (canEdit) {
+      items.push({ label: tr('ctx_edit'), fn: () => openRichEdit(id) });
+      items.push({ label: tr('ctx_group_rename'), fn: () => renameGroupPrompt(id) });
+      items.push({ label: tr('ctx_group_set_background'), fn: () => setGroupBackgroundPrompt(id) });
+      items.push({ label: tr('ctx_group_set_color'), fn: () => setGroupColorPrompt(id) });
+      items.push({ kind: 'separator' });
+      items.push({ label: tr('ctx_group_ungroup'), fn: () => ungroupGroup(id) });
+      items.push({ label: tr('ctx_group_delete_keep_children'), fn: () => deleteGroupKeepChildren(id) });
+      items.push({ label: tr('ctx_group_delete_with_children'), danger: true, fn: () => deleteGroupWithChildren(id) });
+    }
     return items;
   }
 
   const editorOpenForThis = !!(editNodeModal && editNodeModal.isOpen && editNodeModal.isOpen()
     && editNodeModal.currentView && editNodeModal.currentView.id === id);
-  if ((isEditableNode(n) || isPuzzleNode(n) || isStickyNode(n) || isBlockNode(n)) && !editorOpenForThis) {
+  if (canEdit && (isEditableNode(n) || isPuzzleNode(n) || isStickyNode(n) || isBlockNode(n)) && !editorOpenForThis) {
     items.push({ label: tr('ctx_edit'), fn: () => openRichEdit(id) });
   }
 
   if (nodeIsImageFile(n)) {
     items.push({ label: tr('ctx_view_image'), fn: () => viewImageFull(id) });
-    items.push({ label: tr('ctx_crop'), fn: () => doCropImage(id, n.file) });
-    items.push({ label: tr('ctx_replace_image'), fn: () => doReplaceImage(id) });
+    if (canEdit) {
+      items.push({ label: tr('ctx_crop'), fn: () => doCropImage(id, n.file) });
+      items.push({ label: tr('ctx_replace_image'), fn: () => doReplaceImage(id) });
+    }
     items.push({ kind: 'separator' });
-    appendCommonItems(items, id, n, view);
+    appendCommonItems(items, id, n, view, canEdit);
   } else if (nodeIsHtmlDocument(n)) {
     items.push({ label: tr('ctx_view_as_page'), fn: () => viewAsHtmlPage(id) });
     items.push({ label: tr('ctx_view_source'), fn: () => viewSource(id) });
     items.push({ label: tr('ctx_open_new_tab'), fn: () => openFileInNewTab(id) });
     items.push({ kind: 'separator' });
-    appendCommonItems(items, id, n, view);
+    appendCommonItems(items, id, n, view, canEdit);
   } else if (nodeIsPdfDocument(n)) {
     items.push({ label: tr('ctx_view_pdf'), fn: () => viewPdf(id) });
     items.push({ label: tr('ctx_download'), fn: () => downloadFile(id) });
     items.push({ kind: 'separator' });
-    appendCommonItems(items, id, n, view);
+    appendCommonItems(items, id, n, view, canEdit);
   } else if (nodeIsTextDocument(n)) {
     items.push({ label: tr('ctx_view_formatted'), fn: () => viewTextFormatted(id) });
     items.push({ label: tr('ctx_view_as_hex'), fn: () => viewAsCode(id) });
     items.push({ label: tr('ctx_download'), fn: () => downloadFile(id) });
     items.push({ kind: 'separator' });
-    appendCommonItems(items, id, n, view);
+    appendCommonItems(items, id, n, view, canEdit);
   } else if (nodeIsVideo(n)) {
     items.push({ label: tr('ctx_play'), fn: () => triggerMediaPlay(id) });
-    items.push({ label: tr('ctx_replace_url'), fn: () => replaceVideoUrl(id) });
+    if (canEdit) items.push({ label: tr('ctx_replace_url'), fn: () => replaceVideoUrl(id) });
     items.push({ label: tr('ctx_copy_url'), fn: () => copyNodeUrl(id) });
     items.push({ kind: 'separator' });
-    appendCommonItems(items, id, n, view);
+    appendCommonItems(items, id, n, view, canEdit);
   } else if (nodeIsAudio(n)) {
     items.push({ label: tr('ctx_play_pause'), fn: () => triggerMediaPlay(id) });
-    items.push({ label: tr('ctx_replace_audio'), fn: () => doReplaceAudio(id) });
+    if (canEdit) items.push({ label: tr('ctx_replace_audio'), fn: () => doReplaceAudio(id) });
     items.push({ kind: 'separator' });
-    appendCommonItems(items, id, n, view);
+    appendCommonItems(items, id, n, view, canEdit);
   } else {
-    appendCommonItems(items, id, n, view);
+    appendCommonItems(items, id, n, view, canEdit);
   }
 
-  const brSub = buildBranchSubmenu(id);
-  if (brSub && brSub.length) {
+  if (canEdit) {
+    const brSub = buildBranchSubmenu(id);
+    if (brSub && brSub.length) {
+      items.push({ kind: 'separator' });
+      items.push({ label: tr('branches_add_to_node'), submenu: brSub });
+    }
     items.push({ kind: 'separator' });
-    items.push({ label: tr('branches_add_to_node'), submenu: brSub });
+    items.push({ label: tr('ctx_delete'), danger: true, fn: () => deletePuzzleNode(id) });
   }
-  items.push({ kind: 'separator' });
-  items.push({ label: tr('ctx_delete'), danger: true, fn: () => deletePuzzleNode(id) });
+  while (items.length && items[items.length - 1] && items[items.length - 1].kind === 'separator') items.pop();
   return items;
 }
 
@@ -2447,7 +2475,8 @@ function toggleNodeBranch(nodeId, branchId) {
 
 function buildContextMenuItemsForEmpty(imgPt) {
   const items = [];
-  if (imgPt && Number.isFinite(imgPt.x) && Number.isFinite(imgPt.y)) {
+  const canEdit = isLoggedIn();
+  if (canEdit && imgPt && Number.isFinite(imgPt.x) && Number.isFinite(imgPt.y)) {
     items.push({
       label: tr('ctx_add_transform_here'),
       fn: () => {
@@ -2458,17 +2487,18 @@ function buildContextMenuItemsForEmpty(imgPt) {
   }
   if (state.selection.size === 0) return items;
   if (items.length) items.push({ kind: 'separator' });
-  if (state.selection.size === 2) {
+  if (canEdit && state.selection.size === 2) {
     items.push({ label: tr('ctx_wrap_as_transform'), fn: () => wrapSelectionAsTransform() });
   }
   if (state.selection.size > 1) {
-    items.push({ label: tr('ctx_group_selection'), fn: () => groupCurrentSelection() });
+    if (canEdit) items.push({ label: tr('ctx_group_selection'), fn: () => groupCurrentSelection() });
     items.push({ label: tr('ctx_compare'), fn: () => openCompareForSelection() });
     items.push({ label: tr('ctx_diff'), fn: () => openDiffForSelection() });
-    items.push({ label: tr('ctx_delete_selected'), danger: true, fn: () => deleteCurrentSelection() });
-  } else {
+    if (canEdit) items.push({ label: tr('ctx_delete_selected'), danger: true, fn: () => deleteCurrentSelection() });
+  } else if (canEdit) {
     items.push({ label: tr('ctx_delete'), danger: true, fn: () => deleteCurrentSelection() });
   }
+  while (items.length && items[items.length - 1] && items[items.length - 1].kind === 'separator') items.pop();
   return items;
 }
 
@@ -4933,7 +4963,7 @@ function readStoredThemeChoice() {
 }
 
 function resolveTheme(choice) {
-  if (choice === 'dark' || choice === 'white' || choice === 'graphite') return choice;
+  if (THEME_PICKER_IDS.includes(choice)) return choice;
   try {
     if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark';
   } catch (e) { void e; }
@@ -4951,29 +4981,20 @@ function applyTheme(choice) {
     minimap.refreshPalette();
   }
   if (leftRail) leftRail.setThemeChoice(choice);
-  syncThemeButtons(choice);
-}
-
-function syncThemeButtons(choice) {
-  const buttons = document.querySelectorAll('#theme-switch .theme-btn');
-  buttons.forEach((b) => {
-    b.classList.toggle('active', b.dataset.themeValue === choice);
-  });
+  if (themePicker) themePicker.setChoice(choice);
 }
 
 function setupThemeSwitch() {
   const choice = readStoredThemeChoice();
-  applyTheme(choice);
-  const buttons = document.querySelectorAll('#theme-switch .theme-btn');
-  buttons.forEach((b) => {
-    b.addEventListener('click', (e) => {
-      e.preventDefault();
-      const v = b.dataset.themeValue;
-      if (!THEME_CHOICES.includes(v)) return;
+  themePicker = new ThemePicker({
+    getChoice: () => readStoredThemeChoice(),
+    onChoose: (v) => {
+      if (!THEME_PICKER_IDS.includes(v)) return;
       try { localStorage.setItem(THEME_KEY, v); } catch (er) { void er; }
       applyTheme(v);
-    });
+    },
   });
+  applyTheme(choice);
   const langSel = $('lang-select');
   if (langSel) {
     langSel.value = getLang();

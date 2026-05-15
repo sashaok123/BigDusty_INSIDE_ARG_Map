@@ -72,8 +72,18 @@ function pickSelectionStroke(fillColor, accentColor) {
   return accentColor;
 }
 
-const HANDLE_SIZE = 8;
+const HANDLE_SIZE = 10;
 const HANDLE_KEYS = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+const HANDLE_CURSORS = {
+  nw: 'nwse-resize',
+  n:  'ns-resize',
+  ne: 'nesw-resize',
+  e:  'ew-resize',
+  se: 'nwse-resize',
+  s:  'ns-resize',
+  sw: 'nesw-resize',
+  w:  'ew-resize',
+};
 
 export class Viewer {
   constructor(canvas, options) {
@@ -620,6 +630,37 @@ export class Viewer {
     return null;
   }
 
+  _handleAtPoint(pt) {
+    if (this.mode !== 'editor') return null;
+    const tool = getActiveTool();
+    if (tool !== 'select') return null;
+    for (const h of this.hotspots) {
+      if (h.locked) continue;
+      if (!(this.selection.has(h.id) || this.activeId === h.id || this.hoverId === h.id)) continue;
+      const k = this.handleAtImagePoint(h, pt);
+      if (k) return { key: k, id: h.id, isImage: this._isImageHotspot(h) };
+    }
+    for (const b of this.blocks) {
+      if (this._isLocked(b.id)) continue;
+      if (!(this.selection.has(b.id) || this.activeId === b.id)) continue;
+      const k = this.handleAtImagePoint(b, pt);
+      if (k) return { key: k, id: b.id, isImage: true };
+    }
+    return null;
+  }
+
+  _isImageHotspot(h) {
+    if (!h) return false;
+    if (h.kind === 'block') return true;
+    if (h.type === 'file' && typeof h.file === 'string' && /\.(png|jpe?g|gif|webp|bmp|svg|avif)(\?.*)?$/i.test(h.file)) return true;
+    return false;
+  }
+
+  setResizeHints(imageHint, lockedHint) {
+    this._handleHintImage = typeof imageHint === 'string' ? imageHint : '';
+    this._handleHintLocked = typeof lockedHint === 'string' ? lockedHint : '';
+  }
+
   _handlePositions(x, y, w, h) {
     return [
       { key: 'nw', hx: x,       hy: y       },
@@ -1048,7 +1089,7 @@ export class Viewer {
       ctx.restore();
     }
 
-    if (this.mode === 'editor' && lod && lod.handlesVisible && (isHover || this.activeId === h.id) && !h.locked) {
+    if (this.mode === 'editor' && lod && lod.handlesVisible && (isHover || this.activeId === h.id || isSelected) && !h.locked) {
       ctx.fillStyle = this.accentColour;
       ctx.strokeStyle = this.handleStrokeColour;
       ctx.lineWidth = 1.5 / this.scale;
@@ -1513,7 +1554,9 @@ export class Viewer {
         if (hover) {
           const locked = this._isLocked(hover.id);
           const handle = !locked ? this.handleAtImagePoint(hover, img) : null;
-          if (handle && !ev.shiftKey) {
+          const hoverIsImage = this._isImageHotspot(hover);
+          const startResize = handle && (hoverIsImage || !ev.shiftKey);
+          if (startResize) {
             this.dragState = {
               kind: 'resize',
               handle,
@@ -1523,6 +1566,7 @@ export class Viewer {
               startScreen: screen,
               shiftKey: !!ev.shiftKey,
               moved: false,
+              target: hoverIsImage ? 'image-hotspot' : 'hotspot',
             };
             return;
           }
@@ -1575,7 +1619,7 @@ export class Viewer {
           const isSelectedBlk = this.selection.has(blk.id) || this.activeId === blk.id;
           if (!locked && isSelectedBlk) {
             const handle = this.handleAtImagePoint(blk, img);
-            if (handle && !ev.shiftKey) {
+            if (handle) {
               this.dragState = {
                 kind: 'resize',
                 handle,
@@ -1730,6 +1774,24 @@ export class Viewer {
       } else {
         this._updateTooltip();
       }
+      if (this.mode === 'editor') {
+        const tHandle = this._handleAtPoint(img);
+        if (tHandle) {
+          this.canvas.style.cursor = HANDLE_CURSORS[tHandle.key] || 'move';
+          this._cursorOnHandle = true;
+          const hint = tHandle.isImage ? this._handleHintImage : this._handleHintLocked;
+          if (hint && this.canvas.title !== hint) this.canvas.title = hint;
+        } else {
+          if (this._cursorOnHandle) {
+            this._cursorOnHandle = false;
+            this._updateCursor();
+          }
+          if (this.canvas.title) this.canvas.title = '';
+        }
+      } else if (this._cursorOnHandle) {
+        this._cursorOnHandle = false;
+        this._updateCursor();
+      }
       const tool = getActiveTool();
       if (!newHover && this.mode === 'editor' && tool === 'select'
           && typeof this.onStrokeHover === 'function') {
@@ -1795,7 +1857,9 @@ export class Viewer {
         if (d.handle.includes('n')) rect.y = d.origRect.y + d.origRect.h - MIN_SIDE;
         rect.h = MIN_SIDE;
       }
-      if (ev.shiftKey && d.origRect.w > 0 && d.origRect.h > 0) {
+      const isImageTarget = d.target === 'block' || d.target === 'image-hotspot';
+      const lockAspect = isImageTarget ? !ev.shiftKey : !!ev.shiftKey;
+      if (lockAspect && d.origRect.w > 0 && d.origRect.h > 0) {
         const aspect = d.origRect.w / d.origRect.h;
         const horizHandle = d.handle === 'e' || d.handle === 'w';
         const vertHandle = d.handle === 'n' || d.handle === 's';
@@ -2003,6 +2067,7 @@ export class Viewer {
   }
 
   _onContextMenu(ev) {
+    if (this.mode !== 'editor') return;
     ev.preventDefault();
     if (this._suppressNextContextMenu) {
       this._suppressNextContextMenu = false;
@@ -2015,6 +2080,7 @@ export class Viewer {
   }
 
   _fireContextMenuAt(ev) {
+    if (this.mode !== 'editor') return;
     const img = this.imagePointFromClient(ev.clientX, ev.clientY);
     const hover = this.hotspotAtImagePoint(img);
     if (hover) {
@@ -2031,7 +2097,7 @@ export class Viewer {
       this.onHotspotRightClick(blk.id, ev);
       return;
     }
-    if (typeof this.onStrokeRightClick === 'function' && this.mode === 'editor') {
+    if (typeof this.onStrokeRightClick === 'function') {
       const sid = this.onStrokeRightClick(img, ev);
       if (sid) return;
     }

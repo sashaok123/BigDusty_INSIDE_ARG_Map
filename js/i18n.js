@@ -601,8 +601,25 @@ const _I18N_DATA = {
   theme_white: ['White', 'Белая', 'Weiß', 'Bianco', 'Hvid'],
   theme_dark: ['Dark', 'Тёмная', 'Dunkel', 'Scuro', 'Mørk'],
   theme_graphite: ['Graphite', 'Графит', 'Graphit', 'Grafite', 'Grafit'],
+  theme_sepia: ['Sepia', 'Сепия', 'Sepia', 'Seppia', 'Sepia'],
+  theme_noir: ['Noir', 'Нуар', 'Noir', 'Noir', 'Noir'],
   theme_auto: ['Auto', 'Авто', 'Automatisch', 'Auto', 'Auto'],
   theme_toggle_aria: ['Theme', 'Тема', 'Design', 'Tema', 'Tema'],
+  theme_picker_label: ['Theme', 'Тема', 'Design', 'Tema', 'Tema'],
+  resize_hint_image: [
+    'Drag to resize. Shift = free resize.',
+    'Перетащите для изменения размера. Shift = свободно.',
+    'Ziehen zum Ändern der Größe. Shift = frei.',
+    'Trascina per ridimensionare. Shift = libero.',
+    'Træk for at ændre størrelse. Shift = fri.',
+  ],
+  resize_hint_locked: [
+    'Drag to resize. Shift = lock aspect.',
+    'Перетащите для изменения размера. Shift = пропорции.',
+    'Ziehen zum Ändern der Größe. Shift = Seitenverhältnis.',
+    'Trascina per ridimensionare. Shift = blocca proporzioni.',
+    'Træk for at ændre størrelse. Shift = lås forhold.',
+  ],
 
   sign_in_button: ['Sign in', 'Войти', 'Anmelden', 'Accedi', 'Log ind'],
 
