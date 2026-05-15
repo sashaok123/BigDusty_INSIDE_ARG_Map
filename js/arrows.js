@@ -85,6 +85,7 @@ export class ArrowLayer {
     this.onEdgesChange = opts.onEdgesChange || (() => {});
     this.onScheduleSave = opts.onScheduleSave || (() => {});
     this.onEdgeMutation = opts.onEdgeMutation || (() => {});
+    this.onBeforeMutation = opts.onBeforeMutation || (() => {});
 
     this.edges = new Map();
     this.boundEdges = new Map();
@@ -193,6 +194,33 @@ export class ArrowLayer {
     this.requestDraw();
   }
 
+  serializeEdges() {
+    const out = [];
+    for (const [id, e] of this.edges.entries()) {
+      out.push([id, JSON.parse(JSON.stringify(e))]);
+    }
+    return out;
+  }
+
+  replaceAllEdges(arr) {
+    const next = new Map();
+    if (Array.isArray(arr)) {
+      for (const entry of arr) {
+        if (!entry || entry.length !== 2) continue;
+        const [id, edge] = entry;
+        if (typeof id !== 'string' || !edge) continue;
+        const clone = JSON.parse(JSON.stringify(edge));
+        ensureBindings(clone);
+        next.set(id, clone);
+      }
+    }
+    this.edges = next;
+    this._rebuildBoundIndex();
+    this._pathCache.clear();
+    if (this.selectedId && !this.edges.has(this.selectedId)) this._deselect();
+    this.requestDraw();
+  }
+
   setStatusFilter(statusSet, opts) {
     this.statusFilter = statusSet instanceof Set ? statusSet : null;
     this.fadeNonMatching = !!(opts && opts.fade);
@@ -250,6 +278,7 @@ export class ArrowLayer {
   }
 
   createEdgeFromPoints(opts) {
+    this.onBeforeMutation('create');
     const id = this._nextId();
     const fromPt = opts && opts.fromPt ? { x: opts.fromPt.x, y: opts.fromPt.y } : { x: 0, y: 0 };
     const toPt = opts && opts.toPt ? { x: opts.toPt.x, y: opts.toPt.y } : { x: fromPt.x + 100, y: fromPt.y };
@@ -314,6 +343,7 @@ export class ArrowLayer {
   applyEdgePatch(id, patch, opts) {
     const e = this.edges.get(id);
     if (!e) return;
+    if (!opts || !opts.silent) this.onBeforeMutation('patch', id);
     if (patch.routing !== undefined) e.routing = isValidRouting(patch.routing) ? patch.routing : e.routing;
     if (patch.style   !== undefined) e.style   = isValidStyle(patch.style)   ? patch.style   : e.style;
     if (patch.color   !== undefined) e.color   = isValidColour(patch.color)  ? patch.color   : 'accent';
@@ -402,6 +432,7 @@ export class ArrowLayer {
 
   deleteEdge(id) {
     if (!this.edges.has(id)) return;
+    this.onBeforeMutation('delete', id);
     this.edges.delete(id);
     this._pathCache.delete(id);
     if (this.selectedId === id) this._deselect();
@@ -415,6 +446,7 @@ export class ArrowLayer {
   beginAddBranch(id) {
     const e = this.edges.get(id);
     if (!e) return;
+    this.onBeforeMutation('branch', id);
     const nodes = this.getNodes();
     const from = resolveAnchor(e, 'from', nodes, null).point;
     const to   = resolveAnchor(e, 'to',   nodes, null).point;
@@ -596,6 +628,7 @@ export class ArrowLayer {
 
     if (this.mode === 'editor' && (!lod || lod.handlesVisible)) {
       renderJunctionHandle(this.handlesGroup, edge, junction, scale, (ev, edgeId) => {
+        this.onBeforeMutation('junction-drag', edgeId);
         this.dragState = {
           kind: 'drag-junction',
           edgeId,
@@ -780,6 +813,7 @@ export class ArrowLayer {
     ev.stopPropagation();
     const e = this.edges.get(refs.edgeId);
     if (!e) return;
+    this.onBeforeMutation('label-drag', refs.edgeId);
     let startPos;
     if (refs.kind === 'branch' && Number.isInteger(refs.branchIndex) && e.branches && e.branches[refs.branchIndex]) {
       startPos = ensureLabelShape(e.branches[refs.branchIndex].label).position || refs.autoAt || { x: 0, y: 0 };
@@ -897,6 +931,7 @@ export class ArrowLayer {
     if (this.mode !== 'editor') return;
     const e = this.edges.get(edgeId);
     if (!e) return;
+    this.onBeforeMutation('endpoint-drag', edgeId);
     const cursorImg = this._imgPointFromClient(ev.clientX, ev.clientY);
     this.dragState = {
       kind: 'rebind-endpoint',
@@ -912,6 +947,7 @@ export class ArrowLayer {
     if (this.mode !== 'editor') return;
     const e = this.edges.get(edgeId);
     if (!e || !Array.isArray(e.waypoints) || !e.waypoints[idx]) return;
+    this.onBeforeMutation('waypoint-drag', edgeId);
     const cursorImg = this._imgPointFromClient(ev.clientX, ev.clientY);
     this.dragState = {
       kind: 'drag-waypoint',
@@ -931,6 +967,7 @@ export class ArrowLayer {
   _removeWaypoint(edgeId, idx) {
     const e = this.edges.get(edgeId);
     if (!e || !Array.isArray(e.waypoints)) return;
+    this.onBeforeMutation('waypoint-remove', edgeId);
     e.waypoints.splice(idx, 1);
     if (!e.waypoints.length) delete e.waypoints;
     this.onEdgesChange();
@@ -942,6 +979,7 @@ export class ArrowLayer {
   _addWaypoint(edgeId, point) {
     const e = this.edges.get(edgeId);
     if (!e) return;
+    this.onBeforeMutation('waypoint-add', edgeId);
     if (!Array.isArray(e.waypoints)) e.waypoints = [];
     e.waypoints.push({ x: point.x, y: point.y });
     this.onEdgesChange();
@@ -1198,6 +1236,7 @@ export class ArrowLayer {
     const e = this.edges.get(edgeId);
     if (!e || !Array.isArray(e.branches)) return;
     if (branchIdx < 0 || branchIdx >= e.branches.length) return;
+    this.onBeforeMutation('branch-remove', edgeId);
     e.branches.splice(branchIdx, 1);
     if (e.branches.length === 0) {
       delete e.branches;

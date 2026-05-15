@@ -348,6 +348,15 @@
   flex-shrink: 0;
 }
 
+.crop-inline-toolbar .modal-btn {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 4px 10px;
+}
+.crop-inline-rect { transition: box-shadow 0.08s linear; }
+
 .upload-dropzone {
   display: none;
   position: absolute;

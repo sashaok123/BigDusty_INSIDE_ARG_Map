@@ -69,22 +69,40 @@ export class FileViewerModal {
     if (cl) { cl.title = tr('file_viewer_close'); cl.setAttribute('aria-label', tr('file_viewer_close')); }
   }
 
-  async open(node) {
+  async open(node, opts) {
     if (!node) return;
     this._currentNode = node;
     this._currentName = node.name || node.slug || node.id;
     this._currentMime = (node.mime || '').toLowerCase();
     this._currentUrl = node.file || (node.media && node.media.url) || '';
+    this._forcedMode = (opts && typeof opts.mode === 'string') ? opts.mode : null;
     if (this.titleEl) this.titleEl.textContent = this._currentName;
     this.bodyEl.textContent = tr('file_preview_loading');
     this.overlay.classList.add('open');
-    const kind = pickRenderer(this._currentMime, this._currentName);
+    let kind = pickRenderer(this._currentMime, this._currentName);
+    if (this._forcedMode === 'hex') kind = 'hex';
+    else if (this._forcedMode === 'source') kind = 'text';
+    else if (this._forcedMode === 'render' && this._currentMime === 'text/html') kind = 'html';
+    else if (this._forcedMode === 'image') kind = 'image';
     if (kind === 'pdf') { renderPdfInto(this.bodyEl, this._currentUrl); this._setTabsVisible(false); return; }
     if (kind === 'image') { renderImageInto(this.bodyEl, this._currentUrl, this._currentName); this._setTabsVisible(false); return; }
+    if (kind === 'hex') {
+      try {
+        const bytes = await fetchAsBytes(this._currentUrl);
+        this._currentBytes = bytes;
+        this._setTabsVisible(false);
+        renderHexInto(this.bodyEl, bytes, { onDownload: () => this._doDownload() });
+      } catch (e) {
+        this.bodyEl.textContent = (e && e.message) || tr('file_preview_fetch_failed');
+      }
+      return;
+    }
     try {
       if (kind === 'html') {
         this._currentText = await fetchAsText(this._currentUrl);
-        this._setTabsVisible(true); this._setTab('render'); return;
+        this._setTabsVisible(true);
+        this._setTab(this._forcedMode === 'source' ? 'source' : 'render');
+        return;
       }
       if (kind === 'json') {
         this._currentText = await fetchAsText(this._currentUrl);

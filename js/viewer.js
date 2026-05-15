@@ -997,6 +997,7 @@ export class Viewer {
   }
 
   _onDoubleClick(ev) {
+    if (this.croppingActive) return;
     const img = this.imagePointFromClient(ev.clientX, ev.clientY);
     const target = this.selectableAtImagePoint(img) || this.blockAtImagePoint(img);
     if (!target) return;
@@ -1018,6 +1019,7 @@ export class Viewer {
   }
 
   _onMouseDown(ev) {
+    if (this.croppingActive) return;
     const screen = { x: ev.clientX, y: ev.clientY };
     const img = this.imagePointFromClient(ev.clientX, ev.clientY);
 

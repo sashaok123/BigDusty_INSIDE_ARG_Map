@@ -60,6 +60,7 @@ import { LeftRail } from './left-rail.js';
 import { EditNodeModal, detectVideoUrl } from './edit-node-modal.js';
 import { Uploader, validateImageFile, isVideoMime } from './uploader.js';
 import { openCropper } from './crop-tool.js';
+import { CropOverlay } from './crop-overlay.js';
 import { TouchHandler } from './touch.js';
 import { NodeClipboard } from './clipboard.js';
 import { openVideoUrlDialog } from './video-dialog.js';
@@ -145,6 +146,8 @@ let documentOverlay;
 let fileViewerModal;
 let branchesPanel;
 let presencePanel;
+let cropOverlay;
+let _resizeHistoryPushed = false;
 
 function $(id) { return document.getElementById(id); }
 
@@ -202,6 +205,7 @@ async function bootstrap() {
   setupAudioOverlay();
   setupDocumentOverlay();
   setupFileViewer();
+  setupCropOverlay();
   setupBranchesPanel();
   setupToastBridge();
   setupPresence();
@@ -226,6 +230,7 @@ async function bootstrap() {
     if (arrowLayer) arrowLayer.retranslate();
     if (minimap) minimap.retranslate();
     if (keyboard) keyboard.retranslate();
+    if (cropOverlay) cropOverlay.retranslate();
     if (leftRail) leftRail.setLang(getLang());
     refreshMigrationBannerText();
     refreshRealtimeStatusLabel();
@@ -449,6 +454,18 @@ function setupDocumentOverlay() {
 }
 
 function setupFileViewer() { fileViewerModal = new FileViewerModal(); }
+
+function setupCropOverlay() {
+  const viewport = $('viewport');
+  if (!viewport || !viewer) return;
+  cropOverlay = new CropOverlay({
+    viewport,
+    viewer,
+    getTransform: () => viewer.getTransform(),
+    onApply: () => {},
+    onCancel: () => {},
+  });
+}
 
 function setupBranchesPanel() {
   branchesPanel = new BranchesPanel({
@@ -711,10 +728,28 @@ function setupViewer() {
       handleArrowDrawEnd(info);
     },
     onHotspotResize: (id, rect) => {
+      if (!_resizeHistoryPushed) {
+        const n = findNode(state.nodes, id);
+        if (n) {
+          const snap = serializeFullState();
+          for (const entry of snap.nodes) {
+            if (entry[0] === id) {
+              entry[1].x = n.x; entry[1].y = n.y;
+              entry[1].width = n.width; entry[1].height = n.height;
+              break;
+            }
+          }
+          state.history.past.push(snap);
+          if (state.history.past.length > HISTORY_LIMIT) state.history.past.shift();
+          state.history.future = [];
+        }
+        _resizeHistoryPushed = true;
+      }
       updatePuzzleNode(state.nodes, id, { rect });
       if (arrowLayer) arrowLayer.invalidateNode(id);
     },
     onHotspotResizeEnd: (id) => {
+      _resizeHistoryPushed = false;
       const n = findNode(state.nodes, id);
       if (n) {
         pushNodePatch(id, { x: n.x, y: n.y, width: n.width, height: n.height });
@@ -771,6 +806,7 @@ function setupArrowLayer() {
     getTransform: () => viewer.getTransform(),
     onEdgesChange: () => {},
     onScheduleSave: () => scheduleSave(),
+    onBeforeMutation: () => { pushHistory(); },
     onEdgeMutation: (kind, id, edge) => {
       if (!state.backendOnline || !isLoggedIn()) return;
       if (kind === 'create' && edge) {
@@ -1181,6 +1217,173 @@ function setupGlobalContextMenu() {
   }, true);
 }
 
+const HTML_EXT_RE = /\.(x?html?)(\?.*)?$/i;
+const PDF_EXT_RE = /\.pdf(\?.*)?$/i;
+const TEXT_CODE_EXT_RE = /\.(json|csv|md|txt|py|js|sh|css|xml|ts|tsx|jsx|yaml|yml|toml|ini|log)(\?.*)?$/i;
+
+function nodeFileMime(n) {
+  return (n && typeof n.mime === 'string') ? n.mime.toLowerCase() : '';
+}
+function nodeFileUrl(n) {
+  if (!n) return '';
+  if (typeof n.file === 'string' && n.file) return n.file;
+  if (n.media && typeof n.media.url === 'string') return n.media.url;
+  return '';
+}
+function nodeFileName(n) {
+  if (!n) return '';
+  return n.name || n.slug || n.id || '';
+}
+function nodeIsHtmlDocument(n) {
+  if (!n || n.kind !== 'document') return false;
+  const m = nodeFileMime(n);
+  const url = nodeFileUrl(n);
+  if (m === 'text/html') return true;
+  if (HTML_EXT_RE.test(url)) return true;
+  return false;
+}
+function nodeIsPdfDocument(n) {
+  if (!n) return false;
+  const m = nodeFileMime(n);
+  const url = nodeFileUrl(n);
+  if (m === 'application/pdf') return true;
+  if (PDF_EXT_RE.test(url)) return true;
+  return false;
+}
+function nodeIsTextDocument(n) {
+  if (!n || n.kind !== 'document') return false;
+  if (nodeIsHtmlDocument(n) || nodeIsPdfDocument(n)) return false;
+  const m = nodeFileMime(n);
+  const url = nodeFileUrl(n);
+  if (/^text\//.test(m)) return true;
+  if (m === 'application/json' || m === 'application/xml' || m === 'application/javascript') return true;
+  if (TEXT_CODE_EXT_RE.test(url)) return true;
+  return false;
+}
+function nodeIsVideo(n) { return !!(n && n.kind === 'video'); }
+function nodeIsAudio(n) { return !!(n && n.kind === 'audio'); }
+
+function viewerNodeForFile(n) {
+  return {
+    id: n.id,
+    file: n.file || null,
+    name: nodeFileName(n),
+    slug: n.slug || n.id,
+    mime: n.mime || null,
+    media: n.media || null,
+    kind: n.kind || null,
+  };
+}
+
+function viewImageFull(id) {
+  const n = findNode(state.nodes, id);
+  if (!n || !fileViewerModal) return;
+  fileViewerModal.open(viewerNodeForFile(n), { mode: 'image' });
+}
+function viewAsCode(id) {
+  const n = findNode(state.nodes, id);
+  if (!n || !fileViewerModal) return;
+  fileViewerModal.open(viewerNodeForFile(n), { mode: 'hex' });
+}
+function viewAsHtmlPage(id) {
+  const n = findNode(state.nodes, id);
+  if (!n || !fileViewerModal) return;
+  fileViewerModal.open(viewerNodeForFile(n), { mode: 'render' });
+}
+function viewSource(id) {
+  const n = findNode(state.nodes, id);
+  if (!n || !fileViewerModal) return;
+  fileViewerModal.open(viewerNodeForFile(n), { mode: 'source' });
+}
+function viewPdf(id) {
+  const n = findNode(state.nodes, id);
+  if (!n || !fileViewerModal) return;
+  fileViewerModal.open(viewerNodeForFile(n));
+}
+function viewTextFormatted(id) {
+  const n = findNode(state.nodes, id);
+  if (!n || !fileViewerModal) return;
+  fileViewerModal.open(viewerNodeForFile(n));
+}
+function openFileInNewTab(id) {
+  const n = findNode(state.nodes, id);
+  if (!n) return;
+  const url = nodeFileUrl(n);
+  if (!url) return;
+  try { window.open(url, '_blank', 'noopener,noreferrer'); } catch (e) { console.warn('[app] open new tab failed', e); }
+}
+function downloadFile(id) {
+  const n = findNode(state.nodes, id);
+  if (!n) return;
+  const url = nodeFileUrl(n);
+  if (!url) return;
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nodeFileName(n) || 'file';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+function copyNodeUrl(id) {
+  const n = findNode(state.nodes, id);
+  if (!n) return;
+  const url = nodeFileUrl(n);
+  if (!url) return;
+  try { navigator.clipboard.writeText(url); toast(tr('admin_invitation_copied')); }
+  catch (e) { void e; }
+}
+async function replaceVideoUrl(id) {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  const n = findNode(state.nodes, id);
+  if (!n) return;
+  const info = await openVideoUrlDialog();
+  if (!info) return;
+  pushHistory();
+  updatePuzzleNode(state.nodes, id, { media: { ...info }, url: info.url });
+  refreshPuzzleViewsInViewer();
+  pushNodePatch(id, { media: { ...info }, url: info.url });
+  scheduleSave();
+  if (videoOverlay) videoOverlay.requestDraw();
+}
+function triggerMediaPlay(id) {
+  const host = document.querySelector(`[data-id="${id}"]`);
+  if (!host) return;
+  const btn = host.querySelector('.audio-card-play, .video-placeholder-play')
+    || host.querySelector('button.audio-card-play')
+    || host.querySelector('.video-placeholder');
+  if (btn && typeof btn.click === 'function') btn.click();
+}
+
+function appendCommonItems(items, id, n, view) {
+  const selSize = state.selection.size;
+  const selHasId = state.selection.has(id);
+  items.push({
+    label: tr('ctx_set_status'),
+    submenu: statusSubmenu(view.status, (status) => setStatusForNode(id, status)),
+  });
+  items.push({
+    label: tr(n.locked ? 'ctx_unlock' : 'ctx_lock'),
+    fn: () => {
+      state.selection = new Set([id]);
+      if (viewer) viewer.setSelection(state.selection);
+      toggleLockSelection();
+    },
+  });
+  if (selSize > 1 && selHasId) {
+    items.push({ label: tr('ctx_group'), fn: () => groupCurrentSelection() });
+  } else {
+    items.push({ label: tr('ctx_group'), fn: () => {
+      state.selection = new Set([id]);
+      if (viewer) viewer.setSelection(state.selection);
+      groupCurrentSelection();
+    } });
+  }
+  if (n.parent) {
+    items.push({ label: tr('ctx_ungroup'), fn: () => {
+      const parentId = n.parent;
+      ungroupGroup(parentId);
+    } });
+  }
+}
+
 function buildContextMenuItemsForNode(id) {
   const n = findNode(state.nodes, id);
   if (!n) return [];
@@ -1207,41 +1410,51 @@ function buildContextMenuItemsForNode(id) {
     return items;
   }
 
-  if (isEditableNode(n) || isPuzzleNode(n) || isStickyNode(n) || isBlockNode(n)) {
+  const editorOpenForThis = !!(editNodeModal && editNodeModal.isOpen && editNodeModal.isOpen()
+    && editNodeModal.currentView && editNodeModal.currentView.id === id);
+  if ((isEditableNode(n) || isPuzzleNode(n) || isStickyNode(n) || isBlockNode(n)) && !editorOpenForThis) {
     items.push({ label: tr('ctx_edit'), fn: () => openRichEdit(id) });
   }
-  items.push({
-    label: tr('ctx_set_status'),
-    submenu: statusSubmenu(view.status, (status) => setStatusForNode(id, status)),
-  });
-  items.push({
-    label: tr(n.locked ? 'ctx_unlock' : 'ctx_lock'),
-    fn: () => {
-      state.selection = new Set([id]);
-      if (viewer) viewer.setSelection(state.selection);
-      toggleLockSelection();
-    },
-  });
-  if (selSize > 0 && selHasId && selSize > 1) {
-    items.push({ label: tr('ctx_group'), fn: () => groupCurrentSelection() });
-  } else {
-    items.push({ label: tr('ctx_group'), fn: () => {
-      state.selection = new Set([id]);
-      if (viewer) viewer.setSelection(state.selection);
-      groupCurrentSelection();
-    } });
-  }
-  if (n.parent) {
-    items.push({ label: tr('ctx_ungroup'), fn: () => {
-      const parentId = n.parent;
-      ungroupGroup(parentId);
-    } });
-  }
+
   if (nodeIsImageFile(n)) {
-    items.push({ kind: 'separator' });
+    items.push({ label: tr('ctx_view_image'), fn: () => viewImageFull(id) });
+    items.push({ label: tr('ctx_view_as_code'), fn: () => viewAsCode(id) });
     items.push({ label: tr('ctx_crop'), fn: () => doCropImage(id, n.file) });
     items.push({ label: tr('ctx_replace_image'), fn: () => doReplaceImage(id) });
+    items.push({ kind: 'separator' });
+    appendCommonItems(items, id, n, view);
+  } else if (nodeIsHtmlDocument(n)) {
+    items.push({ label: tr('ctx_view_as_page'), fn: () => viewAsHtmlPage(id) });
+    items.push({ label: tr('ctx_view_source'), fn: () => viewSource(id) });
+    items.push({ label: tr('ctx_open_new_tab'), fn: () => openFileInNewTab(id) });
+    items.push({ kind: 'separator' });
+    appendCommonItems(items, id, n, view);
+  } else if (nodeIsPdfDocument(n)) {
+    items.push({ label: tr('ctx_view_pdf'), fn: () => viewPdf(id) });
+    items.push({ label: tr('ctx_download'), fn: () => downloadFile(id) });
+    items.push({ kind: 'separator' });
+    appendCommonItems(items, id, n, view);
+  } else if (nodeIsTextDocument(n)) {
+    items.push({ label: tr('ctx_view_formatted'), fn: () => viewTextFormatted(id) });
+    items.push({ label: tr('ctx_view_as_hex'), fn: () => viewAsCode(id) });
+    items.push({ label: tr('ctx_download'), fn: () => downloadFile(id) });
+    items.push({ kind: 'separator' });
+    appendCommonItems(items, id, n, view);
+  } else if (nodeIsVideo(n)) {
+    items.push({ label: tr('ctx_play'), fn: () => triggerMediaPlay(id) });
+    items.push({ label: tr('ctx_replace_url'), fn: () => replaceVideoUrl(id) });
+    items.push({ label: tr('ctx_copy_url'), fn: () => copyNodeUrl(id) });
+    items.push({ kind: 'separator' });
+    appendCommonItems(items, id, n, view);
+  } else if (nodeIsAudio(n)) {
+    items.push({ label: tr('ctx_play_pause'), fn: () => triggerMediaPlay(id) });
+    items.push({ label: tr('ctx_replace_audio'), fn: () => doReplaceAudio(id) });
+    items.push({ kind: 'separator' });
+    appendCommonItems(items, id, n, view);
+  } else {
+    appendCommonItems(items, id, n, view);
   }
+
   const brSub = buildBranchSubmenu(id);
   if (brSub && brSub.length) {
     items.push({ kind: 'separator' });
@@ -1250,6 +1463,49 @@ function buildContextMenuItemsForNode(id) {
   items.push({ kind: 'separator' });
   items.push({ label: tr('ctx_delete'), danger: true, fn: () => deletePuzzleNode(id) });
   return items;
+}
+
+let _replaceAudioPicker = null;
+function doReplaceAudio(nodeId) {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+  const n = findNode(state.nodes, nodeId);
+  if (!n) return;
+  if (!_replaceAudioPicker) {
+    _replaceAudioPicker = document.createElement('input');
+    _replaceAudioPicker.type = 'file';
+    _replaceAudioPicker.accept = 'audio/mpeg,audio/mp3,audio/ogg,audio/wav,audio/x-wav,audio/webm,audio/aac,audio/flac';
+    _replaceAudioPicker.style.display = 'none';
+    document.body.appendChild(_replaceAudioPicker);
+  }
+  const input = _replaceAudioPicker;
+  input.value = '';
+  input.onchange = async () => {
+    const file = input.files && input.files[0];
+    input.onchange = null;
+    if (!file) return;
+    try {
+      const uploaded = await apiUploadImage(file, file.name);
+      if (!uploaded || !uploaded.url) return;
+      pushHistory();
+      const currentNode = findNode(state.nodes, nodeId);
+      if (!currentNode) return;
+      const nextMedia = { ...(currentNode.media || {}), kind: 'audio', url: uploaded.url, provider: 'local' };
+      updatePuzzleNode(state.nodes, nodeId, { file: uploaded.url, media: nextMedia, mime: file.type || currentNode.mime });
+      refreshPuzzleViewsInViewer();
+      pushNodePatch(nodeId, { file: uploaded.url, media: nextMedia, mime: file.type || currentNode.mime });
+      if (audioOverlay) audioOverlay.requestDraw();
+      scheduleSave();
+      toast(tr('toast_hotspot_updated'));
+    } catch (e) {
+      if (e && e.kind === 'auth_expired') {
+        if (authUI) authUI.openLogin();
+      } else {
+        toast(tr('upload_image_failed'), 'error');
+        console.warn('[app] audio replace failed', e);
+      }
+    }
+  };
+  input.click();
 }
 
 function buildBranchSubmenu(nodeId) {
@@ -1426,14 +1682,46 @@ async function placeUploadedImageNode(placement) {
   return id;
 }
 
-async function doCropImage(nodeId, currentUrl) {
-  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return null; }
-  if (!currentUrl) return null;
+function doCropImage(nodeId, currentUrl) {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return Promise.resolve(null); }
+  if (!currentUrl) return Promise.resolve(null);
+  const n = findNode(state.nodes, nodeId);
+  if (!n) return Promise.resolve(null);
+  if (!cropOverlay) return doCropImageFallback(nodeId, currentUrl);
+  if (cropOverlay.isActive()) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    _cropPendingNodeId = nodeId;
+    const node = { x: n.x, y: n.y, width: n.width, height: n.height };
+    cropOverlay.onApply = async (blob) => {
+      if (!blob) { resolve(null); return; }
+      try {
+        const uploaded = await apiUploadImage(blob, 'crop.webp');
+        if (!uploaded || !uploaded.url) { resolve(null); return; }
+        pushHistory();
+        await replaceImageForNode(nodeId, uploaded.url);
+        resolve(uploaded.url);
+      } catch (e) {
+        if (e && e.kind === 'auth_expired') {
+          if (authUI) authUI.openLogin();
+        } else {
+          toast(tr('upload_image_failed'), 'error');
+          console.warn('[app] crop upload failed', e);
+        }
+        resolve(null);
+      }
+    };
+    cropOverlay.onCancel = () => resolve(null);
+    cropOverlay.open(node, currentUrl);
+  });
+}
+
+async function doCropImageFallback(nodeId, currentUrl) {
   const blob = await openCropper(currentUrl);
   if (!blob) return null;
   try {
     const uploaded = await apiUploadImage(blob, 'crop.webp');
     if (!uploaded || !uploaded.url) return null;
+    pushHistory();
     await replaceImageForNode(nodeId, uploaded.url);
     return uploaded.url;
   } catch (e) {
@@ -1479,6 +1767,7 @@ function doReplaceImage(nodeId) {
         }
         const uploaded = await apiUploadImage(blob, name);
         if (!uploaded || !uploaded.url) { resolve(null); return; }
+        pushHistory();
         await replaceImageForNode(nodeId, uploaded.url);
         resolve(uploaded.url);
       } catch (e) {
@@ -1663,6 +1952,7 @@ function applyDragSelection(ids, dx, dy, commit) {
   refreshPuzzleViewsInViewer();
   if (commit) {
     if (snapGuides) snapGuides.clear();
+    pushHistoryForDragCommit(allIds);
     for (const id of allIds) {
       const n = findNode(state.nodes, id);
       if (!n) continue;
@@ -1671,6 +1961,25 @@ function applyDragSelection(ids, dx, dy, commit) {
     applyDragSelection._orig = null;
     scheduleSave();
   }
+}
+
+function pushHistoryForDragCommit(allIds) {
+  const orig = applyDragSelection._orig;
+  if (!orig || orig.size === 0) return;
+  const snap = serializeFullState();
+  for (const entry of snap.nodes) {
+    const id = entry[0];
+    const node = entry[1];
+    if (orig.has(id)) {
+      const o = orig.get(id);
+      node.x = o.x;
+      node.y = o.y;
+    }
+  }
+  state.history.past.push(snap);
+  if (state.history.past.length > HISTORY_LIMIT) state.history.past.shift();
+  state.history.future = [];
+  void allIds;
 }
 
 function computeSnapGuides(dragRect, otherRects) {
@@ -1864,39 +2173,140 @@ function computeUnionBbox(ids) {
 }
 
 function pushHistory() {
-  const snap = serializeNodes();
+  const snap = serializeFullState();
   state.history.past.push(snap);
   if (state.history.past.length > HISTORY_LIMIT) state.history.past.shift();
   state.history.future = [];
 }
 
 function serializeNodes() {
+  return serializeFullState();
+}
+
+function serializeFullState() {
   return {
     nodes: Array.from(state.nodes.entries()).map(([id, n]) => [id, JSON.parse(JSON.stringify(n))]),
+    edges: arrowLayer && typeof arrowLayer.serializeEdges === 'function' ? arrowLayer.serializeEdges() : [],
+    branches: Array.isArray(state.branches) ? JSON.parse(JSON.stringify(state.branches)) : [],
   };
 }
 
 function restoreNodes(snap) {
-  if (!snap || !Array.isArray(snap.nodes)) return;
-  state.nodes = new Map(snap.nodes);
+  restoreFullState(snap);
+}
+
+function restoreFullState(snap) {
+  if (!snap) return;
+  const prevNodes = state.nodes;
+  const prevEdges = arrowLayer ? new Map(arrowLayer.edges) : new Map();
+  if (Array.isArray(snap.nodes)) state.nodes = new Map(snap.nodes);
+  if (Array.isArray(snap.branches)) state.branches = JSON.parse(JSON.stringify(snap.branches));
+  if (arrowLayer && Array.isArray(snap.edges)) {
+    arrowLayer.replaceAllEdges(snap.edges);
+    state.edges = arrowLayer.edges;
+  }
   refreshPuzzleViewsInViewer();
+  if (viewer) viewer.notifyNodesChanged();
+  if (arrowLayer) arrowLayer.requestDraw();
+  if (branchesPanel) branchesPanel.setBranches();
+  syncRestoredStateToBackend(prevNodes, prevEdges);
+}
+
+function syncRestoredStateToBackend(prevNodes, prevEdges) {
+  if (!state.backendOnline || !isLoggedIn()) return;
+  const nextEdges = arrowLayer ? arrowLayer.edges : new Map();
+  for (const [id, n] of state.nodes.entries()) {
+    const prev = prevNodes.get(id);
+    if (!prev) {
+      pushNodeCreate(toViewShape(n), nodeMarkdown(n) || '');
+      continue;
+    }
+    if (JSON.stringify(prev) !== JSON.stringify(n)) {
+      pushNodePatch(id, nodePatchPayload(n));
+    }
+  }
+  for (const [id] of prevNodes.entries()) {
+    if (!state.nodes.has(id)) pushNodeDelete(id);
+  }
+  for (const [id, e] of nextEdges.entries()) {
+    const prev = prevEdges.get(id);
+    if (!prev) {
+      pushEdgeCreate(e);
+      continue;
+    }
+    if (JSON.stringify(prev) !== JSON.stringify(e)) {
+      pushEdgePatch(id, e);
+    }
+  }
+  for (const [id] of prevEdges.entries()) {
+    if (!nextEdges.has(id)) pushEdgeDelete(id);
+  }
+}
+
+function nodePatchPayload(n) {
+  const payload = {
+    x: n.x, y: n.y, width: n.width, height: n.height,
+    status: n.status, tags: n.tags || [], label: n.label, color: n.color,
+    parent: n.parent || null, caption: n.caption || null,
+    translations: n.translations || null, text_style: n.text_style || null,
+    media: n.media || null, branches: Array.isArray(n.branches) ? n.branches : [],
+    kind: n.kind || null, locked: !!n.locked,
+  };
+  if (typeof n.file === 'string') payload.file = n.file;
+  if (typeof n.text === 'string') payload.text = n.text;
+  if (typeof n.mime === 'string') payload.mime = n.mime;
+  if (typeof n.name === 'string') payload.name = n.name;
+  if (typeof n.background === 'string') payload.background = n.background;
+  if (typeof n.url === 'string') payload.url = n.url;
+  return payload;
+}
+
+async function pushEdgeCreate(edge) {
+  if (!state.backendOnline || !isLoggedIn()) return;
+  try {
+    trackSelfMutation('edge_created', edge.id);
+    const r = await apiCreateEdge({ ...edge });
+    if (r && typeof r.revision === 'number') state.revision = r.revision;
+  } catch (e) {
+    if (e && e.kind !== 'auth_expired') console.warn('[app] edge create (restore) failed', e);
+  }
+}
+async function pushEdgePatch(id, edge) {
+  if (!state.backendOnline || !isLoggedIn()) return;
+  try {
+    trackSelfMutation('edge_updated', id);
+    const r = await apiPatchEdge(id, { ...edge });
+    if (r && typeof r.revision === 'number') state.revision = r.revision;
+  } catch (e) {
+    if (e && e.kind !== 'auth_expired') console.warn('[app] edge patch (restore) failed', e);
+  }
+}
+async function pushEdgeDelete(id) {
+  if (!state.backendOnline || !isLoggedIn()) return;
+  try {
+    trackSelfMutation('edge_deleted', id);
+    const r = await apiDeleteEdge(id);
+    if (r && typeof r.revision === 'number') state.revision = r.revision;
+  } catch (e) {
+    if (e && e.kind !== 'auth_expired') console.warn('[app] edge delete (restore) failed', e);
+  }
 }
 
 function doUndo() {
   if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
   if (state.history.past.length === 0) return;
-  state.history.future.push(serializeNodes());
+  state.history.future.push(serializeFullState());
   const snap = state.history.past.pop();
-  restoreNodes(snap);
+  restoreFullState(snap);
   scheduleSave();
 }
 
 function doRedo() {
   if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
   if (state.history.future.length === 0) return;
-  state.history.past.push(serializeNodes());
+  state.history.past.push(serializeFullState());
   const snap = state.history.future.pop();
-  restoreNodes(snap);
+  restoreFullState(snap);
   scheduleSave();
 }
 

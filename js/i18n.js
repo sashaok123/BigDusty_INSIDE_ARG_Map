@@ -638,6 +638,23 @@ const _I18N_DATA = {
     'Trascina il rettangolo per ritagliare',
     'Træk rektanglet for at beskære',
   ],
+  crop_ratio_label: ['Ratio', 'Соотношение', 'Verhältnis', 'Proporzioni', 'Forhold'],
+  crop_ratio_free: ['Free', 'Свободно', 'Frei', 'Libero', 'Fri'],
+
+  ctx_view_image:    ['View image',     'Открыть изображение',     'Bild anzeigen',     'Apri immagine',     'Vis billede'],
+  ctx_view_as_code:  ['View as code',   'Открыть как код',         'Als Code anzeigen', 'Apri come codice',  'Vis som kode'],
+  ctx_view_as_page:  ['View as page',   'Открыть как страницу',    'Als Seite anzeigen','Apri come pagina',  'Vis som side'],
+  ctx_view_source:   ['View source',    'Открыть исходник',        'Quelltext anzeigen','Apri sorgente',     'Vis kildekode'],
+  ctx_open_new_tab:  ['Open in new tab','Открыть в новой вкладке', 'In neuem Tab öffnen','Apri in nuova scheda','Åbn i ny fane'],
+  ctx_view_pdf:      ['View PDF',       'Открыть PDF',             'PDF anzeigen',      'Apri PDF',          'Vis PDF'],
+  ctx_view_formatted:['View formatted', 'Открыть форматированно',  'Formatiert anzeigen','Apri formattato',  'Vis formateret'],
+  ctx_view_as_hex:   ['View as hex',    'Открыть как HEX',         'Als Hex anzeigen',  'Apri come hex',     'Vis som hex'],
+  ctx_download:      ['Download',       'Скачать',                 'Herunterladen',     'Scarica',           'Download'],
+  ctx_play:          ['Play',           'Воспроизвести',           'Abspielen',         'Riproduci',         'Afspil'],
+  ctx_play_pause:    ['Play / Pause',   'Старт / Пауза',           'Wiedergabe/Pause',  'Riproduci/Pausa',   'Afspil/Pause'],
+  ctx_replace_url:   ['Replace URL',    'Заменить URL',            'URL ersetzen',      'Sostituisci URL',   'Erstat URL'],
+  ctx_replace_audio: ['Replace audio',  'Заменить аудио',          'Audio ersetzen',    'Sostituisci audio', 'Erstat lyd'],
+  ctx_copy_url:      ['Copy URL',       'Скопировать URL',         'URL kopieren',      'Copia URL',         'Kopier URL'],
 
   upload_image_button: [
     'Upload image',

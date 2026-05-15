@@ -30,6 +30,7 @@ export const OWNED_SURFACES = [
   '#migration-banner',
   '#search-results',
   '.crop-overlay',
+  '.crop-inline-root',
   '.ctx-menu',
   '.video-dialog',
   '.align-floater',
