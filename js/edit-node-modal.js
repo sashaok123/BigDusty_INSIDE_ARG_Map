@@ -6,11 +6,15 @@
    ctx-menu Edit open the same panel. */
 
 import { tr, LANGS } from './i18n.js';
-import { STATUSES, statusVarName, isGroupNode, nodeMarkdown } from './nodes.js';
+import { STATUSES, statusVarName, isGroupNode, nodeMarkdown, isDocumentNode } from './nodes.js';
 import { renderMarkdown } from './markdown.js';
 import { translateMany, providerLabel } from './translate.js';
 import { getTranslationProvider } from './settings.js';
 import { buildMarkdownToolbar } from './md-toolbar.js';
+import {
+  pickRenderer, renderHtmlInto, renderTextInto, renderJsonInto,
+  renderPdfInto, renderImageInto, renderHexInto, fetchAsText, fetchAsBytes,
+} from './file-renderers.js';
 
 const TEXT_SIZES = ['S', 'M', 'L', 'XL'];
 const TEXT_FAMILIES = ['system', 'mono', 'serif'];
@@ -120,6 +124,9 @@ export class EditNodeModal {
     this.onContentChange = opts.onContentChange || (() => {});
     this.onExportMd = opts.onExportMd || (() => {});
     this.onConfirmCloseWithUnsaved = opts.onConfirmCloseWithUnsaved || ((cb) => cb(true));
+    this.onOpenFullViewer = opts.onOpenFullViewer || null;
+    this._fileBodyCache = new Map();
+    this._fileBytesCache = new Map();
     this._build();
     document.addEventListener('i18n:changed', () => this._retranslate());
   }
@@ -270,10 +277,14 @@ export class EditNodeModal {
     const imageActions = el('div', { class: 'em-image-actions' });
     const cropBtn = el('button', { type: 'button', class: 'modal-btn', text: tr('edit_modal_crop_image') });
     const replaceBtn = el('button', { type: 'button', class: 'modal-btn', text: tr('edit_modal_replace_image') });
+    const openFullImageBtn = el('button', { type: 'button', class: 'modal-btn',
+      text: tr('file_viewer_open_full') });
     cropBtn.addEventListener('click', () => this._cropImage());
     replaceBtn.addEventListener('click', () => this._replaceImage());
+    openFullImageBtn.addEventListener('click', () => this._openFullViewer());
     imageActions.appendChild(cropBtn);
     imageActions.appendChild(replaceBtn);
+    imageActions.appendChild(openFullImageBtn);
     imageRow.appendChild(imagePreview);
     imageRow.appendChild(imageActions);
     imageField.appendChild(imageLabel);
@@ -355,6 +366,29 @@ export class EditNodeModal {
     videoField.appendChild(videoHint);
     videoField.style.display = 'none';
 
+    const previewField = el('div', { class: 'em-field em-preview-section' });
+    const previewHeadRow = el('div', { class: 'em-preview-head' });
+    const previewLabel = el('label', { text: tr('file_preview_label') });
+    const previewControls = el('div', { class: 'em-preview-controls' });
+    const previewTabs = el('div', { class: 'em-preview-tabs' });
+    const previewTabRenderBtn = el('button', { type: 'button', text: tr('file_viewer_render') });
+    const previewTabSourceBtn = el('button', { type: 'button', text: tr('file_viewer_source') });
+    previewTabRenderBtn.addEventListener('click', () => this._setPreviewTab('render'));
+    previewTabSourceBtn.addEventListener('click', () => this._setPreviewTab('source'));
+    previewTabs.appendChild(previewTabRenderBtn);
+    previewTabs.appendChild(previewTabSourceBtn);
+    const previewOpenFullBtn = el('button', { type: 'button', class: 'em-preview-open-full',
+      text: tr('file_viewer_open_full') });
+    previewOpenFullBtn.addEventListener('click', () => this._openFullViewer());
+    previewControls.appendChild(previewTabs);
+    previewControls.appendChild(previewOpenFullBtn);
+    previewHeadRow.appendChild(previewLabel);
+    previewHeadRow.appendChild(previewControls);
+    const previewHost = el('div', { class: 'em-preview-host' });
+    previewField.appendChild(previewHeadRow);
+    previewField.appendChild(previewHost);
+    previewField.style.display = 'none';
+
     body.appendChild(signinHint);
     const row = el('div', { class: 'em-row' });
     row.appendChild(statusField); row.appendChild(colorField);
@@ -369,6 +403,7 @@ export class EditNodeModal {
     body.appendChild(this._buildBranchesField());
     body.appendChild(translationsField);
     body.appendChild(imageField);
+    body.appendChild(previewField);
 
     const foot = el('div', { id: 'edit-node-foot' });
     const lockBtn = el('button', { type: 'button', class: 'modal-btn em-lock-btn', text: tr('ctx_lock') });
@@ -446,6 +481,7 @@ export class EditNodeModal {
     this.imagePreviewEmptyEl = imagePreviewEmpty;
     this.cropBtnEl = cropBtn;
     this.replaceBtnEl = replaceBtn;
+    this.openFullImageBtnEl = openFullImageBtn;
     this.textStyleFieldEl = textStyleField;
     this.textStyleLabelEl = textStyleLabel;
     this.sizeBtnEls = sizeBtns;
@@ -463,6 +499,17 @@ export class EditNodeModal {
     this.titleWandEl = titleWand;
     this.bodyWandEl = bodyWandBtn;
     this.mdToolbarRef = mdToolbarRef;
+    this.previewFieldEl = previewField;
+    this.previewLabelEl = previewLabel;
+    this.previewHostEl = previewHost;
+    this.previewTabsEl = previewTabs;
+    this.previewTabRenderEl = previewTabRenderBtn;
+    this.previewTabSourceEl = previewTabSourceBtn;
+    this.previewOpenFullEl = previewOpenFullBtn;
+    this._previewTab = 'render';
+    this._previewText = '';
+    this._previewKind = '';
+    this._previewToken = 0;
 
     this._state = null;
     this.currentView = null;
@@ -670,6 +717,9 @@ export class EditNodeModal {
     const isImage = looksLikeImage(this._state);
     this.imageFieldEl.style.display = isImage ? 'flex' : 'none';
     if (isImage) this._setImagePreview(this._state.file || '');
+    if (this.openFullImageBtnEl) {
+      this.openFullImageBtnEl.style.display = isImage && typeof this.onOpenFullViewer === 'function' ? '' : 'none';
+    }
     const isText = this._state.kind === 'text';
     if (this.textStyleFieldEl) this.textStyleFieldEl.style.display = isText ? 'flex' : 'none';
     const isVideo = this._state.kind === 'video' || (this._state.media && (this._state.media.kind === 'youtube' || this._state.media.kind === 'vimeo'));
@@ -708,8 +758,141 @@ export class EditNodeModal {
     }
     this._setBodyTab('edit');
     this._refreshLockButton();
+    this._loadPreview();
     if (this.panelEl) this.panelEl.classList.add('open');
     this._suppressInlineCommits = false;
+  }
+
+  _loadPreview() {
+    const field = this.previewFieldEl;
+    const host = this.previewHostEl;
+    if (!field || !host) return;
+    const s = this._state;
+    if (!s || !s.file) { field.style.display = 'none'; host.innerHTML = ''; return; }
+    const isImage = looksLikeImage(s);
+    const isDoc = isDocumentNode({ kind: s.kind, mime: s.mime });
+    if (!isDoc || isImage) { field.style.display = 'none'; host.innerHTML = ''; return; }
+    field.style.display = 'flex';
+    const mime = (s.mime || '').toLowerCase();
+    const filename = s.name || s.file || '';
+    const kind = pickRenderer(mime, filename);
+    this._previewKind = kind;
+    this._previewTab = 'render';
+    const showHtmlTabs = kind === 'html';
+    if (this.previewTabsEl) this.previewTabsEl.style.display = showHtmlTabs ? '' : 'none';
+    if (showHtmlTabs) this._syncPreviewTabButtons();
+    if (this.previewOpenFullEl) {
+      this.previewOpenFullEl.style.display = typeof this.onOpenFullViewer === 'function' ? '' : 'none';
+    }
+    const token = ++this._previewToken;
+    if (kind === 'pdf') {
+      renderPdfInto(host, s.file);
+      return;
+    }
+    if (kind === 'image') {
+      renderImageInto(host, s.file, filename);
+      return;
+    }
+    host.innerHTML = '';
+    const status = document.createElement('div');
+    status.className = 'em-preview-status';
+    status.textContent = tr('file_preview_loading');
+    host.appendChild(status);
+    if (kind === 'hex') {
+      this._loadHexPreview(token, host, filename);
+    } else {
+      this._loadTextPreview(token, host, mime, filename, kind);
+    }
+  }
+
+  _loadTextPreview(token, host, mime, filename, kind) {
+    const id = this._state ? this._state.id : null;
+    const url = this._state ? this._state.file : null;
+    const cached = id ? this._fileBodyCache.get(id) : null;
+    const apply = (text) => {
+      if (token !== this._previewToken) return;
+      this._previewText = text;
+      if (kind === 'html') {
+        if (this._previewTab === 'render') renderHtmlInto(host, text);
+        else renderTextInto(host, text, mime, filename);
+      } else if (kind === 'json') {
+        renderJsonInto(host, text);
+      } else {
+        renderTextInto(host, text, mime, filename);
+      }
+    };
+    if (cached != null) { apply(cached); return; }
+    fetchAsText(url).then((text) => {
+      if (id) this._fileBodyCache.set(id, text);
+      apply(text);
+    }).catch((e) => {
+      if (token !== this._previewToken) return;
+      host.innerHTML = '';
+      const err = document.createElement('div');
+      err.className = 'em-preview-status is-error';
+      err.textContent = (e && e.message) || tr('file_preview_fetch_failed');
+      host.appendChild(err);
+    });
+  }
+
+  _loadHexPreview(token, host, filename) {
+    const id = this._state ? this._state.id : null;
+    const url = this._state ? this._state.file : null;
+    const cached = id ? this._fileBytesCache.get(id) : null;
+    const apply = (bytes) => {
+      if (token !== this._previewToken) return;
+      renderHexInto(host, bytes, { onDownload: () => this._downloadPreviewFile(filename) });
+    };
+    if (cached) { apply(cached); return; }
+    fetchAsBytes(url).then((bytes) => {
+      if (id) this._fileBytesCache.set(id, bytes);
+      apply(bytes);
+    }).catch((e) => {
+      if (token !== this._previewToken) return;
+      host.innerHTML = '';
+      const err = document.createElement('div');
+      err.className = 'em-preview-status is-error';
+      err.textContent = (e && e.message) || tr('file_preview_fetch_failed');
+      host.appendChild(err);
+    });
+  }
+
+  _setPreviewTab(name) {
+    if (this._previewKind !== 'html') return;
+    this._previewTab = name === 'source' ? 'source' : 'render';
+    this._syncPreviewTabButtons();
+    const host = this.previewHostEl;
+    if (!host || this._previewText == null) return;
+    const mime = this._state ? (this._state.mime || '').toLowerCase() : 'text/html';
+    const filename = this._state ? (this._state.name || this._state.file || '') : '';
+    if (this._previewTab === 'render') renderHtmlInto(host, this._previewText);
+    else renderTextInto(host, this._previewText, mime, filename);
+  }
+
+  _syncPreviewTabButtons() {
+    if (this.previewTabRenderEl) this.previewTabRenderEl.classList.toggle('active', this._previewTab === 'render');
+    if (this.previewTabSourceEl) this.previewTabSourceEl.classList.toggle('active', this._previewTab === 'source');
+  }
+
+  _openFullViewer() {
+    if (typeof this.onOpenFullViewer !== 'function') return;
+    if (!this._state) return;
+    const view = this.currentView || this._state;
+    try { this.onOpenFullViewer(view); } catch (e) { void e; }
+  }
+
+  _downloadPreviewFile(filename) {
+    if (!this._state || !this._state.file) return;
+    const a = document.createElement('a');
+    a.href = this._state.file;
+    a.download = filename || 'file';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  }
+
+  invalidatePreviewCache(id) {
+    if (!id) return;
+    this._fileBodyCache.delete(id);
+    this._fileBytesCache.delete(id);
   }
 
   isOpen() {
@@ -1068,6 +1251,11 @@ export class EditNodeModal {
     if (this.captionTextEl) this.captionTextEl.value = '';
     this._renderTags();
     this._refreshLockButton();
+    this._previewToken += 1;
+    this._previewText = '';
+    this._previewKind = '';
+    if (this.previewFieldEl) this.previewFieldEl.style.display = 'none';
+    if (this.previewHostEl) this.previewHostEl.innerHTML = '';
     if (typeof this.onClose === 'function') this.onClose();
   }
 
@@ -1155,6 +1343,7 @@ export class EditNodeModal {
     if (this.imagePreviewEmptyEl) this.imagePreviewEmptyEl.textContent = tr('edit_modal_image_empty');
     if (this.cropBtnEl) this.cropBtnEl.textContent = tr('edit_modal_crop_image');
     if (this.replaceBtnEl) this.replaceBtnEl.textContent = tr('edit_modal_replace_image');
+    if (this.openFullImageBtnEl) this.openFullImageBtnEl.textContent = tr('file_viewer_open_full');
     for (const s of STATUSES) {
       const b = this.statusBtnEls[s];
       if (b && b.lastChild) b.lastChild.textContent = this._statusLabel(s);
@@ -1162,6 +1351,10 @@ export class EditNodeModal {
     if (this.parentSelectEl && this.parentSelectEl.options.length > 0) {
       this.parentSelectEl.options[0].textContent = tr('edit_modal_parent_none');
     }
+    if (this.previewLabelEl) this.previewLabelEl.textContent = tr('file_preview_label');
+    if (this.previewTabRenderEl) this.previewTabRenderEl.textContent = tr('file_viewer_render');
+    if (this.previewTabSourceEl) this.previewTabSourceEl.textContent = tr('file_viewer_source');
+    if (this.previewOpenFullEl) this.previewOpenFullEl.textContent = tr('file_viewer_open_full');
     this._refreshLockButton();
   }
 

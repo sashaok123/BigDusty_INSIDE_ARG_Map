@@ -14,6 +14,9 @@ export const ALLOWED_AUDIO_MIMES = new Set([
 export const ALLOWED_DOC_MIMES = new Set([
   'text/html', 'text/plain', 'text/markdown', 'text/csv',
   'application/json', 'application/xml', 'text/xml', 'application/pdf',
+  'text/css', 'application/javascript', 'text/javascript',
+  'text/x-python', 'application/x-python',
+  'application/x-sh', 'text/x-shellscript',
 ]);
 export const ALLOWED_MIMES = new Set([
   ...ALLOWED_IMAGE_MIMES, ...ALLOWED_VIDEO_MIMES, ...ALLOWED_AUDIO_MIMES, ...ALLOWED_DOC_MIMES,

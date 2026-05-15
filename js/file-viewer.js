@@ -1,68 +1,13 @@
-/* Modal viewer for HTML / plain text / markdown / JSON / XML / CSV / PDF.
-   Lazy: fetches the file body only on open. Renders an iframe sandbox for
-   HTML (with Render/Source tabs), pretty-printed JSON, syntax-highlighted
-   text, or an <embed> for PDFs. */
+/* Modal viewer for HTML / plain text / markdown / JSON / XML / CSV / PDF
+   and binary files. Delegates rendering to file-renderers.js. Lazy: fetches
+   the file body on open. HTML has Render/Source tabs; binary mimes fall
+   back to a hex viewer. */
 
 import { tr } from './i18n.js';
-
-const TEXT_LIKE = new Set(['text/plain', 'text/markdown', 'text/csv', 'application/xml', 'text/xml']);
-
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
-
-function colourTokens(text, mime) {
-  if (mime === 'application/json') {
-    let html = '';
-    const re = /("(?:\\.|[^"\\])*")(\s*:)?|\b(true|false|null)\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|([{}\[\],:])|(\s+)|([^"\s{}\[\],:]+)/g;
-    let m;
-    while ((m = re.exec(text)) !== null) {
-      if (m[1]) {
-        const cls = m[2] ? 'fv-tok-key' : 'fv-tok-string';
-        html += `<span class="${cls}">${escapeHtml(m[1])}</span>${m[2] ? escapeHtml(m[2]) : ''}`;
-      } else if (m[3]) html += `<span class="fv-tok-bool">${escapeHtml(m[3])}</span>`;
-      else if (m[4]) html += `<span class="fv-tok-num">${escapeHtml(m[4])}</span>`;
-      else if (m[5]) html += `<span class="fv-tok-punct">${escapeHtml(m[5])}</span>`;
-      else if (m[6]) html += escapeHtml(m[6]);
-      else if (m[7]) html += escapeHtml(m[7]);
-    }
-    return html;
-  }
-  if (mime === 'application/xml' || mime === 'text/xml' || mime === 'text/html') {
-    let html = escapeHtml(text);
-    html = html.replace(/(&lt;\/?)([a-zA-Z][\w:-]*)/g, '$1<span class="fv-tok-tag">$2</span>');
-    html = html.replace(/(\s)([a-zA-Z][\w:-]*)(=)(&quot;[^&]*?&quot;)/g, '$1<span class="fv-tok-attr">$2</span>$3<span class="fv-tok-string">$4</span>');
-    return html;
-  }
-  let html = escapeHtml(text);
-  html = html.replace(/(^|[\s\(\[,])(-?\d+(?:\.\d+)?)/g, '$1<span class="fv-tok-num">$2</span>');
-  html = html.replace(/("(?:\\.|[^"\\])*")/g, '<span class="fv-tok-string">$1</span>');
-  html = html.replace(/('(?:\\.|[^'\\])*')/g, '<span class="fv-tok-string">$1</span>');
-  return html;
-}
-
-function renderJsonTree(obj, indent) {
-  const pad = '  '.repeat(indent);
-  if (obj === null) return `<span class="fv-tok-bool">null</span>`;
-  if (typeof obj === 'boolean') return `<span class="fv-tok-bool">${obj}</span>`;
-  if (typeof obj === 'number') return `<span class="fv-tok-num">${obj}</span>`;
-  if (typeof obj === 'string') return `<span class="fv-tok-string">${escapeHtml(JSON.stringify(obj))}</span>`;
-  if (Array.isArray(obj)) {
-    if (obj.length === 0) return '<span class="fv-tok-punct">[]</span>';
-    const sub = obj.map((v) => `${pad}  ${renderJsonTree(v, indent + 1)}`).join(',\n');
-    return `<span class="fv-tree-toggle" data-open="1">▾</span><span class="fv-tok-punct">[</span>\n${sub}\n${pad}<span class="fv-tok-punct">]</span>`;
-  }
-  if (typeof obj === 'object') {
-    const keys = Object.keys(obj);
-    if (keys.length === 0) return '<span class="fv-tok-punct">{}</span>';
-    const sub = keys.map((k) => {
-      const v = renderJsonTree(obj[k], indent + 1);
-      return `${pad}  <span class="fv-tok-key">"${escapeHtml(k)}"</span><span class="fv-tok-punct">:</span> ${v}`;
-    }).join(',\n');
-    return `<span class="fv-tree-toggle" data-open="1">▾</span><span class="fv-tok-punct">{</span>\n${sub}\n${pad}<span class="fv-tok-punct">}</span>`;
-  }
-  return escapeHtml(String(obj));
-}
+import {
+  renderHtmlInto, renderTextInto, renderJsonInto, renderPdfInto,
+  renderImageInto, renderHexInto, fetchAsText, fetchAsBytes, pickRenderer,
+} from './file-renderers.js';
 
 export class FileViewerModal {
   constructor() { this._build(); }
@@ -110,6 +55,7 @@ export class FileViewerModal {
     document.addEventListener('i18n:changed', () => this._retranslate());
     this._currentText = '';
     this._currentMime = '';
+    this._currentName = '';
   }
 
   _retranslate() {
@@ -130,27 +76,32 @@ export class FileViewerModal {
     this._currentMime = (node.mime || '').toLowerCase();
     this._currentUrl = node.file || (node.media && node.media.url) || '';
     if (this.titleEl) this.titleEl.textContent = this._currentName;
-    this.bodyEl.textContent = tr('audio_loading');
+    this.bodyEl.textContent = tr('file_preview_loading');
     this.overlay.classList.add('open');
-    if (this._currentMime === 'application/pdf') {
-      this._renderPdf(); this._setTabsVisible(false); return;
-    }
+    const kind = pickRenderer(this._currentMime, this._currentName);
+    if (kind === 'pdf') { renderPdfInto(this.bodyEl, this._currentUrl); this._setTabsVisible(false); return; }
+    if (kind === 'image') { renderImageInto(this.bodyEl, this._currentUrl, this._currentName); this._setTabsVisible(false); return; }
     try {
-      if (this._currentMime === 'text/html') {
-        this._currentText = await this._fetchText();
+      if (kind === 'html') {
+        this._currentText = await fetchAsText(this._currentUrl);
         this._setTabsVisible(true); this._setTab('render'); return;
       }
-      if (this._currentMime === 'application/json') {
-        this._currentText = await this._fetchText();
-        this._setTabsVisible(false); this._renderJson(this._currentText); return;
+      if (kind === 'json') {
+        this._currentText = await fetchAsText(this._currentUrl);
+        this._setTabsVisible(false); renderJsonInto(this.bodyEl, this._currentText); return;
       }
-      if (TEXT_LIKE.has(this._currentMime) || /^text\//.test(this._currentMime)) {
-        this._currentText = await this._fetchText();
-        this._setTabsVisible(false); this._renderText(this._currentText); return;
+      if (kind === 'text') {
+        this._currentText = await fetchAsText(this._currentUrl);
+        this._setTabsVisible(false);
+        renderTextInto(this.bodyEl, this._currentText, this._currentMime, this._currentName);
+        return;
       }
-      this.bodyEl.textContent = 'unsupported_mime';
+      const bytes = await fetchAsBytes(this._currentUrl);
+      this._currentBytes = bytes;
+      this._setTabsVisible(false);
+      renderHexInto(this.bodyEl, bytes, { onDownload: () => this._doDownload() });
     } catch (e) {
-      this.bodyEl.textContent = e && e.message ? e.message : 'fetch_failed';
+      this.bodyEl.textContent = (e && e.message) || tr('file_preview_fetch_failed');
     }
   }
 
@@ -158,17 +109,11 @@ export class FileViewerModal {
     if (this.overlay) this.overlay.classList.remove('open');
     this.bodyEl.innerHTML = '';
     this._currentText = '';
+    this._currentBytes = null;
   }
 
   _setTabsVisible(visible) {
     if (this.tabsEl) this.tabsEl.style.display = visible ? '' : 'none';
-  }
-
-  async _fetchText() {
-    if (!this._currentUrl) throw new Error('no url');
-    const res = await fetch(this._currentUrl, { cache: 'no-cache' });
-    if (!res.ok) throw new Error(`fetch ${res.status}`);
-    return await res.text();
   }
 
   _setTab(name) {
@@ -176,61 +121,9 @@ export class FileViewerModal {
     this.tabRenderBtn.classList.toggle('active', name === 'render');
     this.tabSourceBtn.classList.toggle('active', name === 'source');
     if (this._currentMime === 'text/html') {
-      if (name === 'render') this._renderHtml(this._currentText);
-      else this._renderText(this._currentText);
+      if (name === 'render') renderHtmlInto(this.bodyEl, this._currentText);
+      else renderTextInto(this.bodyEl, this._currentText, this._currentMime, this._currentName);
     }
-  }
-
-  _renderHtml(text) {
-    this.bodyEl.innerHTML = '';
-    const iframe = document.createElement('iframe');
-    iframe.sandbox = 'allow-same-origin';
-    iframe.style.cssText = 'width:100%;height:100%;border:0;background:#fff';
-    this.bodyEl.appendChild(iframe);
-    try {
-      const doc = iframe.contentDocument || (iframe.contentWindow && iframe.contentWindow.document);
-      if (doc) { doc.open(); doc.write(text); doc.close(); }
-    } catch (e) { void e; }
-  }
-
-  _renderText(text) {
-    this.bodyEl.innerHTML = '';
-    const pre = document.createElement('pre');
-    pre.className = 'fv-pre';
-    pre.innerHTML = colourTokens(text || '', this._currentMime);
-    this.bodyEl.appendChild(pre);
-  }
-
-  _renderJson(text) {
-    this.bodyEl.innerHTML = '';
-    let obj = null; let err = null;
-    try { obj = JSON.parse(text); } catch (e) { err = e; }
-    const pre = document.createElement('pre');
-    pre.className = 'fv-pre fv-json';
-    if (err) pre.innerHTML = `<span class="fv-tok-error">${escapeHtml(err.message)}</span>\n\n` + colourTokens(text || '', 'application/json');
-    else pre.innerHTML = renderJsonTree(obj, 0);
-    this.bodyEl.appendChild(pre);
-    pre.addEventListener('click', (e) => {
-      if (!e.target.classList.contains('fv-tree-toggle')) return;
-      const tog = e.target;
-      const open = tog.dataset.open === '1';
-      tog.dataset.open = open ? '0' : '1';
-      tog.textContent = open ? '▸' : '▾';
-      let next = tog.nextElementSibling;
-      while (next && !next.classList.contains('fv-tree-toggle-end')) {
-        next.style.display = open ? 'none' : '';
-        next = next.nextElementSibling;
-      }
-    });
-  }
-
-  _renderPdf() {
-    this.bodyEl.innerHTML = '';
-    const embed = document.createElement('embed');
-    embed.type = 'application/pdf';
-    embed.src = this._currentUrl;
-    embed.style.cssText = 'width:100%;height:100%';
-    this.bodyEl.appendChild(embed);
   }
 
   _doDownload() {

@@ -1001,6 +1001,48 @@ const _I18N_DATA = {
   file_viewer_copy:     ['Copy',           'Копировать',        'Kopieren',            'Copia',              'Kopiér'],
   file_viewer_download: ['Download',       'Скачать',           'Herunterladen',       'Scarica',            'Download'],
   file_viewer_close:    ['Close',          'Закрыть',           'Schließen',           'Chiudi',             'Luk'],
+  file_viewer_open_full: [
+    'Open full viewer',
+    'Открыть в полном просмотре',
+    'Vollansicht öffnen',
+    'Apri visualizzatore intero',
+    'Åbn fuld visning',
+  ],
+  file_preview_label: [
+    'Preview',
+    'Превью',
+    'Vorschau',
+    'Anteprima',
+    'Forhåndsvisning',
+  ],
+  file_preview_loading: [
+    'Loading preview...',
+    'Загрузка превью...',
+    'Vorschau wird geladen...',
+    'Caricamento anteprima...',
+    'Indlæser forhåndsvisning...',
+  ],
+  file_preview_fetch_failed: [
+    'Failed to load file',
+    'Не удалось загрузить файл',
+    'Datei konnte nicht geladen werden',
+    'Impossibile caricare il file',
+    'Kunne ikke indlæse fil',
+  ],
+  file_preview_unsupported: [
+    'No inline preview for this type',
+    'Нет встроенного превью для этого типа',
+    'Keine Inline-Vorschau für diesen Typ',
+    'Nessuna anteprima inline per questo tipo',
+    'Ingen indlejret forhåndsvisning for denne type',
+  ],
+  file_preview_hex_truncated: [
+    'Showing first {shown} of {total}',
+    'Показано первые {shown} из {total}',
+    'Erste {shown} von {total} angezeigt',
+    'Mostrati primi {shown} di {total}',
+    'Viser første {shown} af {total}',
+  ],
 
   upload_compressing_toast: [
     'Compressing {from}...',

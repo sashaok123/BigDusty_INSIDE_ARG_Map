@@ -71,7 +71,13 @@ export function isAudioNode(n) {
   return !!(n.media && n.media.kind === 'audio');
 }
 
-const DOC_MIMES = new Set(['text/html', 'text/plain', 'text/markdown', 'text/csv', 'application/json', 'application/xml', 'text/xml', 'application/pdf']);
+const DOC_MIMES = new Set([
+  'text/html', 'text/plain', 'text/markdown', 'text/csv',
+  'application/json', 'application/xml', 'text/xml', 'application/pdf',
+  'text/css', 'application/javascript', 'text/javascript',
+  'text/x-python', 'application/x-python',
+  'application/x-sh', 'text/x-shellscript',
+]);
 
 export function isDocumentNode(n) {
   if (!n) return false;

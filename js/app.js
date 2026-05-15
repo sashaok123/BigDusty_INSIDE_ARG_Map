@@ -1115,6 +1115,7 @@ function setupEditNodeModal() {
       setTimeout(() => URL.revokeObjectURL(url), 200);
       toast(tr('toast_md_downloaded', { filename: `${slug}.md` }));
     },
+    onOpenFullViewer: (view) => { if (fileViewerModal && view) fileViewerModal.open(view); },
   });
   const closeBtn = $('panel-close');
   if (closeBtn) closeBtn.addEventListener('click', () => editNodeModal && editNodeModal.requestClose());
