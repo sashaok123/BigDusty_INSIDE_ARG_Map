@@ -141,12 +141,18 @@ async def get_image(
     record = await db.scalar(select(CanvasImage).where(CanvasImage.id == image_id))
     if record is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
+    mime = (record.mime or "").lower()
+    is_inline = mime.startswith("image/") or mime == "application/pdf"
+    headers = {
+        "Cache-Control": "public, max-age=31536000, immutable",
+        "Content-Length": str(record.size),
+        "X-Image-Sha256": record.sha256,
+        "X-Content-Type-Options": "nosniff",
+    }
+    if not is_inline:
+        headers["Content-Disposition"] = "attachment"
     return Response(
         content=record.data,
         media_type=record.mime,
-        headers={
-            "Cache-Control": "public, max-age=31536000, immutable",
-            "Content-Length": str(record.size),
-            "X-Image-Sha256": record.sha256,
-        },
+        headers=headers,
     )

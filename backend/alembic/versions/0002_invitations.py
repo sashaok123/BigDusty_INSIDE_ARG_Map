@@ -21,23 +21,38 @@ def _uuid_col() -> sa.types.TypeEngine:
     return postgresql.UUID(as_uuid=True).with_variant(sa.String(36), "sqlite")
 
 
+def _has_table(name: str) -> bool:
+    return sa.inspect(op.get_bind()).has_table(name)
+
+
+def _has_index(table: str, index_name: str) -> bool:
+    insp = sa.inspect(op.get_bind())
+    if not insp.has_table(table):
+        return False
+    return any(ix["name"] == index_name for ix in insp.get_indexes(table))
+
+
 def upgrade() -> None:
-    op.create_table(
-        "invitations",
-        sa.Column("id", _uuid_col(), primary_key=True, nullable=False),
-        sa.Column("token", sa.String(64), nullable=False),
-        sa.Column("username", sa.String(64), nullable=False),
-        sa.Column("username_display", sa.String(64), nullable=False),
-        sa.Column("created_by_user_id", _uuid_col(), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
-        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("used_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("is_admin_initial", sa.Boolean(), nullable=False, server_default=sa.text("false")),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.UniqueConstraint("token", name="uq_invitations_token"),
-    )
-    op.create_index("ix_invitations_token", "invitations", ["token"], unique=True)
+    if not _has_table("invitations"):
+        op.create_table(
+            "invitations",
+            sa.Column("id", _uuid_col(), primary_key=True, nullable=False),
+            sa.Column("token", sa.String(64), nullable=False),
+            sa.Column("username", sa.String(64), nullable=False),
+            sa.Column("username_display", sa.String(64), nullable=False),
+            sa.Column("created_by_user_id", _uuid_col(), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+            sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
+            sa.Column("used_at", sa.DateTime(timezone=True), nullable=True),
+            sa.Column("is_admin_initial", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+            sa.UniqueConstraint("token", name="uq_invitations_token"),
+        )
+    if not _has_index("invitations", "ix_invitations_token"):
+        op.create_index("ix_invitations_token", "invitations", ["token"], unique=True)
 
 
 def downgrade() -> None:
-    op.drop_index("ix_invitations_token", table_name="invitations")
-    op.drop_table("invitations")
+    if _has_index("invitations", "ix_invitations_token"):
+        op.drop_index("ix_invitations_token", table_name="invitations")
+    if _has_table("invitations"):
+        op.drop_table("invitations")

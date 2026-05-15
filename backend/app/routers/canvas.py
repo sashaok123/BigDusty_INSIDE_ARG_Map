@@ -274,15 +274,22 @@ async def canvas_socket(
     import json as _json
 
     factory = get_session_factory()
+    revision = 0
+    authed_username: str | None = None
     async with factory() as db:
         canvas = await db.scalar(select(Canvas).where(Canvas.id == canvas_id))
-    if canvas is None:
-        await ws.close(code=4404)
-        return
-    await _resolve_ws_user(token)
+        if canvas is None:
+            await ws.close(code=4404)
+            return
+        revision = canvas.revision
+        user_id = await _resolve_ws_user(token)
+        if user_id is not None:
+            user = await db.scalar(select(User).where(User.id == user_id))
+            if user is not None:
+                authed_username = user.username_display or user.username
     await manager.connect(canvas_id, ws)
     try:
-        await ws.send_json({"type": "hello", "revision": canvas.revision})
+        await ws.send_json({"type": "hello", "revision": revision})
         await ws.send_json({"type": "presence", "users": manager.presence_users(canvas_id)})
         while True:
             raw = await ws.receive_text()
@@ -295,9 +302,10 @@ async def canvas_socket(
             ptype = payload.get("type")
             if ptype == "presence_hello":
                 cid = payload.get("client_id")
-                uname = payload.get("username") or "anonymous"
-                if isinstance(cid, str) and cid:
-                    await manager.register_presence(canvas_id, ws, cid, str(uname))
+                if not isinstance(cid, str) or not cid:
+                    continue
+                uname = authed_username if authed_username else "anonymous"
+                await manager.register_presence(canvas_id, ws, cid, uname)
     except WebSocketDisconnect:
         pass
     finally:

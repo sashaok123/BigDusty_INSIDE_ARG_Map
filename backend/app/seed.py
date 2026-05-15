@@ -26,6 +26,11 @@ async def seed_initial_admin(db: AsyncSession) -> None:
     password = settings.initial_admin_password
     generated = False
     if not password:
+        if settings.env == "production":
+            raise RuntimeError(
+                "INITIAL_ADMIN_PASSWORD must be set in production. "
+                "No admin user exists and auto-generated passwords are not logged here."
+            )
         password = secrets.token_urlsafe(18)
         generated = True
     user = User(
@@ -37,14 +42,16 @@ async def seed_initial_admin(db: AsyncSession) -> None:
     db.add(user)
     await db.commit()
     banner = "=" * 72
-    note = "auto-generated" if generated else "from INITIAL_ADMIN_PASSWORD env"
-    logger.warning(banner)
-    logger.warning(
-        "INITIAL ADMIN CREATED. username: %s | password: %s (%s). "
-        "Change it immediately via POST /auth/change_password.",
-        username_display, password, note,
-    )
-    logger.warning(banner)
+    if generated and settings.env != "production":
+        logger.warning(banner)
+        logger.warning(
+            "INITIAL ADMIN CREATED (dev only). username: %s | password: %s. "
+            "Change it immediately via POST /auth/change_password.",
+            username_display, password,
+        )
+        logger.warning(banner)
+    else:
+        logger.info("Initial admin '%s' created (password from INITIAL_ADMIN_PASSWORD).", username_display)
 
 
 async def seed_initial_canvas(db: AsyncSession) -> None:
