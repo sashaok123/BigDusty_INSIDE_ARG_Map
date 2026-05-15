@@ -1613,6 +1613,25 @@ export class Viewer {
           };
           return;
         }
+        for (const b of this.blocks) {
+          if (!this.selection.has(b.id) && this.activeId !== b.id) continue;
+          if (this._isLocked(b.id)) continue;
+          const handle = this.handleAtImagePoint(b, img);
+          if (handle) {
+            this.dragState = {
+              kind: 'resize',
+              handle,
+              id: b.id,
+              origRect: { ...b.rect },
+              startImg: img,
+              startScreen: screen,
+              shiftKey: !!ev.shiftKey,
+              moved: false,
+              target: 'block',
+            };
+            return;
+          }
+        }
         const blk = this.blockAtImagePoint(img);
         if (blk) {
           const locked = this._isLocked(blk.id);
