@@ -10,6 +10,7 @@ const MIN_RECT_PX = 16;
 const HANDLE_KEYS = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
 
 const ASPECT_PRESETS = [
+  { id: 'original', ratio: null },
   { id: 'free', ratio: null },
   { id: '1:1', ratio: 1 },
   { id: '4:3', ratio: 4 / 3 },
@@ -66,7 +67,7 @@ export class CropOverlay {
     this.onApply = opts.onApply || (() => {});
     this.onCancel = opts.onCancel || (() => {});
     this.active = false;
-    this.aspectId = 'free';
+    this.aspectId = 'original';
     this._buildDom();
   }
 
@@ -100,7 +101,9 @@ export class CropOverlay {
     for (const a of ASPECT_PRESETS) {
       const opt = document.createElement('option');
       opt.value = a.id;
-      opt.textContent = a.id === 'free' ? tr('crop_ratio_free') : a.id;
+      if (a.id === 'free') opt.textContent = tr('crop_ratio_free');
+      else if (a.id === 'original') opt.textContent = tr('crop_ratio_original');
+      else opt.textContent = a.id;
       ratioSel.appendChild(opt);
     }
     ratioSel.addEventListener('change', () => {
@@ -153,6 +156,7 @@ export class CropOverlay {
       const opts = Array.from(this.ratioSelEl.querySelectorAll('option'));
       for (const o of opts) {
         if (o.value === 'free') o.textContent = tr('crop_ratio_free');
+        else if (o.value === 'original') o.textContent = tr('crop_ratio_original');
       }
     }
   }
@@ -172,8 +176,8 @@ export class CropOverlay {
     if (this.imgW <= 0 || this.imgH <= 0) { this._cancel(); return; }
     this.rect = { x: 0, y: 0, w: this.imgW, h: this.imgH };
     this.drag = null;
-    this.aspectId = 'free';
-    if (this.ratioSelEl) this.ratioSelEl.value = 'free';
+    this.aspectId = 'original';
+    if (this.ratioSelEl) this.ratioSelEl.value = 'original';
     if (this.viewer) this.viewer.croppingActive = true;
     this.rootEl.style.display = 'block';
     window.addEventListener('keydown', this._onKey, true);
@@ -328,6 +332,10 @@ export class CropOverlay {
   }
 
   _currentRatio() {
+    if (this.aspectId === 'original') {
+      if (this.imgW > 0 && this.imgH > 0) return this.imgW / this.imgH;
+      return null;
+    }
     const preset = ASPECT_PRESETS.find((p) => p.id === this.aspectId);
     return preset && preset.ratio ? preset.ratio : null;
   }

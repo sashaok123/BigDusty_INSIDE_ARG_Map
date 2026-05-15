@@ -805,6 +805,7 @@ const _I18N_DATA = {
   ],
   crop_ratio_label: ['Ratio', 'Соотношение', 'Verhältnis', 'Proporzioni', 'Forhold'],
   crop_ratio_free: ['Free', 'Свободно', 'Frei', 'Libero', 'Fri'],
+  crop_ratio_original: ['Original', 'Оригинал', 'Original', 'Originale', 'Original'],
 
   ctx_view_image:    ['View image',     'Открыть изображение',     'Bild anzeigen',     'Apri immagine',     'Vis billede'],
   ctx_view_as_code:  ['View as code',   'Открыть как код',         'Als Code anzeigen', 'Apri come codice',  'Vis som kode'],
