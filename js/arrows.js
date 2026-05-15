@@ -107,6 +107,7 @@ export class ArrowLayer {
   _installRoot() {
     while (this.svg.firstChild) this.svg.removeChild(this.svg.firstChild);
     this.defs = document.createElementNS(SVG_NS, 'defs');
+    this._customMarkerCache = new Set();
     for (const c of COLOURS) {
       const mk = document.createElementNS(SVG_NS, 'marker');
       mk.setAttribute('id', `arrowhead-${c}`);
@@ -135,6 +136,38 @@ export class ArrowLayer {
     this.previewGroup = document.createElementNS(SVG_NS, 'g');
     this.previewGroup.setAttribute('id', 'arrow-preview');
     this.world.appendChild(this.previewGroup);
+  }
+
+  _ensureCustomMarker(hex) {
+    const key = String(hex).toLowerCase();
+    if (!/^#[0-9a-f]{3,8}$/i.test(key)) return null;
+    const id = `arrowhead-x${key.slice(1)}`;
+    if (this._customMarkerCache && this._customMarkerCache.has(id)) return id;
+    const mk = document.createElementNS(SVG_NS, 'marker');
+    mk.setAttribute('id', id);
+    mk.setAttribute('viewBox', '0 0 10 10');
+    mk.setAttribute('refX', '8');
+    mk.setAttribute('refY', '5');
+    mk.setAttribute('markerWidth', '6');
+    mk.setAttribute('markerHeight', '6');
+    mk.setAttribute('orient', 'auto-start-reverse');
+    const poly = document.createElementNS(SVG_NS, 'path');
+    poly.setAttribute('d', 'M 0 0 L 10 5 L 0 10 Z');
+    poly.setAttribute('fill', key);
+    mk.appendChild(poly);
+    this.defs.appendChild(mk);
+    if (this._customMarkerCache) this._customMarkerCache.add(id);
+    return id;
+  }
+
+  _markerEndUrlFor(edge, fallbackColour) {
+    const s = ensureStrokeShape(edge.stroke);
+    if (s.color !== 'auto') {
+      const id = this._ensureCustomMarker(s.color);
+      if (id) return `url(#${id})`;
+    }
+    const preset = COLOUR_VAR[fallbackColour] ? fallbackColour : 'accent';
+    return `url(#arrowhead-${preset})`;
   }
 
   _installEvents() {
@@ -576,7 +609,7 @@ export class ArrowLayer {
     path.setAttribute('d', d);
     path.setAttribute('fill', 'none');
     const stroke = strokeFor(edge, colour);
-    path.setAttribute('stroke', stroke.colour);
+    path.style.stroke = stroke.colour;
     path.setAttribute('stroke-linecap',  'round');
     path.setAttribute('stroke-linejoin', 'round');
     const selectedBoost = this.selectedId === edge.id ? 1.0 : 0;
@@ -585,7 +618,7 @@ export class ArrowLayer {
     const dash = dashFor(edge.style, scale);
     if (dash) path.setAttribute('stroke-dasharray', dash);
     if (!opts || !opts.isTrunk) {
-      path.setAttribute('marker-end', `url(#arrowhead-${colour})`);
+      path.setAttribute('marker-end', this._markerEndUrlFor(edge, colour));
     }
     if (opts && Number.isFinite(opts.opacity) && opts.opacity < 1) {
       path.setAttribute('opacity', String(opts.opacity));
@@ -594,7 +627,6 @@ export class ArrowLayer {
     path.style.cursor = this.mode === 'editor' ? 'pointer' : 'default';
     if (this.mode === 'editor') path.classList.add('arrow-path-interactive');
     if (this.selectedId === edge.id) {
-      path.setAttribute('filter', '');
       path.classList.add('arrow-selected-glow');
     }
     if (this.mode === 'editor') {
@@ -626,12 +658,11 @@ export class ArrowLayer {
     path.setAttribute('d', d);
     path.setAttribute('fill', 'none');
     const stroke = strokeFor(edge, colour);
-    const strokeColour = stroke.color === 'auto' ? (COLOUR_VAR[colour] || COLOUR_VAR.accent) : stroke.colour;
-    path.setAttribute('stroke', strokeColour);
+    path.style.stroke = stroke.colour;
     path.setAttribute('stroke-width', String((stroke.width * 0.9) / scale));
     path.setAttribute('stroke-linecap', 'round');
     path.setAttribute('stroke-linejoin', 'round');
-    path.setAttribute('marker-end', `url(#arrowhead-${COLOUR_VAR[colour] ? colour : 'accent'})`);
+    path.setAttribute('marker-end', this._markerEndUrlFor(edge, colour));
     const dash = dashFor(edge.style, scale);
     if (dash) path.setAttribute('stroke-dasharray', dash);
     if (Number.isFinite(opacity) && opacity < 1) path.setAttribute('opacity', String(opacity));

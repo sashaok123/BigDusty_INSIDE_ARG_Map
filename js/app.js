@@ -727,6 +727,9 @@ function setupViewer() {
     onSelectionChange: ({ ids }) => {
       state.selection = new Set(ids);
       refreshSelectionStatus();
+      if (ids.length === 0 && editNodeModal && editNodeModal.isOpen()) {
+        editNodeModal.requestClose();
+      }
     },
     onMarqueeSelect: ({ ids }) => {
       state.selection = new Set(ids);

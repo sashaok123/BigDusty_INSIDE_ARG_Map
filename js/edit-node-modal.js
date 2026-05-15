@@ -6,7 +6,10 @@
    ctx-menu Edit open the same panel. */
 
 import { tr, LANGS } from './i18n.js';
-import { STATUSES, statusVarName, isGroupNode, nodeMarkdown, isDocumentNode } from './nodes.js';
+import {
+  STATUSES, statusVarName, isGroupNode, nodeMarkdown, isDocumentNode,
+  isPuzzleNode, isStickyNode, isTextNode, isBlockNode, isVideoNode, isAudioNode,
+} from './nodes.js';
 import { renderMarkdown } from './markdown.js';
 import { translateMany, providerLabel } from './translate.js';
 import { getTranslationProvider } from './settings.js';
@@ -97,6 +100,11 @@ function el(tag, attrs, kids) {
   }
   if (kids) for (const k of kids) if (k) e.appendChild(k);
   return e;
+}
+
+function setDisp(node, visible) {
+  if (!node) return;
+  node.style.display = visible ? '' : 'none';
 }
 
 export class EditNodeModal {
@@ -445,28 +453,36 @@ export class EditNodeModal {
 
     this.rootEl = root;
     this.signinHintEl = signinHint;
+    this.titleFieldEl = titleField;
     this.titleLabelEl = titleLabel;
     this.titleInputEl = titleInput;
+    this.statusFieldEl = statusField;
     this.statusLabelEl = statusLabel;
     this.statusBtnEls = statusBtns;
+    this.tagsFieldEl = tagsField;
     this.tagsLabelEl = tagsLabel;
     this.tagsHostEl = tagsHost;
     this.tagsInputEl = tagsInput;
     this.tagsDatalistEl = tagsDatalist;
+    this.bodyFieldEl = bodyField;
     this.bodyLabelEl = bodyLabel;
     this.bodyTabEditEl = tabEdit;
     this.bodyTabPreviewEl = tabPreview;
     this.mdInputEl = mdInput;
     this.previewEl = previewEl;
+    this.captionFieldEl = captionField;
     this.captionLabelEl = captionLabel;
     this.captionTextEl = captionTextIn;
     this.captionSideEls = sideBtns;
     this.captionOffsetEl = captionOffsetIn;
     this.captionOffsetValEl = captionOffsetVal;
+    this.colorFieldEl = colorField;
     this.colorLabelEl = colorLabel;
     this.colorBtnEls = colorBtns;
+    this.parentFieldEl = parentField;
     this.parentLabelEl = parentLabel;
     this.parentSelectEl = parentSel;
+    this.translationsFieldEl = translationsField;
     this.translationsLabelEl = translationsLabel;
     this.translationsRowsEl = translationsRows;
     this.translationsLangSelEl = translationsLangSel;
@@ -715,15 +731,8 @@ export class EditNodeModal {
     this._renderTranslations();
     this._renderBranches();
     const isImage = looksLikeImage(this._state);
-    this.imageFieldEl.style.display = isImage ? 'flex' : 'none';
     if (isImage) this._setImagePreview(this._state.file || '');
-    if (this.openFullImageBtnEl) {
-      this.openFullImageBtnEl.style.display = isImage && typeof this.onOpenFullViewer === 'function' ? '' : 'none';
-    }
-    const isText = this._state.kind === 'text';
-    if (this.textStyleFieldEl) this.textStyleFieldEl.style.display = isText ? 'flex' : 'none';
     const isVideo = this._state.kind === 'video' || (this._state.media && (this._state.media.kind === 'youtube' || this._state.media.kind === 'vimeo'));
-    if (this.videoFieldEl) this.videoFieldEl.style.display = isVideo ? 'flex' : 'none';
     if (isVideo) {
       this.videoInputEl.value = (this._state.media && this._state.media.url) || '';
       if (this.videoHintEl) {
@@ -732,6 +741,7 @@ export class EditNodeModal {
         } else this.videoHintEl.textContent = '';
       }
     }
+    this._applyKindVisibility();
     this._readonly = !this.canEdit();
     if (this.rootEl) this.rootEl.classList.toggle('em-readonly', this._readonly);
     if (this.signinHintEl) this.signinHintEl.classList.toggle('visible', this._readonly);
@@ -770,7 +780,7 @@ export class EditNodeModal {
     const s = this._state;
     if (!s || !s.file) { field.style.display = 'none'; host.innerHTML = ''; return; }
     const isImage = looksLikeImage(s);
-    const isDoc = isDocumentNode({ kind: s.kind, mime: s.mime });
+    const isDoc = s.kind === 'document';
     if (!isDoc || isImage) { field.style.display = 'none'; host.innerHTML = ''; return; }
     field.style.display = 'flex';
     const mime = (s.mime || '').toLowerCase();
@@ -920,6 +930,9 @@ export class EditNodeModal {
     this._state.color = view.color || '';
     this._state.parent = view.parent || '';
     this._state.caption = view.caption ? { ...view.caption } : this._state.caption;
+    if (view.kind) this._state.kind = view.kind;
+    if (view.mime !== undefined) this._state.mime = view.mime;
+    if (view.media !== undefined) this._state.media = view.media ? { ...view.media } : null;
     this._tags = [...this._state.tags];
     this._lastCommittedLabel = this._state.title;
     this._lastCommittedTagsKey = this._tagsKey(this._tags);
@@ -932,6 +945,7 @@ export class EditNodeModal {
     this._renderBranches();
     this._setColor(this._state.color, true);
     this._refreshLockButton();
+    this._applyKindVisibility();
     this._suppressInlineCommits = false;
   }
 
@@ -987,6 +1001,42 @@ export class EditNodeModal {
       b.classList.toggle('active', k === c);
     });
     void silent;
+  }
+
+  _applyKindVisibility() {
+    const s = this._state;
+    if (!s) return;
+    const probe = { kind: s.kind, type: s.type, mime: s.mime, media: s.media };
+    const isImage = looksLikeImage(s);
+    const isBlock = isBlockNode(probe);
+    const isText = isTextNode(probe);
+    const isSticky = isStickyNode(probe);
+    const isPuzzle = isPuzzleNode(probe);
+    const isGroup = isGroupNode(probe);
+    const isVideo = isVideoNode(probe);
+    const isAudio = isAudioNode(probe);
+    const isDocument = isDocumentNode(probe);
+    const showStatus = isBlock || isPuzzle || isVideo || isAudio || isDocument;
+    const showBody = isText || isSticky || isPuzzle || isVideo || isAudio;
+    const showCaption = (isBlock && isImage) || isPuzzle || isVideo || isDocument;
+    const showParent = !isGroup;
+    const showTextStyle = isText;
+    const showVideo = isVideo;
+    const showImage = isBlock && isImage;
+    const showExportMd = isText || isSticky || isPuzzle;
+    const showTranslations = isText || isSticky || isPuzzle || isVideo || isAudio;
+    setDisp(this.statusFieldEl, showStatus);
+    setDisp(this.bodyFieldEl, showBody);
+    setDisp(this.captionFieldEl, showCaption);
+    setDisp(this.parentFieldEl, showParent);
+    setDisp(this.textStyleFieldEl, showTextStyle);
+    setDisp(this.videoFieldEl, showVideo);
+    setDisp(this.imageFieldEl, showImage);
+    setDisp(this.translationsFieldEl, showTranslations);
+    if (this.exportBtnEl) this.exportBtnEl.style.display = showExportMd ? '' : 'none';
+    if (this.openFullImageBtnEl) {
+      this.openFullImageBtnEl.style.display = showImage && typeof this.onOpenFullViewer === 'function' ? '' : 'none';
+    }
   }
 
   _setBodyTab(t) {
@@ -1133,6 +1183,7 @@ export class EditNodeModal {
     const host = el('div', { class: 'em-branches-host' });
     field.appendChild(lbl);
     field.appendChild(host);
+    this.branchesFieldEl = field;
     this._branchesHostEl = host;
     this._branchesLabelEl = lbl;
     return field;

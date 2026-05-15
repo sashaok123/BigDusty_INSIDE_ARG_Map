@@ -141,8 +141,8 @@ body.space-held #viewport #arrow-layer * { pointer-events: none !important; curs
 }
 
 .arrow-selected-glow {
-  stroke: var(--accent);
   paint-order: stroke fill;
+  filter: drop-shadow(0 0 3px var(--accent));
 }
 
 .arrow-props-row-mini { margin-bottom: 4px; }

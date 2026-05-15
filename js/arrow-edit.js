@@ -231,21 +231,26 @@ function buildStrokeRow(edge, onPatch) {
   const wrap = document.createElement('div');
   wrap.className = 'arrow-props-row arrow-props-row-block arrow-props-stroke';
 
+  const widthBtns = [];
   const widthRow = document.createElement('div');
   widthRow.className = 'arrow-props-label-style-row';
   const widthLab = document.createElement('span');
   widthLab.className = 'arrow-props-mini-label';
   widthLab.textContent = tr('edge_stroke_width');
   widthRow.appendChild(widthLab);
-  const cur = popoverStrokeWidth(edge);
+  const curW = popoverStrokeWidth(edge);
   for (const w of STROKE_WIDTH_PRESETS) {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'arrow-props-mini-btn arrow-props-stroke-width-btn';
     b.textContent = String(w);
-    if (w === cur) b.classList.add('active');
-    b.addEventListener('click', () => onPatch({ strokeWidth: w }));
+    if (w === curW) b.classList.add('active');
+    b.addEventListener('click', () => {
+      onPatch({ strokeWidth: w });
+      syncWidthActive(w);
+    });
     widthRow.appendChild(b);
+    widthBtns.push({ w, el: b });
   }
   wrap.appendChild(widthRow);
 
@@ -256,24 +261,40 @@ function buildStrokeRow(edge, onPatch) {
   colorLab.textContent = tr('edge_stroke_color');
   colorRow.appendChild(colorLab);
   const currentColor = popoverStrokeColor(edge);
+  const colorBtns = [];
   const autoBtn = document.createElement('button');
   autoBtn.type = 'button';
   autoBtn.className = 'arrow-props-mini-btn';
   autoBtn.textContent = 'A';
   autoBtn.title = tr('arrow_label_color_auto');
   if (currentColor === 'auto') autoBtn.classList.add('active');
-  autoBtn.addEventListener('click', () => onPatch({ strokeColor: 'auto' }));
+  autoBtn.addEventListener('click', () => {
+    onPatch({ strokeColor: 'auto' });
+    syncColorActive('auto');
+  });
   colorRow.appendChild(autoBtn);
+  colorBtns.push({ value: 'auto', el: autoBtn });
   for (const c of STROKE_COLOR_SWATCHES_EDIT) {
     const sw = document.createElement('button');
     sw.type = 'button';
     sw.className = 'arrow-props-color-swatch';
     sw.style.background = c;
     if (currentColor === c) sw.classList.add('active');
-    sw.addEventListener('click', () => onPatch({ strokeColor: c }));
+    sw.addEventListener('click', () => {
+      onPatch({ strokeColor: c });
+      syncColorActive(c);
+    });
     colorRow.appendChild(sw);
+    colorBtns.push({ value: c, el: sw });
   }
   wrap.appendChild(colorRow);
+
+  function syncWidthActive(active) {
+    for (const it of widthBtns) it.el.classList.toggle('active', it.w === active);
+  }
+  function syncColorActive(active) {
+    for (const it of colorBtns) it.el.classList.toggle('active', it.value === active);
+  }
 
   return wrap;
 }
@@ -504,6 +525,41 @@ export class EdgePropsPopover {
 
     document.body.appendChild(popover);
     this.el = popover;
+    this._installDismissHandlers();
+  }
+
+  _installDismissHandlers() {
+    this._removeDismissHandlers();
+    const onDocDown = (ev) => {
+      if (!this.el) return;
+      if (this.el.contains(ev.target)) return;
+      const t = ev.target;
+      if (t && t.classList && t.classList.contains('arrow-path-interactive')) return;
+      if (t && typeof t.closest === 'function' && t.closest('.arrow-path-interactive')) return;
+      this.layer._deselect();
+    };
+    const onKey = (ev) => {
+      if (ev.key === 'Escape' && this.el) {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        this.layer._deselect();
+      }
+    };
+    this._onDocDown = onDocDown;
+    this._onKey = onKey;
+    document.addEventListener('mousedown', onDocDown, true);
+    document.addEventListener('keydown', onKey, true);
+  }
+
+  _removeDismissHandlers() {
+    if (this._onDocDown) {
+      document.removeEventListener('mousedown', this._onDocDown, true);
+      this._onDocDown = null;
+    }
+    if (this._onKey) {
+      document.removeEventListener('keydown', this._onKey, true);
+      this._onKey = null;
+    }
   }
 
   hide() {
@@ -511,6 +567,7 @@ export class EdgePropsPopover {
       try { this._labelDebounceCancel(); } catch (e) { void e; }
       this._labelDebounceCancel = null;
     }
+    this._removeDismissHandlers();
     if (this.el && this.el.parentNode) this.el.parentNode.removeChild(this.el);
     this.el = null;
   }
