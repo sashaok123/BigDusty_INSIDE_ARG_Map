@@ -232,3 +232,17 @@ class GitHubResyncRequest(BaseModel):
 class GitHubResyncResult(BaseModel):
     revision: int
     data: dict[str, Any]
+
+
+class FetchUrlMetaRequest(BaseModel):
+    url: str = Field(..., min_length=4, max_length=4096)
+
+
+class FetchUrlMetaResult(BaseModel):
+    url: str
+    title: str | None = None
+    description: str | None = None
+    image_url: str | None = None
+    fetched_at: str
+    status: Literal["ok", "failed"] = "ok"
+    error: str | None = None

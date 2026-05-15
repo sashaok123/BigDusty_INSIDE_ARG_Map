@@ -165,6 +165,7 @@ export class KeyboardShortcuts {
     if (k === 'f' || k === 'F') {
       if (meta) return;
       ev.preventDefault();
+      if (this._call('onFocusMode', ev)) return;
       this._call('onFilterCycle', ev);
       return;
     }
@@ -180,7 +181,8 @@ export class KeyboardShortcuts {
       return;
     }
     if (k === 'Tab') {
-      if (this._call('onCreateChild', ev)) ev.preventDefault();
+      const handler = ev.shiftKey ? 'onTabSibling' : 'onTabChild';
+      if (this._call(handler, ev)) ev.preventDefault();
       return;
     }
     if (k === 'Enter') {
@@ -279,8 +281,10 @@ export class KeyboardShortcuts {
         { keys: ['E'],           descKey: 'shortcut_desc_mode' },
       ]},
       { titleKey: 'shortcut_section_editing', rows: [
-        { keys: ['Tab'],         descKey: 'shortcut_desc_child' },
+        { keys: ['Tab'],         descKey: 'shortcut_desc_tab_child' },
+        { keys: ['Shift', 'Tab'],descKey: 'shortcut_desc_tab_sibling' },
         { keys: ['Enter'],       descKey: 'shortcut_desc_sibling' },
+        { keys: ['F'],           descKey: 'shortcut_desc_focus_mode' },
         { keys: ['Del'],         descKey: 'shortcut_desc_delete' },
         { keys: ['Ctrl', 'A'],   descKey: 'shortcut_desc_select_all' },
         { keys: ['Ctrl', 'C'],   descKey: 'shortcut_desc_copy' },

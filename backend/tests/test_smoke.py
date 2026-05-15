@@ -1078,3 +1078,91 @@ async def test_image_restore_no_original_returns_404(client, admin_token):
     assert resp.status_code == 404
     body = resp.json()
     assert body.get("detail") == "no_original"
+
+
+async def test_fetch_url_meta_parses_html(client, admin_token, monkeypatch):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    sample_html = (
+        b"<!doctype html><html><head>"
+        b"<title>Inside ARG site</title>"
+        b"<meta name=\"description\" content=\"Top-level description.\">"
+        b"<meta property=\"og:title\" content=\"OG Inside\">"
+        b"<meta property=\"og:image\" content=\"/banner.png\">"
+        b"<meta property=\"og:description\" content=\"Open Graph description.\">"
+        b"</head><body>hi</body></html>"
+    )
+
+    class _FakeResponse:
+        def __init__(self) -> None:
+            self.status_code = 200
+            self.text = sample_html.decode()
+            self.headers = {"content-type": "text/html; charset=utf-8"}
+            self.url = "https://example.com/landing"
+
+    class _FakeClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        async def __aenter__(self) -> "_FakeClient":
+            return self
+
+        async def __aexit__(self, *_exc) -> None:
+            return None
+
+        async def get(self, _url: str) -> "_FakeResponse":
+            return _FakeResponse()
+
+    import httpx
+    monkeypatch.setattr(httpx, "AsyncClient", _FakeClient)
+
+    resp = await client.post(
+        "/admin/fetch_url_meta",
+        json={"url": "https://example.com/landing"},
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["title"] == "OG Inside"
+    assert body["description"] == "Open Graph description."
+    assert body["image_url"] == "https://example.com/banner.png"
+    assert body["status"] == "ok"
+    assert body["fetched_at"]
+
+
+async def test_fetch_url_meta_requires_admin(client):
+    resp = await client.post(
+        "/admin/fetch_url_meta",
+        json={"url": "https://example.com"},
+    )
+    assert resp.status_code == 401
+
+
+async def test_fetch_url_meta_handles_network_error(client, admin_token, monkeypatch):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+
+    class _FakeClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        async def __aenter__(self) -> "_FakeClient":
+            return self
+
+        async def __aexit__(self, *_exc) -> None:
+            return None
+
+        async def get(self, _url: str):
+            import httpx as _httpx
+            raise _httpx.ConnectError("boom")
+
+    import httpx
+    monkeypatch.setattr(httpx, "AsyncClient", _FakeClient)
+
+    resp = await client.post(
+        "/admin/fetch_url_meta",
+        json={"url": "https://example.invalid/x"},
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["status"] == "failed"
+    assert body["title"] is None

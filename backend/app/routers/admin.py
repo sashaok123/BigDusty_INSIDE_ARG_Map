@@ -1,10 +1,13 @@
 """Admin endpoints for managing users and invitations."""
 
+import re
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
+from urllib.parse import urljoin, urlparse
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -25,6 +28,8 @@ from ..schemas import (
     ActivityEntryOut,
     AuditEntryOut,
     CreateUserRequest,
+    FetchUrlMetaRequest,
+    FetchUrlMetaResult,
     GitHubImportPlan,
     GitHubImportRequest,
     GitHubResyncRequest,
@@ -513,3 +518,147 @@ async def resync_node_from_github(
         },
     )
     return GitHubResyncResult(revision=canvas.revision, data=updated)
+
+
+_HTML_TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
+_META_RE = re.compile(
+    r"<meta\s+([^>]*?)/?>",
+    re.IGNORECASE | re.DOTALL,
+)
+_ATTR_RE = re.compile(
+    r'([A-Za-z:_-]+)\s*=\s*("([^"]*)"|\'([^\']*)\'|([^\s>]+))',
+    re.IGNORECASE,
+)
+
+_BROWSER_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+)
+
+
+def _unescape_html_entities(s: str) -> str:
+    if not s:
+        return s
+    s = (
+        s.replace("&amp;", "&")
+        .replace("&quot;", '"')
+        .replace("&#39;", "'")
+        .replace("&apos;", "'")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&nbsp;", " ")
+    )
+    return s.strip()
+
+
+def _parse_meta_attrs(raw: str) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for m in _ATTR_RE.finditer(raw):
+        key = m.group(1).lower()
+        value = m.group(3) or m.group(4) or m.group(5) or ""
+        out[key] = value
+    return out
+
+
+def _extract_html_meta(html: str) -> dict[str, str | None]:
+    title_m = _HTML_TITLE_RE.search(html)
+    title = _unescape_html_entities(re.sub(r"\s+", " ", title_m.group(1))) if title_m else None
+    og_title = None
+    og_image = None
+    og_description = None
+    description = None
+    for m in _META_RE.finditer(html):
+        attrs = _parse_meta_attrs(m.group(1))
+        name = (attrs.get("name") or "").lower()
+        prop = (attrs.get("property") or "").lower()
+        content = attrs.get("content")
+        if not content:
+            continue
+        content = _unescape_html_entities(content)
+        if prop == "og:title" and not og_title:
+            og_title = content
+        elif prop == "og:image" and not og_image:
+            og_image = content
+        elif prop == "og:description" and not og_description:
+            og_description = content
+        elif name == "description" and not description:
+            description = content
+        elif name == "twitter:description" and not description:
+            description = content
+        elif name == "twitter:image" and not og_image:
+            og_image = content
+    return {
+        "title": og_title or title or None,
+        "description": og_description or description or None,
+        "image_url": og_image or None,
+    }
+
+
+@router.post("/fetch_url_meta", response_model=FetchUrlMetaResult)
+async def fetch_url_meta(payload: FetchUrlMetaRequest) -> FetchUrlMetaResult:
+    raw_url = (payload.url or "").strip()
+    if not raw_url:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty URL")
+    if not raw_url.startswith(("http://", "https://")):
+        raw_url = "https://" + raw_url
+    parsed = urlparse(raw_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid URL")
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        async with httpx.AsyncClient(
+            headers={
+                "User-Agent": _BROWSER_UA,
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+            },
+            follow_redirects=True,
+            timeout=8.0,
+        ) as client:
+            resp = await client.get(raw_url)
+    except (httpx.HTTPError, OSError) as exc:
+        return FetchUrlMetaResult(
+            url=raw_url,
+            title=None,
+            description=None,
+            image_url=None,
+            fetched_at=now,
+            status="failed",
+            error=str(exc)[:200],
+        )
+    if resp.status_code >= 400:
+        return FetchUrlMetaResult(
+            url=raw_url,
+            title=None,
+            description=None,
+            image_url=None,
+            fetched_at=now,
+            status="failed",
+            error=f"http_{resp.status_code}",
+        )
+    content_type = (resp.headers.get("content-type") or "").lower()
+    if "html" not in content_type and "xml" not in content_type:
+        return FetchUrlMetaResult(
+            url=str(resp.url),
+            title=None,
+            description=None,
+            image_url=None,
+            fetched_at=now,
+            status="ok",
+        )
+    body = resp.text[:262144]
+    meta = _extract_html_meta(body)
+    image_url = meta.get("image_url")
+    if image_url:
+        try:
+            image_url = urljoin(str(resp.url), image_url)
+        except ValueError:
+            image_url = None
+    return FetchUrlMetaResult(
+        url=str(resp.url),
+        title=meta.get("title"),
+        description=meta.get("description"),
+        image_url=image_url,
+        fetched_at=now,
+        status="ok",
+    )

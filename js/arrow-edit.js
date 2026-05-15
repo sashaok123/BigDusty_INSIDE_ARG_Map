@@ -7,6 +7,26 @@
 import { tr } from './i18n.js';
 import { rectOf, anchorWorld, perimeterProjection, rectContains, sideFromBinding, bindingPoint } from './bindings.js';
 import { buildMarkdownToolbar } from './md-toolbar.js';
+import { attachMentionAutocomplete } from './node-mention.js';
+
+function _mentionNodesFor(layer) {
+  return () => {
+    if (!layer || typeof layer.getNodes !== 'function') return [];
+    const map = layer.getNodes() || new Map();
+    const out = [];
+    for (const n of map.values()) {
+      if (!n || !n.id) continue;
+      out.push({
+        id: n.id,
+        slug: n.slug || n.id,
+        label: n.label || n.title || n.slug || n.id,
+        title: n.label || n.title || n.slug || n.id,
+        status: n.status || '',
+      });
+    }
+    return out;
+  };
+}
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const SNAP_PX = 40;
@@ -456,6 +476,7 @@ export class EdgePropsPopover {
     input.placeholder = tr('arrow_label_placeholder');
     const mdToolbarRef = buildMarkdownToolbar(() => input);
     labelRow.appendChild(mdToolbarRef.el);
+    attachMentionAutocomplete(input, _mentionNodesFor(this.layer), null);
     let labelDebounceTimer = null;
     const commitLabelText = () => {
       this.layer.applyEdgePatch(edge.id, { labelText: input.value });
@@ -511,6 +532,7 @@ export class EdgePropsPopover {
         inp.placeholder = tr('arrow_label_placeholder');
         const branchTbRef = buildMarkdownToolbar(() => inp);
         row.appendChild(branchTbRef.el);
+        attachMentionAutocomplete(inp, _mentionNodesFor(this.layer), null);
         let bTimer = null;
         const commit = () => this.layer.applyEdgePatch(edge.id, { branchLabel: { index: branchIdx, text: inp.value } });
         inp.addEventListener('input', () => {

@@ -3,6 +3,7 @@
    nodes/edges maps, syncs persistence, drives presence + snapshots. */
 
 import { Viewer } from './viewer.js';
+import { setMentionLookup } from './markdown.js';
 import { SearchBar } from './search.js';
 import { EditorModal } from './editor.js';
 import { ContextMenu, statusSubmenu, isInOwnedSurface } from './context-menu.js';
@@ -66,6 +67,7 @@ import { LeftRail } from './left-rail.js';
 import { EditNodeModal, detectVideoUrl } from './edit-node-modal.js';
 import { CompareModal } from './compare-modal.js';
 import { Uploader, validateImageFile, isVideoMime } from './uploader.js';
+import { UrlDrop } from './url-drop.js';
 import { formatBytes } from './image-pipeline.js';
 import { openCropper } from './crop-tool.js';
 import { CropOverlay } from './crop-overlay.js';
@@ -82,6 +84,7 @@ import { DocumentOverlay } from './document-overlay.js';
 import { FileViewerModal } from './file-viewer.js';
 import { BranchesPanel, openManageBranchesModal } from './branches.js';
 import { BookmarksPanel } from './bookmarks.js';
+import { CountersWidget } from './counters-widget.js';
 import { GitHubImportModal } from './github-import.js';
 import { LANGS, initLang, getLang, setLang, tr, setI18nText } from './i18n.js';
 import { AuthUI } from './auth-ui.js';
@@ -97,6 +100,7 @@ import {
   createNode as apiCreateNode, patchNode as apiPatchNode, deleteNode as apiDeleteNode,
   createEdge as apiCreateEdge, patchEdge as apiPatchEdge, deleteEdge as apiDeleteEdge,
   uploadImage as apiUploadImage,
+  fetchUrlMeta as apiFetchUrlMeta,
   apiRestoreOriginal,
   getClientId as getClientIdFromApi,
 } from './api-client.js';
@@ -127,6 +131,7 @@ const state = {
   hasUnsavedEdits: false,
   githubOrigin: null,
   provenance: { active: false, selectedId: null, ancestors: new Set(), descendants: new Set() },
+  focusMode: { active: false, anchorId: null },
   pen: { strokes: [] },
   lockedNodes: new Map(),
   currentlyEditingNodeId: null,
@@ -149,6 +154,7 @@ let authUI;
 let realtime;
 let selectionStatusEl;
 let uploader;
+let urlDrop;
 let replaceImagePicker;
 let touchHandler;
 let clipboardMgr;
@@ -168,6 +174,7 @@ let presencePanel;
 let cropOverlay;
 let exportModal;
 let bookmarksPanel;
+let countersWidget;
 let githubImportModal;
 let compareModal;
 let penLayer;
@@ -205,6 +212,7 @@ function edgeMutationLabel(kind) {
 
 function scheduleSave() {
   saveState(snapshot());
+  dispatchStateChanged('save');
 }
 
 async function bootstrap() {
@@ -222,6 +230,7 @@ async function bootstrap() {
   contextMenu = new ContextMenu({ container: document.body });
   setupGlobalContextMenu();
   setupUploader();
+  setupUrlDrop();
 
   setupStatusFilter();
   setupMinimap();
@@ -243,6 +252,7 @@ async function bootstrap() {
   setupCropOverlay();
   setupBranchesPanel();
   setupBookmarksPanel();
+  setupCountersWidget();
   setupGithubImportModal();
   compareModal = new CompareModal();
   setupToastBridge();
@@ -258,6 +268,7 @@ async function bootstrap() {
   setupRealtime();
 
   setupDebugPanel();
+  setupMentionPipeline();
   refreshHistoryUi();
 
   document.addEventListener('i18n:changed', () => {
@@ -279,6 +290,35 @@ async function bootstrap() {
     refreshOfflineBanner();
     refreshSelectionStatus();
     refreshHistoryUi();
+  });
+}
+
+function setupMentionPipeline() {
+  setMentionLookup((id) => {
+    const n = findNode(state.nodes, id);
+    if (!n) return null;
+    return n.label || n.title || n.slug || n.id;
+  });
+  document.addEventListener('click', (ev) => {
+    const target = ev.target;
+    if (!target || target.nodeType !== 1) return;
+    const a = target.closest && target.closest('a.md-mention[data-mention-id]');
+    if (!a) return;
+    const id = a.getAttribute('data-mention-id');
+    if (!id) return;
+    const n = findNode(state.nodes, id);
+    if (!n) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    const view = toViewShape(n);
+    if (viewer) {
+      if (typeof viewer.centerOnHotspot === 'function') viewer.centerOnHotspot(view);
+      viewer.setActiveId(id);
+      state.selection = new Set([id]);
+      viewer.setSelection(state.selection);
+      refreshSelectionStatus();
+    }
+    openRichEdit(id);
   });
 }
 
@@ -551,6 +591,47 @@ function setupBookmarksPanel() {
     getNodes: () => state.nodes,
     onPick: (id) => focusBookmark(id),
   });
+}
+
+function setupCountersWidget() {
+  countersWidget = new CountersWidget({
+    viewport: $('viewport'),
+    getNodes: () => state.nodes,
+    getEdges: () => (arrowLayer && arrowLayer.edges) ? arrowLayer.edges : state.edges,
+    getBranches: () => state.branches,
+    onBookmarksClick: () => {
+      const btn = $('btn-bookmarks-toggle');
+      if (btn) btn.click();
+    },
+    onVerificationFilter: (verification) => filterByVerification(verification),
+  });
+}
+
+function filterByVerification(verification) {
+  const ids = new Set();
+  for (const n of state.nodes.values()) {
+    if (!n) continue;
+    if ((n.verification || '') === verification) ids.add(n.id);
+  }
+  if (ids.size === 0) {
+    toast(tr('counters_label_' + verification, { n: 0 }));
+    return;
+  }
+  state.selection = ids;
+  if (viewer) {
+    viewer.setSelection(ids);
+    const first = ids.values().next().value;
+    if (first) {
+      const n = findNode(state.nodes, first);
+      if (n) {
+        viewer.setActiveId(first);
+        if (typeof viewer.centerOnHotspot === 'function') {
+          viewer.centerOnHotspot(toViewShape(n));
+        }
+      }
+    }
+  }
+  refreshSelectionStatus();
 }
 
 function setupPenLayer() {
@@ -1654,6 +1735,16 @@ function setupEditNodeModal() {
       setProvenanceActive(active, active ? id : null);
     },
     isProvenanceActive: (id) => state.provenance && state.provenance.active && state.provenance.selectedId === id,
+    onFocusToggle: (id) => {
+      if (state.focusMode.active && state.focusMode.anchorId === id) {
+        setFocusMode(false, null);
+        toast(tr('focus_mode_off_toast'));
+      } else if (id) {
+        setFocusMode(true, id);
+        toast(tr('focus_mode_on_toast'));
+      }
+    },
+    isFocusActive: (id) => state.focusMode && state.focusMode.active && state.focusMode.anchorId === id,
     onAnnotationsChange: (id, annotations) => {
       if (!isLoggedIn()) {
         const n0 = findNode(state.nodes, id);
@@ -1694,6 +1785,18 @@ function refreshSelectionStatus() {
   }
   try { document.dispatchEvent(new CustomEvent('selection:changed', { detail: { ids: Array.from(state.selection) } })); } catch (e) { void e; }
   if (alignFloater) alignFloater.refresh();
+  refreshFocusAnchorIfActive();
+}
+
+let _stateChangedTimer = null;
+function dispatchStateChanged(kind) {
+  if (_stateChangedTimer) return;
+  _stateChangedTimer = setTimeout(() => {
+    _stateChangedTimer = null;
+    try {
+      document.dispatchEvent(new CustomEvent('state:changed', { detail: { kind: kind || 'any' } }));
+    } catch (e) { void e; }
+  }, 16);
 }
 
 function openRichEdit(id) {
@@ -2140,6 +2243,77 @@ function setupUploader() {
     onToast: (msg, kind) => toast(msg, kind),
     onConfirm: (msg) => confirmAudioOversize(msg),
   });
+}
+
+function setupUrlDrop() {
+  urlDrop = new UrlDrop({
+    viewport: $('viewport'),
+    isEnabled: () => isLoggedIn(),
+    toClientToImage: (cx, cy) => viewer ? viewer.imagePointFromClient(cx, cy) : null,
+    onFetchMeta: async (url) => {
+      if (!isLoggedIn()) {
+        if (authUI) authUI.openLogin();
+        return null;
+      }
+      try {
+        return await apiFetchUrlMeta(url);
+      } catch (e) {
+        if (e && e.kind === 'auth_expired') {
+          if (authUI) authUI.openLogin();
+        }
+        return null;
+      }
+    },
+    onPlaceUrlNode: async (placement) => placeUrlDocumentNode(placement),
+    onToast: (msg, kind) => toast(msg, kind),
+  });
+}
+
+async function placeUrlDocumentNode(placement) {
+  if (!placement || !placement.url) return null;
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return null; }
+  const baseTitle = placement.title || placement.url;
+  const id = uniqueId(state.nodes, `link-${baseTitle}`);
+  const rect = placement.rect || { x: 0, y: 0, w: 260, h: 120 };
+  const parent = nodeAtParentLookup(state.nodes, rect);
+  const md = buildLinkDropMarkdown(placement);
+  pushHistory(tr('history_label_create_node'));
+  addPuzzleNode(state.nodes, {
+    id,
+    slug: id,
+    rect,
+    md,
+    status: 'no-data',
+    tags: [],
+    title: baseTitle.slice(0, 200),
+  });
+  const node = findNode(state.nodes, id);
+  if (node) {
+    node.label = baseTitle.slice(0, 200);
+    node.source_url = placement.url;
+    if (placement.imageUrl) {
+      node.media = { kind: 'link', url: placement.url, image: placement.imageUrl };
+    }
+    if (parent) node.parent = parent;
+  }
+  refreshPuzzleViewsInViewer();
+  if (node) pushNodeCreate(toViewShape(node), md);
+  state.selection = new Set([id]);
+  if (viewer) {
+    viewer.setSelection(state.selection);
+    viewer.setActiveId(id);
+    if (typeof viewer.centerOnHotspot === 'function') viewer.centerOnHotspot({ rect });
+  }
+  refreshSelectionStatus();
+  scheduleSave();
+  return id;
+}
+
+function buildLinkDropMarkdown(placement) {
+  const title = placement.title || placement.url;
+  const desc = placement.description ? `\n${placement.description}\n` : '';
+  const img = placement.imageUrl ? `\n![](${placement.imageUrl})\n` : '';
+  return `# ${title}\n${desc}${img}\n[${placement.url}](${placement.url})\n`;
 }
 
 function confirmAudioOversize(msg) {
@@ -2715,8 +2889,67 @@ function setProvenanceActive(active, selectedId) {
     const { ancestors, descendants } = computeProvenance(selectedId);
     state.provenance = { active: true, selectedId, ancestors, descendants };
   }
-  if (viewer && typeof viewer.setProvenance === 'function') viewer.setProvenance(state.provenance);
-  if (arrowLayer && typeof arrowLayer.setProvenance === 'function') arrowLayer.setProvenance(state.provenance);
+  applyProvenanceToViews();
+}
+
+function applyProvenanceToViews() {
+  const focus = state.focusMode && state.focusMode.active;
+  let payload = null;
+  if (state.provenance && state.provenance.active) {
+    payload = { ...state.provenance, dimAlpha: focus ? 0.05 : 0.2 };
+  } else if (focus && state.focusMode.anchorId) {
+    const { ancestors, descendants } = computeProvenance(state.focusMode.anchorId);
+    payload = {
+      active: true,
+      selectedId: state.focusMode.anchorId,
+      ancestors,
+      descendants,
+      dimAlpha: 0.05,
+    };
+  }
+  if (viewer && typeof viewer.setProvenance === 'function') {
+    viewer.setProvenance(payload);
+  }
+  if (arrowLayer && typeof arrowLayer.setProvenance === 'function') {
+    arrowLayer.setProvenance(payload);
+  }
+}
+
+function toggleFocusModeFromSelection() {
+  if (state.mode !== 'editor') return false;
+  if (state.focusMode.active) {
+    setFocusMode(false, null);
+    toast(tr('focus_mode_off_toast'));
+    return true;
+  }
+  const anchorId = state.selection.size > 0
+    ? Array.from(state.selection).pop()
+    : viewer && viewer.activeId;
+  if (!anchorId || !findNode(state.nodes, anchorId)) return false;
+  setFocusMode(true, anchorId);
+  toast(tr('focus_mode_on_toast'));
+  return true;
+}
+
+function setFocusMode(active, anchorId) {
+  if (!active || !anchorId) {
+    state.focusMode = { active: false, anchorId: null };
+  } else {
+    state.focusMode = { active: true, anchorId };
+  }
+  applyProvenanceToViews();
+  document.body.classList.toggle('focus-mode-active', !!state.focusMode.active);
+  dispatchStateChanged('focusMode');
+}
+
+function refreshFocusAnchorIfActive() {
+  if (!state.focusMode.active) return;
+  if (state.selection.size === 0) return;
+  const candidate = Array.from(state.selection).pop();
+  if (!candidate || candidate === state.focusMode.anchorId) return;
+  if (!findNode(state.nodes, candidate)) return;
+  state.focusMode.anchorId = candidate;
+  applyProvenanceToViews();
 }
 
 function openCompareForSelection() {
@@ -4082,6 +4315,11 @@ function setupKeyboard() {
       onDuplicate: () => doDuplicate(),
       onSelectAll: () => doSelectAll(),
       onEscape: () => {
+        if (state.focusMode && state.focusMode.active) {
+          setFocusMode(false, null);
+          toast(tr('focus_mode_off_toast'));
+          return;
+        }
         if (editNodeModal && editNodeModal.isOpen()) {
           editNodeModal.requestClose();
           return;
@@ -4117,6 +4355,9 @@ function setupKeyboard() {
         }
         return createSiblingNode();
       },
+      onTabChild: () => tabExpandFromSelection('child'),
+      onTabSibling: () => tabExpandFromSelection('sibling'),
+      onFocusMode: () => toggleFocusModeFromSelection(),
       onDeleteSelected: () => {
         if (state.mode === 'editor') {
           const hasNodes = state.selection.size > 0;
@@ -4261,6 +4502,78 @@ function createSiblingNode() {
   if (newNode) pushNodeCreate(toViewShape(newNode), `# ${title}\n`);
   scheduleSave();
   toast(tr('node_created'));
+  return true;
+}
+
+function tabExpandFromSelection(direction) {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return false; }
+  if (state.mode !== 'editor') return false;
+  let parentId = null;
+  if (state.selection.size > 0) {
+    parentId = Array.from(state.selection).pop();
+  } else if (viewer && viewer.activeId) {
+    parentId = viewer.activeId;
+  }
+  if (!parentId) return false;
+  const parent = findNode(state.nodes, parentId);
+  if (!parent) return false;
+  const sideways = direction !== 'sibling';
+  pushHistory(sideways ? tr('history_label_tab_child') : tr('history_label_tab_sibling'));
+  const baseTitle = sideways ? tr('tab_child_default_title') : tr('tab_sibling_default_title');
+  const id = uniqueId(state.nodes, baseTitle);
+  const px = Number(parent.x) || 0;
+  const py = Number(parent.y) || 0;
+  const pw = Number(parent.width) || 240;
+  const ph = Number(parent.height) || 140;
+  const newRect = sideways
+    ? { x: px + pw + 80, y: py, w: 240, h: 140 }
+    : { x: px, y: py + ph + 80, w: 240, h: 140 };
+  addPuzzleNode(state.nodes, {
+    id,
+    title: baseTitle,
+    slug: id,
+    status: 'unsolved',
+    tags: [],
+    rect: newRect,
+    md: `# ${baseTitle}\n`,
+    parent: parent.parent || undefined,
+  });
+  const created = findNode(state.nodes, id);
+  if (created) pushNodeCreate(toViewShape(created), `# ${baseTitle}\n`);
+  if (arrowLayer && typeof arrowLayer.createEdgeFromPoints === 'function') {
+    const fromPt = sideways
+      ? { x: px + pw, y: py + ph / 2 }
+      : { x: px + pw / 2, y: py + ph };
+    const toPt = sideways
+      ? { x: newRect.x, y: newRect.y + newRect.h / 2 }
+      : { x: newRect.x + newRect.w / 2, y: newRect.y };
+    arrowLayer.createEdgeFromPoints({
+      fromId: parentId,
+      fromPt,
+      toId: id,
+      toPt,
+    });
+  }
+  refreshPuzzleViewsInViewer();
+  state.selection = new Set([id]);
+  if (viewer) {
+    viewer.setSelection(state.selection);
+    viewer.setActiveId(id);
+    if (typeof viewer.centerOnHotspot === 'function') {
+      viewer.centerOnHotspot({ rect: newRect });
+    }
+  }
+  refreshSelectionStatus();
+  scheduleSave();
+  setTimeout(() => {
+    openRichEdit(id);
+    if (editNodeModal && editNodeModal.titleInputEl) {
+      try {
+        editNodeModal.titleInputEl.focus();
+        editNodeModal.titleInputEl.select();
+      } catch (e) { void e; }
+    }
+  }, 50);
   return true;
 }
 

@@ -610,6 +610,7 @@ export class ArrowLayer {
         selectedId: p.selectedId || null,
         ancestors: p.ancestors instanceof Set ? p.ancestors : new Set(p.ancestors || []),
         descendants: p.descendants instanceof Set ? p.descendants : new Set(p.descendants || []),
+        dimAlpha: typeof p.dimAlpha === 'number' ? p.dimAlpha : 0.2,
       };
     }
     this.requestDraw();
@@ -629,7 +630,7 @@ export class ArrowLayer {
       }
     }
     if (branchIn) return 1;
-    return 0.2;
+    return typeof p.dimAlpha === 'number' ? p.dimAlpha : 0.2;
   }
 
   _nodeMatchesFilter(node) {

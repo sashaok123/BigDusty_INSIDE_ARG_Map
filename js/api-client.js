@@ -344,6 +344,14 @@ export async function importFromGithub(payload) {
   });
 }
 
+export async function fetchUrlMeta(url) {
+  return _request('/admin/fetch_url_meta', {
+    method: 'POST',
+    auth: true,
+    body: { url },
+  });
+}
+
 export async function resyncNodeFromGithub(canvasId, nodeId) {
   const cid = encodeURIComponent(canvasId || CANVAS_ID);
   return _request(`/admin/canvas/${cid}/resync_node`, {

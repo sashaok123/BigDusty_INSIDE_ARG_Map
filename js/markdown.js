@@ -10,6 +10,11 @@ const ESC = (s) => s
 
 const BARE_URL = /(^|[\s(])((?:https?:\/\/|www\.)[^\s<>"`\]]+[^\s<>"`\].,;:!?)\]])/g;
 
+let _mentionLookup = null;
+export function setMentionLookup(fn) {
+  _mentionLookup = typeof fn === 'function' ? fn : null;
+}
+
 function inline(text) {
   const placeholders = [];
   const stash = (html) => {
@@ -22,6 +27,14 @@ function inline(text) {
   s = s.replace(/!\[([^\]]*?)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g, (_, alt, src, title) => {
     const t = title ? ` title="${ESC(title)}"` : '';
     return stash(`<img src="${ESC(src)}" alt="${ESC(alt)}"${t}>`);
+  });
+
+  s = s.replace(/\[\[([a-zA-Z0-9_\-:.]+)\]\]/g, (_, mentionId) => {
+    const label = _mentionLookup ? _mentionLookup(mentionId) : null;
+    if (label) {
+      return stash(`<a class="md-mention" data-mention-id="${ESC(mentionId)}" href="#${ESC(mentionId)}">${ESC(label)}</a>`);
+    }
+    return stash(`<span class="md-mention-missing" data-mention-id="${ESC(mentionId)}" title="${ESC(mentionId)}">[[${ESC(mentionId)}]]</span>`);
   });
 
   s = s.replace(/\[([^\]]+?)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g, (_, label, href, title) => {

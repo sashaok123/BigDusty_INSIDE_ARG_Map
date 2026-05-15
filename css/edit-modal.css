@@ -821,11 +821,33 @@
   border-radius: var(--radius); background: var(--field-bg); cursor: pointer;
 }
 
-.em-provenance { margin-top: 4px; }
+.em-provenance {
+  margin-top: 4px;
+  display: flex;
+  gap: 8px;
+}
 .em-provenance-btn {
-  width: 100%; display: inline-flex; align-items: center; justify-content: center;
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   gap: 6px;
 }
 .em-provenance-btn.on {
   background: var(--accent-soft-bg, rgba(0,0,0,0.06)); border-color: var(--accent); color: var(--accent);
+}
+.em-focus-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-left: 0 !important;
+  padding-left: 14px;
+  padding-right: 14px;
+}
+.em-focus-btn.on {
+  background: var(--accent-soft-bg, rgba(0,0,0,0.06));
+  border-color: var(--accent);
+  color: var(--accent);
 }

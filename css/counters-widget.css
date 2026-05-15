@@ -1,0 +1,73 @@
+.counters-widget {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  z-index: 800;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  pointer-events: auto;
+  user-select: none;
+  max-width: 380px;
+  transition: opacity 0.15s, transform 0.15s;
+}
+.counters-widget.hidden {
+  display: none;
+}
+
+.counters-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.counters-sep {
+  color: var(--text-muted);
+  opacity: 0.7;
+  font-size: 10px;
+}
+
+.counters-cell {
+  background: none;
+  border: none;
+  padding: 1px 2px;
+  margin: 0;
+  font: inherit;
+  color: var(--text-dim);
+  cursor: default;
+  border-radius: 3px;
+}
+
+.counters-cell-active {
+  color: var(--text);
+}
+
+button.counters-cell {
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s;
+}
+button.counters-cell:hover {
+  background: var(--accent-soft-bg, rgba(46, 111, 232, 0.10));
+  color: var(--accent, #2e6fe8);
+}
+button.counters-cell.counters-cell-active {
+  color: var(--accent, #2e6fe8);
+}
+button.counters-cell.counters-cell-active:hover {
+  background: var(--accent-soft-bg-hover, rgba(46, 111, 232, 0.14));
+}
+
+#btn-counters-toggle.active {
+  color: var(--accent, #2e6fe8);
+}

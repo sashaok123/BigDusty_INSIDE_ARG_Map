@@ -13,6 +13,7 @@ import {
   VERIFICATIONS, TECHNIQUES,
 } from './nodes.js';
 import { renderMarkdown } from './markdown.js';
+import { attachMentionAutocomplete } from './node-mention.js';
 import { translateMany, providerLabel } from './translate.js';
 import { getTranslationProvider } from './settings.js';
 import { buildMarkdownToolbar } from './md-toolbar.js';
@@ -230,11 +231,41 @@ export class EditNodeModal {
     this.onRestoreOriginal = opts.onRestoreOriginal || null;
     this.onProvenanceToggle = opts.onProvenanceToggle || (() => {});
     this.isProvenanceActive = opts.isProvenanceActive || (() => false);
+    this.onFocusToggle = opts.onFocusToggle || (() => {});
+    this.isFocusActive = opts.isFocusActive || (() => false);
     this.onAnnotationsChange = opts.onAnnotationsChange || (() => {});
     this._fileBodyCache = new Map();
     this._fileBytesCache = new Map();
     this._build();
+    this._attachMentionAutocompleters();
     document.addEventListener('i18n:changed', () => this._retranslate());
+  }
+
+  _attachMentionAutocompleters() {
+    const nodesProvider = () => {
+      const map = this.getNodes() || new Map();
+      const out = [];
+      for (const n of map.values()) {
+        if (!n || !n.id) continue;
+        out.push({
+          id: n.id,
+          slug: n.slug || n.id,
+          label: n.label || n.title || n.slug || n.id,
+          title: n.label || n.title || n.slug || n.id,
+          status: n.status || '',
+        });
+      }
+      return out;
+    };
+    const targets = [
+      this.mdInputEl,
+      this.captionTextEl,
+      this.transformInputEl,
+      this.transformOutputEl,
+    ];
+    for (const t of targets) {
+      if (t) attachMentionAutocomplete(t, nodesProvider, null);
+    }
   }
 
   _build() {
@@ -1309,7 +1340,10 @@ export class EditNodeModal {
     }
     if (showTransform) this._syncTransformFields();
     if (showAnnotations) this._renderAnnotationsList();
-    if (showProvenance) this._syncProvenanceButton();
+    if (showProvenance) {
+      this._syncProvenanceButton();
+      this._syncFocusButton();
+    }
     this._applyMetadataVisibility();
   }
 
@@ -1585,10 +1619,31 @@ export class EditNodeModal {
     btn.textContent = tr('provenance_show');
     btn.addEventListener('click', () => this._toggleProvenance());
     wrap.appendChild(btn);
+    const focusBtn = el('button', { type: 'button', class: 'em-focus-btn modal-btn' });
+    focusBtn.textContent = tr('focus_mode_button');
+    focusBtn.title = tr('focus_mode_button_aria');
+    focusBtn.setAttribute('aria-label', tr('focus_mode_button_aria'));
+    focusBtn.addEventListener('click', () => this._toggleFocusFromButton());
+    wrap.appendChild(focusBtn);
     wrap.style.display = 'none';
     this.provenanceFieldEl = wrap;
     this.provenanceBtnEl = btn;
+    this.focusModeBtnEl = focusBtn;
     return wrap;
+  }
+
+  _toggleFocusFromButton() {
+    if (!this._state) return;
+    if (typeof this.onFocusToggle === 'function') {
+      try { this.onFocusToggle(this._state.id); } catch (e) { void e; }
+    }
+    this._syncFocusButton();
+  }
+
+  _syncFocusButton() {
+    if (!this.focusModeBtnEl || !this._state) return;
+    const on = typeof this.isFocusActive === 'function' && this.isFocusActive(this._state.id);
+    this.focusModeBtnEl.classList.toggle('on', !!on);
   }
 
   _renderAnnotationsList() {
@@ -2146,6 +2201,11 @@ export class EditNodeModal {
     if (this.annotationsAddBtnEl) this.annotationsAddBtnEl.textContent = tr('annotations_add');
     if (this.annotationsTextPlaceholderEl) this.annotationsTextPlaceholderEl.placeholder = tr('annotations_text_placeholder');
     this._syncProvenanceButton();
+    if (this.focusModeBtnEl) {
+      this.focusModeBtnEl.textContent = tr('focus_mode_button');
+      this.focusModeBtnEl.title = tr('focus_mode_button_aria');
+      this.focusModeBtnEl.setAttribute('aria-label', tr('focus_mode_button_aria'));
+    }
     if (this.metadataSourceInputEl) this.metadataSourceInputEl.placeholder = tr('source_url_placeholder');
     if (this.metadataToolInputEl) this.metadataToolInputEl.placeholder = tr('tool_placeholder');
     if (this.metadataVerifBtnEls) {
