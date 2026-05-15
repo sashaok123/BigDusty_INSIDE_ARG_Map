@@ -123,6 +123,9 @@ export class ActivityFeed {
     this._saveOpenState(true);
     this.refresh();
     this._startPolling();
+    try {
+      document.dispatchEvent(new CustomEvent('ui:dropdown-opened', { detail: { source: 'activity' } }));
+    } catch (e) { void e; }
   }
 
   close() {

@@ -21,12 +21,20 @@
 }
 #toolbar .tb-zone-left   { flex: 0 0 auto; }
 #toolbar .tb-zone-center { flex: 1 1 auto; justify-content: center; min-width: 0; }
-#toolbar .tb-zone-right  { flex: 0 0 auto; justify-content: flex-end; margin-left: auto; }
+#toolbar .tb-zone-right  {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  margin-left: auto;
+  flex-wrap: nowrap;
+  gap: 8px;
+  min-width: 0;
+}
 
 #toolbar .tb-group {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: nowrap;
 }
 #toolbar .tb-divider {
   width: 1px;

@@ -125,9 +125,11 @@ export function defaultBranchSeed() {
 }
 
 export function normaliseNode(raw) {
-  const type = (raw.type === 'text' || raw.type === 'file' || raw.type === 'link' || raw.type === 'group')
+  let type = (raw.type === 'text' || raw.type === 'file' || raw.type === 'link' || raw.type === 'group')
     ? raw.type
     : 'text';
+  if (raw.kind === 'block' && typeof raw.file === 'string' && raw.file) type = 'file';
+  if (raw.kind === 'group' && type !== 'group') type = 'group';
   const node = {
     id: raw.id,
     type,
@@ -139,16 +141,21 @@ export function normaliseNode(raw) {
   if (typeof raw.color === 'string') node.color = raw.color;
   if (type === 'text') {
     node.text = typeof raw.text === 'string' ? raw.text : '';
+    if (typeof raw.file === 'string' && raw.file && raw.kind === 'block') node.file = raw.file;
   } else if (type === 'file') {
     node.file = typeof raw.file === 'string' ? raw.file : '';
     if (typeof raw.subpath === 'string') node.subpath = raw.subpath;
   } else if (type === 'link') {
     node.url = typeof raw.url === 'string' ? raw.url : '';
+    if (typeof raw.file === 'string' && raw.file) node.file = raw.file;
   } else if (type === 'group') {
     if (typeof raw.label === 'string') node.label = raw.label;
     if (typeof raw.background === 'string') node.background = raw.background;
     if (typeof raw.backgroundStyle === 'string') node.backgroundStyle = raw.backgroundStyle;
   }
+  if (typeof raw.imageId === 'string' && raw.imageId) node.imageId = raw.imageId;
+  if (typeof raw.sha256 === 'string' && raw.sha256) node.sha256 = raw.sha256;
+  if (Number.isFinite(raw.size)) node.size = raw.size;
   if (typeof raw.status === 'string') node.status = raw.status;
   if (Array.isArray(raw.tags)) node.tags = raw.tags.filter((t) => typeof t === 'string');
   if (typeof raw.owner === 'string') node.owner = raw.owner;
@@ -187,6 +194,7 @@ export function normaliseNode(raw) {
     if (typeof raw.media.videoId === 'string') m.videoId = raw.media.videoId;
     if (typeof raw.media.embedUrl === 'string') m.embedUrl = raw.media.embedUrl;
     if (typeof raw.media.provider === 'string') m.provider = raw.media.provider;
+    if (typeof raw.media.mime === 'string') m.mime = raw.media.mime;
     if (Number.isFinite(raw.media.volume_default)) m.volume_default = Math.max(0, Math.min(1, raw.media.volume_default));
     node.media = m;
   }

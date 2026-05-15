@@ -935,3 +935,58 @@ async def test_github_import_requires_admin(client):
     payload = {"canvas_id": "main", "owner": "x", "repo": "y", "branch": "main", "dry_run": True}
     resp = await client.post("/admin/import/github", json=payload)
     assert resp.status_code == 401
+
+
+async def test_image_block_node_round_trip(client, admin_token):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    upload = await client.post(
+        "/canvas/main/images",
+        files={"file": ("tile.png", _TINY_PNG, "image/png")},
+        headers=headers,
+    )
+    assert upload.status_code == 201, upload.text
+    media = upload.json()
+    create = await client.post(
+        "/canvas/main/nodes",
+        json={
+            "id": "node_image_block",
+            "type": "file",
+            "x": 12, "y": 34, "width": 200, "height": 150,
+            "file": media["url"],
+            "kind": "block",
+            "mime": "image/png",
+            "imageId": media["id"],
+            "sha256": media["sha256"],
+            "size": media["size"],
+            "name": "tile.png",
+            "status": "no-data",
+            "tags": [],
+            "slug": "node_image_block",
+        },
+        headers=headers,
+    )
+    assert create.status_code == 201, create.text
+    snap = await client.get("/canvas/main")
+    node = next(n for n in snap.json()["data"]["nodes"] if n["id"] == "node_image_block")
+    assert node["type"] == "file"
+    assert node["kind"] == "block"
+    assert node["file"] == media["url"]
+    assert node["mime"] == "image/png"
+    assert node["imageId"] == media["id"]
+    assert node["sha256"] == media["sha256"]
+    assert node["size"] == media["size"]
+    assert node["name"] == "tile.png"
+
+    patch_resp = await client.patch(
+        "/canvas/main/nodes/node_image_block",
+        json={"file": media["url"], "verification": "verified", "tool": "Pillow"},
+        headers=headers,
+    )
+    assert patch_resp.status_code == 200, patch_resp.text
+    snap2 = await client.get("/canvas/main")
+    node2 = next(n for n in snap2.json()["data"]["nodes"] if n["id"] == "node_image_block")
+    assert node2["file"] == media["url"]
+    assert node2["kind"] == "block"
+    assert node2["type"] == "file"
+    assert node2["verification"] == "verified"
+    assert node2["tool"] == "Pillow"

@@ -101,10 +101,12 @@ export class LeftRail {
 
     tools.appendChild(this._makeLabelBtn({
       id: 'rail-tool-select', icon: 'select', i18n: 'tool_select', tool: 'select', shortcut: 'S',
+      helpKey: 'tool_help_select',
       onClick: () => setActiveTool('select'),
     }));
     tools.appendChild(this._makeLabelBtn({
       id: 'rail-tool-pan', icon: 'pan', i18n: 'tool_pan', tool: 'pan', shortcut: 'H',
+      helpKey: 'tool_help_pan',
       onClick: () => setActiveTool('pan'),
     }));
 
@@ -112,22 +114,27 @@ export class LeftRail {
 
     tools.appendChild(this._makeLabelBtn({
       id: 'rail-tool-block', icon: 'block', i18n: 'editor_tools_block', tool: 'block', shortcut: 'B',
+      helpKey: 'tool_help_block',
       onClick: () => setActiveTool('block'),
     }));
     tools.appendChild(this._makeLabelBtn({
       id: 'rail-tool-sticky', icon: 'sticky', i18n: 'editor_tools_sticky', tool: 'sticky', shortcut: 'N',
+      helpKey: 'tool_help_sticky',
       onClick: () => setActiveTool('sticky'),
     }));
     tools.appendChild(this._makeLabelBtn({
       id: 'rail-tool-group', icon: 'group', i18n: 'editor_tools_group', tool: 'group', shortcut: 'G',
+      helpKey: 'tool_help_group',
       onClick: () => setActiveTool('group'),
     }));
     tools.appendChild(this._makeLabelBtn({
       id: 'rail-tool-text', icon: 'text', i18n: 'tool_add_text', tool: 'text', shortcut: 'T',
+      helpKey: 'tool_help_text',
       onClick: () => setActiveTool('text'),
     }));
     tools.appendChild(this._makeLabelBtn({
       id: 'rail-tool-image', icon: 'image', i18n: 'tool_image', tool: 'image', shortcut: 'I',
+      helpKey: 'tool_help_image',
       onClick: () => {
         setActiveTool('image');
         if (this.handlers.onUploadImage) this.handlers.onUploadImage();
@@ -135,6 +142,7 @@ export class LeftRail {
     }));
     tools.appendChild(this._makeLabelBtn({
       id: 'rail-tool-video', icon: 'video', i18n: 'tool_add_video', tool: 'video', shortcut: 'V',
+      helpKey: 'tool_help_video',
       onClick: () => {
         setActiveTool('video');
         if (this.handlers.onAddVideo) this.handlers.onAddVideo();
@@ -142,6 +150,7 @@ export class LeftRail {
     }));
     tools.appendChild(this._makeLabelBtn({
       id: 'rail-tool-audio', icon: 'audio', i18n: 'tool_audio', tool: 'audio', shortcut: 'U',
+      helpKey: 'tool_help_audio',
       onClick: () => {
         setActiveTool('audio');
         if (this.handlers.onUploadAudio) this.handlers.onUploadAudio();
@@ -149,14 +158,17 @@ export class LeftRail {
     }));
     tools.appendChild(this._makeLabelBtn({
       id: 'rail-tool-arrow', icon: 'arrow', i18n: 'tool_arrow', tool: 'arrow', shortcut: 'A',
+      helpKey: 'tool_help_arrow',
       onClick: () => setActiveTool('arrow'),
     }));
     tools.appendChild(this._makeLabelBtn({
       id: 'rail-tool-transform', icon: 'transform', i18n: 'tool_transform', tool: 'transform', shortcut: 'R',
+      helpKey: 'tool_help_transform',
       onClick: () => setActiveTool('transform'),
     }));
     tools.appendChild(this._makeLabelBtn({
       id: 'rail-tool-pen', icon: 'pen', i18n: 'tool_pen', tool: 'pen', shortcut: 'P',
+      helpKey: 'tool_help_pen',
       onClick: () => setActiveTool('pen'),
     }));
     rail.appendChild(tools);
@@ -261,7 +273,8 @@ export class LeftRail {
     if (opts.danger) b.classList.add('danger');
     b.dataset.i18n = opts.i18n;
     if (opts.tool) b.dataset.tool = opts.tool;
-    const aria = opts.shortcut ? `${tr(opts.i18n)} (${opts.shortcut})` : tr(opts.i18n);
+    if (opts.helpKey) b.dataset.helpKey = opts.helpKey;
+    const aria = this._composeAria(opts);
     b.title = aria;
     b.setAttribute('aria-label', aria);
     b.appendChild(svgIcon(opts.icon));
@@ -275,9 +288,26 @@ export class LeftRail {
       sc.textContent = opts.shortcut;
       b.appendChild(sc);
     }
+    if (opts.helpKey) {
+      const help = document.createElement('span');
+      help.className = 'rail-btn-help';
+      help.textContent = '?';
+      help.title = tr(opts.helpKey);
+      help.setAttribute('aria-label', tr('tool_help_badge_aria', { name: tr(opts.i18n) }));
+      help.setAttribute('role', 'img');
+      help.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); });
+      b.appendChild(help);
+    }
     b.addEventListener('click', (e) => { e.preventDefault(); opts.onClick && opts.onClick(); });
     this._buttons[opts.id] = b;
     return b;
+  }
+
+  _composeAria(opts) {
+    const base = tr(opts.i18n);
+    const help = opts.helpKey ? tr(opts.helpKey) : '';
+    const sc = opts.shortcut ? ` (${opts.shortcut})` : '';
+    return help ? `${base}${sc} — ${help}` : `${base}${sc}`;
   }
 
   _toggleCollapsed() {
@@ -357,8 +387,14 @@ export class LeftRail {
       const text = tr(key);
       const lab = b.querySelector('.rail-btn-label');
       if (lab) lab.textContent = text;
-      b.title = text;
-      b.setAttribute('aria-label', text);
+      const help = b.querySelector('.rail-btn-help');
+      if (help && b.dataset.helpKey) {
+        help.title = tr(b.dataset.helpKey);
+        help.setAttribute('aria-label', tr('tool_help_badge_aria', { name: text }));
+      }
+      const composed = this._composeAriaFromButton(b, text);
+      b.title = composed;
+      b.setAttribute('aria-label', composed);
     });
     this.railEl.querySelectorAll('.rail-section-head[data-i18n]').forEach((h) => {
       h.textContent = tr(h.dataset.i18n);
@@ -367,5 +403,12 @@ export class LeftRail {
       const key = this.state.collapsed ? 'rail_expand' : 'rail_collapse';
       this._collapseLabelEl.textContent = tr(key);
     }
+  }
+
+  _composeAriaFromButton(b, text) {
+    const sc = b.querySelector('.rail-btn-shortcut');
+    const scText = sc ? ` (${sc.textContent})` : '';
+    const help = b.dataset.helpKey ? tr(b.dataset.helpKey) : '';
+    return help ? `${text}${scText} — ${help}` : `${text}${scText}`;
   }
 }

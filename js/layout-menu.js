@@ -2,7 +2,7 @@
    hierarchical, grid and circle algorithms. The actual layout math lives in
    layout.js; this module only owns the UI/anchor positioning and option prompts. */
 
-import { tr } from './i18n.js';
+import { tr, setI18nText } from './i18n.js';
 
 export class LayoutMenu {
   constructor(opts) {
@@ -12,6 +12,10 @@ export class LayoutMenu {
     if (this.anchorEl) this.anchorEl.addEventListener('click', (e) => this._toggle(e));
     document.addEventListener('mousedown', (e) => this._maybeClose(e));
     document.addEventListener('i18n:changed', () => this._retranslate());
+    document.addEventListener('ui:dropdown-opened', (ev) => {
+      if (ev && ev.detail && ev.detail.source === 'layout') return;
+      this._close();
+    });
   }
 
   _build() {
@@ -38,7 +42,7 @@ export class LayoutMenu {
   _retranslate() {
     if (!this.menuEl) return;
     this.menuEl.querySelectorAll('[data-i18n]').forEach((el) => {
-      el.textContent = tr(el.dataset.i18n);
+      setI18nText(el, el.dataset.i18n);
     });
   }
 
@@ -67,6 +71,9 @@ export class LayoutMenu {
     this.menuEl.style.top = `${Math.round(r.bottom + 4)}px`;
     this.menuEl.style.left = `${Math.round(r.left)}px`;
     this.menuEl.classList.add('open');
+    try {
+      document.dispatchEvent(new CustomEvent('ui:dropdown-opened', { detail: { source: 'layout' } }));
+    } catch (e) { void e; }
   }
 
   _close() { if (this.menuEl) this.menuEl.classList.remove('open'); }

@@ -37,6 +37,29 @@ const TEXT_COLOR_SWATCHES = [
 ];
 const YOUTUBE_RE = /(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{6,})/;
 const VIMEO_RE = /vimeo\.com\/(?:video\/)?(\d+)/;
+const TWITCH_CLIP_RE = /(?:clips\.twitch\.tv\/|twitch\.tv\/\w+\/clip\/)([\w-]+)/;
+const TWITCH_VIDEO_RE = /twitch\.tv\/videos\/(\d+)/;
+const LOOM_RE = /loom\.com\/(?:share|embed)\/([\w]{16,})/;
+const STREAMABLE_RE = /streamable\.com\/(?:e\/)?([\w-]+)/;
+const DAILYMOTION_RE = /(?:dailymotion\.com\/(?:video|embed\/video)\/|dai\.ly\/)([\w]+)/;
+const DIRECT_FILE_RE = /\.(mp4|webm|ogg|m4v|mov)(\?[^#]*)?(#.*)?$/i;
+
+const DIRECT_MIME_MAP = {
+  mp4: 'video/mp4', webm: 'video/webm', ogg: 'video/ogg', m4v: 'video/mp4', mov: 'video/quicktime',
+};
+
+const VIDEO_MEDIA_KINDS = new Set(['youtube', 'vimeo', 'twitch', 'loom', 'streamable', 'dailymotion', 'video', 'file']);
+
+export function isVideoMediaKind(kind) {
+  return typeof kind === 'string' && VIDEO_MEDIA_KINDS.has(kind);
+}
+
+function twitchEmbedHost() {
+  if (typeof window !== 'undefined' && window.location && window.location.hostname) {
+    return window.location.hostname;
+  }
+  return 'localhost';
+}
 
 export function detectVideoUrl(url) {
   if (typeof url !== 'string' || !url.trim()) return null;
@@ -59,6 +82,68 @@ export function detectVideoUrl(url) {
       videoId: m[1],
       url: u,
       embedUrl: `https://player.vimeo.com/video/${m[1]}`,
+    };
+  }
+  m = u.match(TWITCH_CLIP_RE);
+  if (m) {
+    const parent = encodeURIComponent(twitchEmbedHost());
+    return {
+      kind: 'twitch',
+      provider: 'twitch',
+      videoId: m[1],
+      url: u,
+      embedUrl: `https://clips.twitch.tv/embed?clip=${encodeURIComponent(m[1])}&parent=${parent}`,
+    };
+  }
+  m = u.match(TWITCH_VIDEO_RE);
+  if (m) {
+    const parent = encodeURIComponent(twitchEmbedHost());
+    return {
+      kind: 'twitch',
+      provider: 'twitch',
+      videoId: m[1],
+      url: u,
+      embedUrl: `https://player.twitch.tv/?video=${encodeURIComponent(m[1])}&parent=${parent}`,
+    };
+  }
+  m = u.match(LOOM_RE);
+  if (m) {
+    return {
+      kind: 'loom',
+      provider: 'loom',
+      videoId: m[1],
+      url: u,
+      embedUrl: `https://www.loom.com/embed/${m[1]}`,
+    };
+  }
+  m = u.match(STREAMABLE_RE);
+  if (m) {
+    return {
+      kind: 'streamable',
+      provider: 'streamable',
+      videoId: m[1],
+      url: u,
+      embedUrl: `https://streamable.com/e/${m[1]}`,
+    };
+  }
+  m = u.match(DAILYMOTION_RE);
+  if (m) {
+    return {
+      kind: 'dailymotion',
+      provider: 'dailymotion',
+      videoId: m[1],
+      url: u,
+      embedUrl: `https://www.dailymotion.com/embed/video/${m[1]}`,
+    };
+  }
+  m = u.match(DIRECT_FILE_RE);
+  if (m) {
+    const ext = (m[1] || '').toLowerCase();
+    return {
+      kind: 'file',
+      provider: 'direct',
+      url: u,
+      mime: DIRECT_MIME_MAP[ext] || 'video/mp4',
     };
   }
   return null;
@@ -756,7 +841,7 @@ export class EditNodeModal {
     this._renderBranches();
     const isImage = looksLikeImage(this._state);
     if (isImage) this._setImagePreview(this._state.file || '');
-    const isVideo = this._state.kind === 'video' || (this._state.media && (this._state.media.kind === 'youtube' || this._state.media.kind === 'vimeo'));
+    const isVideo = this._state.kind === 'video' || (this._state.media && isVideoMediaKind(this._state.media.kind));
     if (isVideo) {
       this.videoInputEl.value = (this._state.media && this._state.media.url) || '';
       if (this.videoHintEl) {

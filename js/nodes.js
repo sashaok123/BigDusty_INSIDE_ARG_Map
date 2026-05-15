@@ -90,11 +90,13 @@ export function isTransformNode(n) {
   return n && n.kind === TRANSFORM_KIND;
 }
 
+const VIDEO_MEDIA_KINDS_NODE = new Set(['youtube', 'vimeo', 'twitch', 'loom', 'streamable', 'dailymotion', 'video', 'file']);
+
 export function isVideoNode(n) {
   if (!n) return false;
   if (n.kind === 'video') return true;
   if (typeof n.mime === 'string' && /^video\//i.test(n.mime)) return true;
-  if (n.media && (n.media.kind === 'youtube' || n.media.kind === 'vimeo' || n.media.kind === 'video')) return true;
+  if (n.media && typeof n.media.kind === 'string' && VIDEO_MEDIA_KINDS_NODE.has(n.media.kind)) return true;
   return false;
 }
 

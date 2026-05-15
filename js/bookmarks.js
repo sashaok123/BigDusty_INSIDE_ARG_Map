@@ -33,6 +33,10 @@ export class BookmarksPanel {
       if (this.btnEl && this.btnEl.contains(e.target)) return;
       this._close();
     });
+    document.addEventListener('ui:dropdown-opened', (ev) => {
+      if (ev && ev.detail && ev.detail.source === 'bookmarks') return;
+      this._close();
+    });
   }
 
   _build() {
@@ -71,6 +75,9 @@ export class BookmarksPanel {
     this.menuEl.style.top = `${r.bottom + 4}px`;
     this.menuEl.style.right = `${Math.max(8, window.innerWidth - r.right)}px`;
     this.menuEl.classList.add('open');
+    try {
+      document.dispatchEvent(new CustomEvent('ui:dropdown-opened', { detail: { source: 'bookmarks' } }));
+    } catch (e) { void e; }
   }
 
   _close() { this.menuEl.classList.remove('open'); }

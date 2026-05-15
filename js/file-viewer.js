@@ -3,7 +3,7 @@
    the file body on open. HTML has Render/Source tabs; binary mimes fall
    back to a hex viewer. */
 
-import { tr } from './i18n.js';
+import { tr, setI18nText } from './i18n.js';
 import {
   renderHtmlInto, renderTextInto, renderJsonInto, renderPdfInto,
   renderImageInto, renderHexInto, fetchAsText, fetchAsBytes, pickRenderer,
@@ -60,7 +60,7 @@ export class FileViewerModal {
 
   _retranslate() {
     if (!this.overlay) return;
-    this.overlay.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = tr(el.dataset.i18n); });
+    this.overlay.querySelectorAll('[data-i18n]').forEach((el) => { setI18nText(el, el.dataset.i18n); });
     const copy = this.overlay.querySelector('.fv-copy');
     if (copy) { copy.title = tr('file_viewer_copy'); copy.setAttribute('aria-label', tr('file_viewer_copy')); }
     const dl = this.overlay.querySelector('.fv-download');

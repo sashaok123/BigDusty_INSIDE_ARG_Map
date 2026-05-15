@@ -82,7 +82,7 @@ import { FileViewerModal } from './file-viewer.js';
 import { BranchesPanel, openManageBranchesModal } from './branches.js';
 import { BookmarksPanel } from './bookmarks.js';
 import { GitHubImportModal } from './github-import.js';
-import { LANGS, initLang, getLang, setLang, tr } from './i18n.js';
+import { LANGS, initLang, getLang, setLang, tr, setI18nText } from './i18n.js';
 import { AuthUI } from './auth-ui.js';
 import { Realtime } from './realtime.js';
 import { PresencePanel } from './presence.js';
@@ -2113,6 +2113,9 @@ async function placeUploadedImageNode(placement) {
     x: rect.x, y: rect.y, width: rect.w, height: rect.h,
     file: placement.file, status: 'no-data', tags: [], slug: id,
   };
+  if (typeof placement.imageId === 'string' && placement.imageId) base.imageId = placement.imageId;
+  if (typeof placement.sha256 === 'string' && placement.sha256) base.sha256 = placement.sha256;
+  if (Number.isFinite(placement.size)) base.size = placement.size;
   let node;
   if (placementKind === 'video') {
     node = { ...base, kind: 'video', mime: placement.mime,
@@ -2123,7 +2126,7 @@ async function placeUploadedImageNode(placement) {
   } else if (placementKind === 'document') {
     node = { ...base, kind: 'document', mime: placement.mime, name: placement.name || 'document' };
   } else {
-    node = { ...base, kind: 'block' };
+    node = { ...base, kind: 'block', mime: placement.mime || 'image/webp' };
   }
   if (parent) node.parent = parent;
   state.nodes.set(id, node);
@@ -3128,7 +3131,7 @@ function exportCanvasSnapshot() {
 function applyStaticTranslations() {
   document.title = tr('app_title');
   document.querySelectorAll('[data-i18n]').forEach((el) => {
-    el.textContent = tr(el.dataset.i18n);
+    setI18nText(el, el.dataset.i18n);
   });
   document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
     el.placeholder = tr(el.dataset.i18nPlaceholder);
@@ -3678,23 +3681,53 @@ async function pushNodeDelete(id) {
 }
 
 function nodeToServer(view, md) {
+  const typeFromView = typeof view.type === 'string' && view.type
+    ? view.type
+    : (view.kind === 'block' ? 'file' : (view.kind === 'group' ? 'group' : 'text'));
+  const kindFromView = (() => {
+    if (view.kind === 'transform') return 'transform';
+    if (view.kind === 'block') return 'block';
+    if (view.kind === 'group') return 'group';
+    if (view.kind === 'sticky') return 'sticky';
+    if (view.kind === 'text') return 'text';
+    if (view.kind === 'video') return 'video';
+    if (view.kind === 'audio') return 'audio';
+    if (view.kind === 'document') return 'document';
+    return 'puzzle';
+  })();
   const out = {
     id: view.id,
-    type: 'text',
+    type: typeFromView,
     x: view.rect.x, y: view.rect.y,
     width: view.rect.w, height: view.rect.h,
-    text: md || '',
     status: view.status,
     tags: view.tags || [],
-    kind: view.kind === 'transform' ? 'transform' : 'puzzle',
+    kind: kindFromView,
     slug: view.slug || view.id,
     parent: view.parent || undefined,
   };
-  if (view.kind === 'transform') {
+  if (typeFromView === 'text') out.text = (typeof md === 'string' ? md : (typeof view.text === 'string' ? view.text : ''));
+  if (typeof view.file === 'string' && view.file) out.file = view.file;
+  if (typeof view.mime === 'string' && view.mime) out.mime = view.mime;
+  if (typeof view.name === 'string' && view.name) out.name = view.name;
+  if (view.media && typeof view.media === 'object') out.media = { ...view.media };
+  if (view.caption && typeof view.caption === 'object') out.caption = { ...view.caption };
+  if (typeof view.color === 'string' && view.color) out.color = view.color;
+  if (typeof view.label === 'string' && view.label) out.label = view.label;
+  if (view.translations && typeof view.translations === 'object') out.translations = view.translations;
+  if (view.text_style && typeof view.text_style === 'object') out.text_style = { ...view.text_style };
+  if (Array.isArray(view.branches) && view.branches.length) out.branches = [...view.branches];
+  if (typeof view.verification === 'string' && view.verification) out.verification = view.verification;
+  if (typeof view.source_url === 'string' && view.source_url) out.source_url = view.source_url;
+  if (typeof view.tool === 'string' && view.tool) out.tool = view.tool;
+  if (typeof view.technique === 'string' && view.technique) out.technique = view.technique;
+  if (typeof view.github_path === 'string' && view.github_path) out.github_path = view.github_path;
+  if (view.bookmarked) out.bookmarked = true;
+  if (Array.isArray(view.annotations) && view.annotations.length) out.annotations = view.annotations.map((a) => ({ ...a }));
+  if (kindFromView === 'transform') {
     if (typeof view.input === 'string') out.input = view.input;
     if (typeof view.output === 'string') out.output = view.output;
     if (typeof view.method === 'string') out.method = view.method;
-    if (typeof view.label === 'string' && view.label) out.label = view.label;
   }
   return out;
 }

@@ -1658,6 +1658,98 @@ const _I18N_DATA = {
   pdf_export_method: ['Method', 'Метод', 'Methode', 'Metodo', 'Metode'],
   pdf_export_output: ['Output', 'Выход', 'Ausgang', 'Output', 'Output'],
   minimap_branch_legend: ['Branches', 'Ветви', 'Zweige', 'Rami', 'Grene'],
+  tool_help_select: [
+    'Pick nodes and edges. Drag empty space to pan.',
+    'Выбор узлов и связей. Тяните пустое место, чтобы прокручивать.',
+    'Knoten und Kanten auswählen. Leeren Bereich ziehen, um zu verschieben.',
+    'Seleziona nodi e archi. Trascina lo spazio vuoto per spostarti.',
+    'Vælg knuder og kanter. Træk i tomt rum for at panorere.',
+  ],
+  tool_help_pan: [
+    'Hold and drag to move the canvas.',
+    'Зажмите и тяните, чтобы двигать холст.',
+    'Halten und ziehen, um die Leinwand zu bewegen.',
+    'Tieni premuto e trascina per spostare il canvas.',
+    'Hold og træk for at flytte lærredet.',
+  ],
+  tool_help_block: [
+    'Click or drag to create a generic puzzle block.',
+    'Кликните или тяните, чтобы создать блок головоломки.',
+    'Klicken oder ziehen, um einen Rätselblock zu erstellen.',
+    'Clicca o trascina per creare un blocco generico.',
+    'Klik eller træk for at oprette en puslespilblok.',
+  ],
+  tool_help_sticky: [
+    'Drop a sticky note.',
+    'Поставить стикер-заметку.',
+    'Eine Haftnotiz platzieren.',
+    'Aggiungi una nota adesiva.',
+    'Læg en gul seddel.',
+  ],
+  tool_help_group: [
+    'Draw a region that groups inner nodes.',
+    'Нарисуйте область, объединяющую внутренние узлы.',
+    'Einen Bereich zeichnen, der innere Knoten gruppiert.',
+    'Disegna una regione che raggruppa i nodi interni.',
+    'Tegn et område der grupperer indre knuder.',
+  ],
+  tool_help_text: [
+    'Create a free text label.',
+    'Создать свободную текстовую подпись.',
+    'Eine freie Textbeschriftung erstellen.',
+    'Crea un\'etichetta di testo libero.',
+    'Opret en fritstående tekst-etiket.',
+  ],
+  tool_help_image: [
+    'Upload an image and place it on the canvas.',
+    'Загрузите изображение и поместите на холст.',
+    'Ein Bild hochladen und auf der Leinwand platzieren.',
+    'Carica un\'immagine e posizionala sul canvas.',
+    'Upload et billede og placér det på lærredet.',
+  ],
+  tool_help_video: [
+    'Embed a YouTube/Vimeo URL or upload a video file.',
+    'Вставьте ссылку на YouTube/Vimeo или загрузите видеофайл.',
+    'YouTube/Vimeo-Link einbetten oder Videodatei hochladen.',
+    'Incorpora un URL YouTube/Vimeo o carica un file video.',
+    'Indlejr en YouTube/Vimeo-URL eller upload en videofil.',
+  ],
+  tool_help_audio: [
+    'Upload an audio file.',
+    'Загрузите аудиофайл.',
+    'Eine Audiodatei hochladen.',
+    'Carica un file audio.',
+    'Upload en lydfil.',
+  ],
+  tool_help_arrow: [
+    'Draw a connection between two nodes.',
+    'Соедините два узла стрелкой.',
+    'Eine Verbindung zwischen zwei Knoten zeichnen.',
+    'Disegna una connessione tra due nodi.',
+    'Tegn en forbindelse mellem to knuder.',
+  ],
+  tool_help_transform: [
+    'Document one decoding step: input -> method -> output.',
+    'Зафиксируйте шаг расшифровки: вход -> метод -> выход.',
+    'Einen Decodierungsschritt dokumentieren: Eingang -> Methode -> Ausgang.',
+    'Documenta un passo di decodifica: input -> metodo -> output.',
+    'Dokumentér et dekodningstrin: input -> metode -> output.',
+  ],
+  tool_help_pen: [
+    'Freehand drawing on top of the canvas.',
+    'Свободное рисование поверх холста.',
+    'Freihandzeichnen über der Leinwand.',
+    'Disegno a mano libera sopra il canvas.',
+    'Frihåndstegning oven på lærredet.',
+  ],
+  tool_help_badge_aria: [
+    'Tool help: {name}',
+    'Подсказка: {name}',
+    'Werkzeug-Hilfe: {name}',
+    'Aiuto strumento: {name}',
+    'Værktøjshjælp: {name}',
+  ],
+  toolbar_more: ['More', 'Ещё', 'Mehr', 'Altro', 'Mere'],
 };
 
 const I18N = Object.fromEntries(
@@ -1722,4 +1814,19 @@ export function keysCount() {
 
 export function getDict(lang) {
   return I18N[lang] || I18N[DEFAULT_LANG];
+}
+
+export function setI18nText(el, key, params) {
+  if (!el) return;
+  const text = tr(key, params);
+  if (!el.children || el.children.length === 0) {
+    el.textContent = text;
+    return;
+  }
+  let textNode = null;
+  for (const node of el.childNodes) {
+    if (node.nodeType === 3) { textNode = node; break; }
+  }
+  if (textNode) textNode.nodeValue = text;
+  else el.appendChild(document.createTextNode(text));
 }

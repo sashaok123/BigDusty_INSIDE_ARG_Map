@@ -132,6 +132,33 @@
   color: var(--accent);
 }
 
+#left-rail .rail-btn-help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 6px;
+  border-radius: 50%;
+  border: 1px solid var(--panel-border);
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: help;
+  flex-shrink: 0;
+  background: transparent;
+  transition: color .12s, border-color .12s, background .12s;
+}
+
+#left-rail .rail-btn-help:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft-bg);
+}
+
+#left-rail.collapsed .rail-btn-help { display: none; }
+
 #left-rail .rail-separator {
   width: 100%;
   height: 1px;

@@ -9,6 +9,8 @@ function youtubeThumb(videoId) {
   return `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`;
 }
 
+const IFRAME_KINDS = new Set(['youtube', 'vimeo', 'twitch', 'loom', 'streamable', 'dailymotion']);
+
 export class VideoOverlay {
   constructor(opts) {
     this.viewport = opts.viewport;
@@ -111,7 +113,7 @@ export class VideoOverlay {
     host._materialised = true;
     const media = node.media || {};
     while (host.firstChild) host.removeChild(host.firstChild);
-    if (media.kind === 'youtube' || media.kind === 'vimeo') {
+    if (IFRAME_KINDS.has(media.kind)) {
       const base = media.embedUrl || '';
       const sep = base.includes('?') ? '&' : '?';
       const src = base ? `${base}${sep}autoplay=1` : '';
@@ -129,6 +131,8 @@ export class VideoOverlay {
       v.volume = 0.5;
       const srcEl = document.createElement('source');
       srcEl.src = node.file || media.url;
+      if (typeof media.mime === 'string' && media.mime) srcEl.type = media.mime;
+      else if (typeof node.mime === 'string' && node.mime) srcEl.type = node.mime;
       v.appendChild(srcEl);
       host.appendChild(v);
       v.play().catch(() => {});

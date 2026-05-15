@@ -1,6 +1,6 @@
 .pen-toolbar {
   position: fixed;
-  left: calc(200px + 12px);
+  left: calc(var(--rail-width, 200px) + 12px);
   top: calc(var(--toolbar-h) + 12px);
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
@@ -15,9 +15,13 @@
   font-size: 11px;
   color: var(--text);
   min-width: 220px;
+  max-width: calc(100vw - var(--rail-width, 200px) - 24px);
 }
 
-body.rail-collapsed .pen-toolbar { left: calc(60px + 12px); }
+body { --rail-width: 200px; }
+body.rail-collapsed { --rail-width: 60px; }
+body.rail-collapsed .pen-toolbar { left: calc(var(--rail-width, 60px) + 12px); }
+body:not(.authed) .pen-toolbar { left: 12px; }
 
 .pen-toolbar-row { display: flex; align-items: center; gap: 6px; }
 .pen-colors { flex-wrap: wrap; gap: 4px; }
