@@ -217,9 +217,10 @@ export class AuthUI {
       return b;
     };
     this.menuEl.appendChild(mk(tr('dropdown_change_password'), () => this._openChangePw()));
+    const h = this.adminHandlers || {};
+    this.menuEl.appendChild(mk(tr('user_menu_export'), () => { if (h.onOpenExport) h.onOpenExport(); }, { divider: true }));
     if (u && u.is_admin) {
       this.menuEl.appendChild(mk(tr('dropdown_manage_users'), () => this._openManageUsers()));
-      const h = this.adminHandlers || {};
       this.menuEl.appendChild(mk(tr('dropdown_activity_log'), () => { if (h.onOpenActivityLog) h.onOpenActivityLog(); }));
       this.menuEl.appendChild(mk(tr('dropdown_online_users'), () => { if (h.onOpenPresence) h.onOpenPresence(); }));
       this.menuEl.appendChild(mk(tr('dropdown_snapshots'),    () => { if (h.onOpenSnapshots) h.onOpenSnapshots(); }, { divider: true }));

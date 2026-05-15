@@ -78,6 +78,7 @@ import { AuthUI } from './auth-ui.js';
 import { Realtime } from './realtime.js';
 import { PresencePanel } from './presence.js';
 import { openActivityLog, openSnapshots, openPresence } from './admin-modals.js';
+import { ExportModal } from './export-modal.js';
 import { getActiveTool, setActiveTool, onActiveToolChange, onSpaceHeldChange, isSpaceHeld } from './tools.js';
 import {
   isLoggedIn, getCurrentUser, subscribeAuth,
@@ -147,6 +148,7 @@ let fileViewerModal;
 let branchesPanel;
 let presencePanel;
 let cropOverlay;
+let exportModal;
 let _resizeHistoryPushed = false;
 
 function $(id) { return document.getElementById(id); }
@@ -198,6 +200,7 @@ async function bootstrap() {
   setupTouch();
   setupBeforeUnload();
   setupSettingsModal();
+  setupExportModal();
   setupSnapGuides();
   setupAlignFloater();
   setupCommentsLayer();
@@ -331,6 +334,19 @@ function setupSettingsModal() {
     btn.style.display = 'none';
     btn.addEventListener('click', () => settingsModal.open());
   }
+}
+
+function setupExportModal() {
+  exportModal = new ExportModal({
+    getState: () => state,
+    getArrowLayer: () => arrowLayer,
+    toast: (msg) => toast(msg),
+  });
+}
+
+function openExportDialog() {
+  if (!exportModal) return;
+  exportModal.open();
 }
 
 function setupSnapGuides() {
@@ -653,6 +669,7 @@ function setupAuthUI() {
       onOpenSnapshots:    () => openSnapshotsModal(),
       onOpenPresence:     () => openPresenceModal(),
       onManageBranches:   () => openManageBranches(),
+      onOpenExport:       () => openExportDialog(),
     },
   });
   subscribeAuth((kind) => {

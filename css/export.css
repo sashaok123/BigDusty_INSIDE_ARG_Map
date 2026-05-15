@@ -1,0 +1,179 @@
+.export-modal-box {
+  width: 760px;
+  max-width: 96vw;
+}
+
+.export-modal-body { padding: 14px 18px; gap: 10px; }
+
+.export-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0 12px;
+  border-bottom: 1px solid var(--panel-border);
+  margin-bottom: 10px;
+}
+
+.export-filter-label {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 2px;
+}
+
+.export-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.export-chip {
+  padding: 4px 9px;
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  cursor: pointer;
+  border-radius: var(--radius);
+  transition: background .15s, color .15s, border-color .15s;
+}
+
+.export-chip:hover { color: var(--text); border-color: var(--accent-soft-border); }
+
+.export-chip.active {
+  background: var(--accent-soft-bg);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.export-empty-note {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+.export-options-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+.export-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.export-max-body-input {
+  width: 80px;
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 4px 6px;
+  border-radius: var(--radius);
+}
+
+.export-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-bottom: 1px solid var(--panel-border);
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+}
+
+.export-tab {
+  padding: 5px 12px;
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  border-radius: var(--radius);
+  transition: background .15s, color .15s, border-color .15s;
+}
+
+.export-tab:hover { color: var(--text); border-color: var(--accent-soft-border); }
+
+.export-tab.active {
+  background: var(--accent-soft-bg);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.export-format-hint {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-dim);
+  font-style: italic;
+  margin-bottom: 8px;
+  min-height: 14px;
+}
+
+.export-progress {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+.export-preview {
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.45;
+  padding: 12px;
+  border-radius: var(--radius);
+  max-height: 50vh;
+  overflow: auto;
+  white-space: pre;
+  user-select: text;
+  margin: 0 0 12px;
+}
+
+.export-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.export-actions .modal-btn {
+  padding: 7px 14px;
+  background: transparent;
+  border: 1px solid var(--field-border);
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  border-radius: var(--radius);
+  transition: border-color .18s, color .18s;
+}
+
+.export-actions .modal-btn:hover { color: var(--text); border-color: var(--accent-soft-border); }
+
+@media (max-width: 720px) {
+  .export-modal-box { width: 98vw; }
+  .export-preview { max-height: 40vh; font-size: 10.5px; }
+  .export-tab { font-size: 9.5px; padding: 5px 8px; }
+}
