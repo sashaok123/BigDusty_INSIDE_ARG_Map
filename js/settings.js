@@ -11,6 +11,7 @@ const DEFAULTS = {
   openaiModel: 'gpt-4o-mini',
   anthropicApiKey: '',
   anthropicModel: 'claude-opus-4-7',
+  keepOriginal: false,
 };
 
 function load() {

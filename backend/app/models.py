@@ -105,6 +105,9 @@ class CanvasImage(Base):
     mime: Mapped[str] = mapped_column(String(64), nullable=False)
     size: Mapped[int] = mapped_column(Integer, nullable=False)
     data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    original_data: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    original_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    original_mime: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 

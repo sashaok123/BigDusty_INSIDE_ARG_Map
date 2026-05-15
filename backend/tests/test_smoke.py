@@ -990,3 +990,91 @@ async def test_image_block_node_round_trip(client, admin_token):
     assert node2["type"] == "file"
     assert node2["verification"] == "verified"
     assert node2["tool"] == "Pillow"
+
+
+_TINY_WEBP_COMPRESSED = (
+    b"RIFF\x24\x00\x00\x00WEBP"
+    b"VP8 \x18\x00\x00\x00\x30\x01\x00\x9d\x01\x2a"
+    b"\x01\x00\x01\x00"
+    b"\x02\x00\x34\x25\xa4\x00\x03\x70\x00\xfe\xfb\x94\x00\x00"
+)
+
+_TINY_PNG_ORIGINAL = (
+    b"\x89PNG\r\n\x1a\n"
+    b"\x00\x00\x00\rIHDR"
+    b"\x00\x00\x00\x02\x00\x00\x00\x02\x08\x06\x00\x00\x00"
+    b"\x72\xb6\x0d\x24"
+    b"\x00\x00\x00\x14IDATx\x9cc\xfc\xff\xff?\x03\x03\x03\xc4\x03\x88\x99\x18\x18\x18\x00\x10\x05\x02\x01"
+    b"\x9b\xf3\x4c\x4a"
+    b"\x00\x00\x00\x00IEND\xaeB`\x82"
+)
+
+
+async def test_image_upload_with_original_and_restore(client, admin_token):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    files = {
+        "file": ("compressed.webp", _TINY_WEBP_COMPRESSED, "image/webp"),
+        "original": ("original.png", _TINY_PNG_ORIGINAL, "image/png"),
+    }
+    data = {"keep_original": "true"}
+    resp = await client.post("/canvas/main/images", files=files, data=data, headers=headers)
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    image_id = body["id"]
+    assert body["mime"] == "image/webp"
+    assert body["size"] == len(_TINY_WEBP_COMPRESSED)
+
+    audit = await client.get("/admin/audit", headers=headers)
+    rows = audit.json()
+    upload_rows = [r for r in rows if r["action"] == "image_uploaded" and r.get("payload", {}).get("media_id") == image_id]
+    assert upload_rows, f"expected image_uploaded row, got {rows}"
+    assert upload_rows[0]["payload"].get("original_retained") is True
+    assert upload_rows[0]["payload"].get("original_size") == len(_TINY_PNG_ORIGINAL)
+
+    fetched_compressed = await client.get(body["url"])
+    assert fetched_compressed.status_code == 200
+    assert fetched_compressed.content == _TINY_WEBP_COMPRESSED
+    assert fetched_compressed.headers["content-type"].startswith("image/webp")
+
+    restore = await client.post(
+        f"/canvas/main/images/{image_id}/restore_original",
+        headers=headers,
+    )
+    assert restore.status_code == 200, restore.text
+    restored = restore.json()
+    assert restored["id"] == image_id
+    assert restored["mime"] == "image/png"
+    assert restored["size"] == len(_TINY_PNG_ORIGINAL)
+    assert restored["sha256"] != body["sha256"]
+
+    fetched_original = await client.get(restored["url"])
+    assert fetched_original.status_code == 200
+    assert fetched_original.content == _TINY_PNG_ORIGINAL
+    assert fetched_original.headers["content-type"].startswith("image/png")
+
+    again = await client.post(
+        f"/canvas/main/images/{image_id}/restore_original",
+        headers=headers,
+    )
+    assert again.status_code == 404
+
+
+async def test_image_restore_original_requires_admin(client):
+    fake_id = "00000000-0000-0000-0000-000000000000"
+    resp = await client.post(f"/canvas/main/images/{fake_id}/restore_original")
+    assert resp.status_code == 401
+
+
+async def test_image_restore_no_original_returns_404(client, admin_token):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    files = {"file": ("plain.png", _TINY_PNG, "image/png")}
+    upload = await client.post("/canvas/main/images", files=files, headers=headers)
+    assert upload.status_code == 201, upload.text
+    image_id = upload.json()["id"]
+    resp = await client.post(
+        f"/canvas/main/images/{image_id}/restore_original",
+        headers=headers,
+    )
+    assert resp.status_code == 404
+    body = resp.json()
+    assert body.get("detail") == "no_original"

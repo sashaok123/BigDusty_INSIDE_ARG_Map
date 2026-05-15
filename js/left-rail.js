@@ -360,6 +360,32 @@ export class LeftRail {
     }
   }
 
+  refreshHistoryButtons(info) {
+    const data = info || { canUndo: false, canRedo: false, undoLabel: '', redoLabel: '' };
+    const undoBtn = this._buttons['rail-history-undo'];
+    if (undoBtn) {
+      undoBtn.disabled = !data.canUndo;
+      undoBtn.classList.toggle('disabled', !data.canUndo);
+      const base = tr('editor_tools_undo');
+      const tip = data.undoLabel
+        ? tr('toolbar_undo_tooltip', { label: data.undoLabel })
+        : `${base} (Ctrl+Z)`;
+      undoBtn.title = tip;
+      undoBtn.setAttribute('aria-label', tip);
+    }
+    const redoBtn = this._buttons['rail-history-redo'];
+    if (redoBtn) {
+      redoBtn.disabled = !data.canRedo;
+      redoBtn.classList.toggle('disabled', !data.canRedo);
+      const base = tr('editor_tools_redo');
+      const tip = data.redoLabel
+        ? tr('toolbar_redo_tooltip', { label: data.redoLabel })
+        : `${base} (Ctrl+Y)`;
+      redoBtn.title = tip;
+      redoBtn.setAttribute('aria-label', tip);
+    }
+  }
+
   setActiveMode(mode) {
     const v = this._buttons['rail-mode-viewer'];
     const e = this._buttons['rail-mode-editor'];

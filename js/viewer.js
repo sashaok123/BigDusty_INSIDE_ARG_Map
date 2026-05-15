@@ -127,6 +127,8 @@ export class Viewer {
     this.onDragSelectionEnd = options.onDragSelectionEnd || (() => {});
     this.onSelectStrokeAtPoint = options.onSelectStrokeAtPoint || null;
     this.onClearStrokeSelection = options.onClearStrokeSelection || null;
+    this.onStrokeRightClick = options.onStrokeRightClick || null;
+    this.onStrokeHover = options.onStrokeHover || null;
 
     this.dragState = null;
     this.drawPreviewEl = options.drawPreviewEl || null;
@@ -1415,6 +1417,10 @@ export class Viewer {
       this.cursorPos = null;
       this._updateTooltip();
       this.requestDraw();
+      if (this._lastStrokeHoverId && typeof this.onStrokeHover === 'function') {
+        this.onStrokeHover(null);
+        this._lastStrokeHoverId = null;
+      }
     });
     c.addEventListener('dblclick', this._onDoubleClick.bind(this));
     this._suppressNextContextMenu = false;
@@ -1723,6 +1729,18 @@ export class Viewer {
       } else {
         this._updateTooltip();
       }
+      const tool = getActiveTool();
+      if (!newHover && this.mode === 'editor' && tool === 'select'
+          && typeof this.onStrokeHover === 'function') {
+        const sid = this.onStrokeHover(img);
+        this._lastStrokeHoverId = sid || null;
+        if (sid) {
+          this.canvas.style.cursor = 'pointer';
+        }
+      } else if (this._lastStrokeHoverId && typeof this.onStrokeHover === 'function') {
+        this.onStrokeHover(null);
+        this._lastStrokeHoverId = null;
+      }
       return;
     }
 
@@ -2011,6 +2029,10 @@ export class Viewer {
     if (blk) {
       this.onHotspotRightClick(blk.id, ev);
       return;
+    }
+    if (typeof this.onStrokeRightClick === 'function' && this.mode === 'editor') {
+      const sid = this.onStrokeRightClick(img, ev);
+      if (sid) return;
     }
     this.onCanvasRightClick(ev, { img });
   }

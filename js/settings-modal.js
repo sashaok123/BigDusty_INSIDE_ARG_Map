@@ -46,6 +46,17 @@ export class SettingsModal {
     langSel.addEventListener('change', () => setLang(langSel.value));
     body.appendChild(langLabel); body.appendChild(langSel);
 
+    const keepOriginalField = el('div', { class: 'auth-settings-field auth-settings-toggle-row' });
+    const keepOriginalLabel = el('label', { class: 'auth-settings-toggle-label' });
+    const keepOriginalIn = el('input', { type: 'checkbox' });
+    const keepOriginalText = el('span', { text: tr('settings_keep_original') });
+    keepOriginalLabel.appendChild(keepOriginalIn);
+    keepOriginalLabel.appendChild(keepOriginalText);
+    const keepOriginalHint = el('div', { class: 'auth-settings-hint', text: tr('settings_keep_original_hint') });
+    keepOriginalField.appendChild(keepOriginalLabel);
+    keepOriginalField.appendChild(keepOriginalHint);
+    body.appendChild(keepOriginalField);
+
     const providerLabel = el('label', { text: tr('settings_translation_provider') });
     const providerSel = el('select');
     for (const v of ['none', 'libretranslate', 'deepl', 'openai', 'anthropic']) {
@@ -110,6 +121,7 @@ export class SettingsModal {
         openaiModel: openaiModelIn.value.trim() || 'gpt-4o-mini',
         anthropicApiKey: anthropicIn.value,
         anthropicModel: anthropicModelIn.value.trim() || 'claude-opus-4-7',
+        keepOriginal: !!keepOriginalIn.checked,
       });
       this.close();
     });
@@ -149,6 +161,9 @@ export class SettingsModal {
     this.titleEl = title;
     this.saveBtnEl = saveBtn;
     this.testBtnEl = testBtn;
+    this.keepOriginalInEl = keepOriginalIn;
+    this.keepOriginalTextEl = keepOriginalText;
+    this.keepOriginalHintEl = keepOriginalHint;
     this._refreshVisibility = refreshVisibility;
 
     document.addEventListener('i18n:changed', () => this._retranslate());
@@ -163,6 +178,7 @@ export class SettingsModal {
     this.openaiModelIn.value = s.openaiModel || 'gpt-4o-mini';
     this.anthropicIn.value = s.anthropicApiKey || '';
     this.anthropicModelIn.value = s.anthropicModel || 'claude-opus-4-7';
+    if (this.keepOriginalInEl) this.keepOriginalInEl.checked = !!s.keepOriginal;
     this.langSelEl.value = getLang();
     this._refreshVisibility();
     this.modalEl.classList.add('open');
@@ -176,5 +192,7 @@ export class SettingsModal {
     if (this.titleEl) this.titleEl.textContent = tr('settings_title');
     if (this.saveBtnEl) this.saveBtnEl.textContent = tr('settings_save');
     if (this.testBtnEl) this.testBtnEl.textContent = tr('settings_translation_test');
+    if (this.keepOriginalTextEl) this.keepOriginalTextEl.textContent = tr('settings_keep_original');
+    if (this.keepOriginalHintEl) this.keepOriginalHintEl.textContent = tr('settings_keep_original_hint');
   }
 }

@@ -179,6 +179,29 @@ body.comment-arm { cursor: crosshair; }
 }
 .auth-settings-test-out.error { color: var(--unsolved); }
 
+.auth-settings-toggle-row { margin-top: 10px; }
+.auth-settings-toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.auth-settings-toggle-label input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  cursor: pointer;
+}
+.auth-settings-hint {
+  font-size: 11px;
+  color: var(--text-muted, #888);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+.em-file-restore-original {
+  margin-left: 6px;
+}
+
 .auth-confirm-text {
   font-size: 13px;
   line-height: 1.5;

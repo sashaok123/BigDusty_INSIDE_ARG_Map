@@ -6,6 +6,8 @@
 import { tr } from './i18n.js';
 import { getActiveTool, onActiveToolChange } from './tools.js';
 
+const HOVER_TOLERANCE_PX = 5;
+
 const SAMPLE_INTERVAL_MS = 20;
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -82,6 +84,7 @@ export class PenLayer {
     this._lastSampleAt = 0;
     this._raf = null;
     this._selectedIds = new Set();
+    this._hoverStrokeId = null;
 
     this._build();
     this._wire();
@@ -107,6 +110,30 @@ export class PenLayer {
     if (this._selectedIds.size === 0) return;
     this._selectedIds = new Set();
     this.requestDraw();
+  }
+
+  updateHoverAtWorld(worldPoint) {
+    const id = worldPoint ? this.hitTestStrokeAt(worldPoint, HOVER_TOLERANCE_PX) : null;
+    if (id !== this._hoverStrokeId) {
+      this._hoverStrokeId = id;
+      this.requestDraw();
+    }
+    return id;
+  }
+
+  getHoverStrokeId() { return this._hoverStrokeId; }
+
+  clearHover() {
+    if (this._hoverStrokeId !== null) {
+      this._hoverStrokeId = null;
+      this.requestDraw();
+    }
+  }
+
+  toggleEraser() {
+    this.eraserMode = !this.eraserMode;
+    this._syncEraserBtn();
+    return this.eraserMode;
   }
 
   hitTestStrokeAt(worldPoint, tolerancePx) {
@@ -401,9 +428,13 @@ export class PenLayer {
       const d = pointsToPath(s.points);
       const widthPx = w / Math.max(0.0001, t.scale);
       const isSelected = s.id && this._selectedIds.has(s.id);
+      const isHovered = s.id && !isSelected && this._hoverStrokeId === s.id;
       if (isSelected) {
         const haloWidth = widthPx * 2.2 + 4 / Math.max(0.0001, t.scale);
         html += `<path d="${d}" stroke="#e86b2e" stroke-opacity="0.45" stroke-width="${haloWidth}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+      } else if (isHovered) {
+        const hoverHalo = widthPx * 1.7 + 2 / Math.max(0.0001, t.scale);
+        html += `<path d="${d}" stroke="#e86b2e" stroke-opacity="0.3" stroke-width="${hoverHalo}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
       }
       html += `<path d="${d}" stroke="${safeColor}" stroke-width="${widthPx}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
     }

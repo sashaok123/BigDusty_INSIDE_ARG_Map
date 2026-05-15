@@ -227,6 +227,7 @@ export class EditNodeModal {
     this.getGithubOrigin = opts.getGithubOrigin || (() => null);
     this.isAdmin = opts.isAdmin || (() => false);
     this.onRecompressFile = opts.onRecompressFile || null;
+    this.onRestoreOriginal = opts.onRestoreOriginal || null;
     this.onProvenanceToggle = opts.onProvenanceToggle || (() => {});
     this.isProvenanceActive = opts.isProvenanceActive || (() => false);
     this.onAnnotationsChange = opts.onAnnotationsChange || (() => {});
@@ -403,7 +404,12 @@ export class EditNodeModal {
     const recompressBtn = el('button', { type: 'button', class: 'modal-btn em-file-recompress',
       text: tr('file_info_recompress') });
     recompressBtn.addEventListener('click', () => this._recompressFile());
+    const restoreOriginalBtn = el('button', { type: 'button', class: 'modal-btn em-file-restore-original',
+      text: tr('file_info_restore_original') });
+    restoreOriginalBtn.addEventListener('click', () => this._restoreOriginal());
+    restoreOriginalBtn.style.display = 'none';
     fileInfoActions.appendChild(recompressBtn);
+    fileInfoActions.appendChild(restoreOriginalBtn);
     fileInfoField.appendChild(fileInfoSizeRow);
     fileInfoField.appendChild(fileInfoOriginalRow);
     fileInfoField.appendChild(fileInfoActions);
@@ -617,6 +623,7 @@ export class EditNodeModal {
     this.fileInfoSizeRowEl = fileInfoSizeRow;
     this.fileInfoOriginalRowEl = fileInfoOriginalRow;
     this.recompressBtnEl = recompressBtn;
+    this.restoreOriginalBtnEl = restoreOriginalBtn;
     this.textStyleFieldEl = textStyleField;
     this.textStyleLabelEl = textStyleLabel;
     this.sizeBtnEls = sizeBtns;
@@ -793,6 +800,44 @@ export class EditNodeModal {
     const canRecompress = isImage && typeof this.onRecompressFile === 'function' && !!this.isAdmin();
     this.recompressBtnEl.style.display = canRecompress ? '' : 'none';
     this.recompressBtnEl.disabled = !!this._readonly || !s.file;
+    if (this.restoreOriginalBtnEl) {
+      const canRestore = isImage
+        && typeof this.onRestoreOriginal === 'function'
+        && !!this.isAdmin()
+        && !!s.imageId
+        && size != null
+        && originalSize != null
+        && originalSize > size;
+      this.restoreOriginalBtnEl.style.display = canRestore ? '' : 'none';
+      this.restoreOriginalBtnEl.disabled = !!this._readonly || !s.file;
+    }
+  }
+
+  _restoreOriginal() {
+    if (this._readonly) { this.onUnauthedSubmit(); return; }
+    if (!this._state || !this._state.imageId) return;
+    if (typeof this.onRestoreOriginal !== 'function') return;
+    const id = this._state.id;
+    const imageId = this._state.imageId;
+    const currentSize = Number.isFinite(this._state.size) ? this._state.size : 0;
+    const originalSize = Number.isFinite(this._state.originalSize) ? this._state.originalSize : 0;
+    const proceed = window.confirm(tr('file_info_restore_original_confirm', {
+      from: formatBytes(currentSize),
+      to: formatBytes(originalSize),
+    }));
+    if (!proceed) return;
+    Promise.resolve(this.onRestoreOriginal(id, imageId)).then((res) => {
+      if (!res || !this._state || this._state.id !== id) return;
+      if (res.url) {
+        this._state.file = res.url;
+        if (looksLikeImage(this._state)) this._setImagePreview(res.url);
+      }
+      if (Number.isFinite(res.size)) this._state.size = res.size;
+      if (res.mime) this._state.mime = res.mime;
+      if (typeof res.sha256 === 'string') this._state.sha256 = res.sha256;
+      this._state.originalSize = null;
+      this._syncFileInfo();
+    }).catch((e) => { void e; });
   }
 
   _recompressFile() {
@@ -901,6 +946,8 @@ export class EditNodeModal {
       annotations: Array.isArray(view.annotations) ? view.annotations.map((a) => ({ ...a })) : [],
       size: Number.isFinite(view.size) ? view.size : null,
       originalSize: Number.isFinite(view.originalSize) ? view.originalSize : null,
+      imageId: typeof view.imageId === 'string' ? view.imageId : null,
+      sha256: typeof view.sha256 === 'string' ? view.sha256 : null,
     };
     this.currentView = view;
     this._tags = [...this._state.tags];
@@ -2057,6 +2104,8 @@ export class EditNodeModal {
     if (this.cropBtnEl) this.cropBtnEl.textContent = tr('edit_modal_crop_image');
     if (this.replaceBtnEl) this.replaceBtnEl.textContent = tr('edit_modal_replace_image');
     if (this.openFullImageBtnEl) this.openFullImageBtnEl.textContent = tr('file_viewer_open_full');
+    if (this.recompressBtnEl) this.recompressBtnEl.textContent = tr('file_info_recompress');
+    if (this.restoreOriginalBtnEl) this.restoreOriginalBtnEl.textContent = tr('file_info_restore_original');
     for (const s of STATUSES) {
       const b = this.statusBtnEls[s];
       if (b && b.lastChild) b.lastChild.textContent = this._statusLabel(s);

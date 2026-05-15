@@ -170,6 +170,11 @@ export class KeyboardShortcuts {
     }
     if (k === 'e' || k === 'E') {
       if (meta) return;
+      if (this.editModeActive && getActiveTool() === 'pen') {
+        ev.preventDefault();
+        this._call('onPenEraserToggle', ev);
+        return;
+      }
       ev.preventDefault();
       this._call('onModeToggle', ev);
       return;

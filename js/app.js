@@ -97,6 +97,7 @@ import {
   createNode as apiCreateNode, patchNode as apiPatchNode, deleteNode as apiDeleteNode,
   createEdge as apiCreateEdge, patchEdge as apiPatchEdge, deleteEdge as apiDeleteEdge,
   uploadImage as apiUploadImage,
+  apiRestoreOriginal,
   getClientId as getClientIdFromApi,
 } from './api-client.js';
 import { isPlaceholderApiBase } from './config.js';
@@ -131,7 +132,8 @@ const state = {
   currentlyEditingNodeId: null,
 };
 
-const HISTORY_LIMIT = 50;
+const HISTORY_LIMIT = 100;
+const HISTORY_COALESCE_MS = 500;
 
 let viewer;
 let searchBar;
@@ -194,6 +196,13 @@ function snapshot() {
   };
 }
 
+function edgeMutationLabel(kind) {
+  if (kind === 'create') return tr('history_label_edge_create');
+  if (kind === 'patch') return tr('history_label_edge_update');
+  if (kind === 'delete') return tr('history_label_edge_delete');
+  return tr('history_label_edge_drag');
+}
+
 function scheduleSave() {
   saveState(snapshot());
 }
@@ -249,6 +258,7 @@ async function bootstrap() {
   setupRealtime();
 
   setupDebugPanel();
+  refreshHistoryUi();
 
   document.addEventListener('i18n:changed', () => {
     applyStaticTranslations();
@@ -268,6 +278,7 @@ async function bootstrap() {
     refreshRealtimeStatusLabel();
     refreshOfflineBanner();
     refreshSelectionStatus();
+    refreshHistoryUi();
   });
 }
 
@@ -563,7 +574,7 @@ function setupPenLayer() {
 
 function commitPenStroke(stroke) {
   if (!stroke || !stroke.id) return;
-  pushHistory();
+  pushHistory(tr('history_label_pen_stroke'));
   if (!state.pen) state.pen = { strokes: [] };
   state.pen.strokes.push({
     id: stroke.id,
@@ -580,16 +591,31 @@ function deletePenStroke(id, opts) {
   if (!state.pen || !Array.isArray(state.pen.strokes)) return;
   const idx = state.pen.strokes.findIndex((s) => s.id === id);
   if (idx < 0) return;
-  if (!opts || !opts.skipHistory) pushHistory();
+  if (!opts || !opts.skipHistory) pushHistory(tr('history_label_erase_stroke'));
   state.pen.strokes.splice(idx, 1);
   if (penLayer) penLayer.requestDraw();
   scheduleSave();
   pushPenToBackend();
 }
 
+function openStrokeContextMenu(strokeId, ev) {
+  if (!contextMenu || !strokeId) return;
+  if (penLayer) {
+    penLayer.setSelectedStrokeIds(new Set([strokeId]));
+  }
+  const x = (ev && Number.isFinite(ev.clientX)) ? ev.clientX : 0;
+  const y = (ev && Number.isFinite(ev.clientY)) ? ev.clientY : 0;
+  contextMenu.open(x, y, [
+    { label: tr('ctx_delete_stroke'), danger: true, fn: () => {
+      if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
+      if (penLayer) penLayer.deleteStrokeIds([strokeId]);
+    } },
+  ]);
+}
+
 function clearAllPenStrokes() {
   if (!state.pen || !Array.isArray(state.pen.strokes) || !state.pen.strokes.length) return;
-  pushHistory();
+  pushHistory(tr('history_label_clear_strokes'));
   state.pen = { strokes: [] };
   if (penLayer) penLayer.requestDraw();
   scheduleSave();
@@ -683,7 +709,7 @@ function setupGithubImportModal() {
 
 async function applyLocalImportPayload(payload) {
   if (!payload) return;
-  pushHistory();
+  pushHistory(tr('history_label_import'));
   for (const g of (payload.groups || [])) {
     if (!g || !g.id) continue;
     state.nodes.set(g.id, normaliseNode(g));
@@ -786,7 +812,7 @@ function openManageBranches() {
 }
 
 function applyBranchesUpdate(nextList) {
-  pushHistory();
+  pushHistory(tr('history_label_branches'));
   const validIds = new Set(nextList.map((b) => b.id));
   state.branches = normaliseBranches(nextList);
   for (const n of state.nodes.values()) {
@@ -835,7 +861,7 @@ function triggerAddComment() {
 }
 
 function createVideoNode(rect, media) {
-  pushHistory();
+  pushHistory(tr('history_label_create_video'));
   const id = uniqueId(state.nodes, `video-${media.provider || 'media'}`);
   const node = {
     id,
@@ -892,7 +918,7 @@ async function applyLayoutAlgorithm(algo, opts) {
   else if (algo === 'circle') positions = applyCircle(targets, bounds);
   else return;
   if (!positions || !positions.size) return;
-  pushHistory();
+  pushHistory(tr('history_label_layout', { algo }));
   for (const [id, pos] of positions.entries()) {
     const n = findNode(state.nodes, id);
     if (!n) continue;
@@ -911,7 +937,7 @@ function applyAlignmentOperation(op) {
   if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
   const ids = Array.from(state.selection);
   if (ids.length < 2) return;
-  pushHistory();
+  pushHistory(tr('history_label_align'));
   const nodes = ids.map((id) => findNode(state.nodes, id)).filter(Boolean);
   if (!nodes.length) return;
   const lefts = nodes.map((n) => n.x);
@@ -1140,9 +1166,7 @@ function setupViewer() {
               break;
             }
           }
-          state.history.past.push(snap);
-          if (state.history.past.length > HISTORY_LIMIT) state.history.past.shift();
-          state.history.future = [];
+          pushHistorySnapshot(snap, 'Resize node', { nodeId: id });
         }
         _resizeHistoryPushed = true;
       }
@@ -1200,6 +1224,17 @@ function setupViewer() {
       for (const id of ids) next.add(id);
       penLayer.setSelectedStrokeIds(next);
     },
+    onStrokeHover: (worldPt) => {
+      if (!penLayer) return null;
+      return penLayer.updateHoverAtWorld(worldPt);
+    },
+    onStrokeRightClick: (worldPt, ev) => {
+      if (!penLayer) return null;
+      const id = penLayer.hitTestStrokeAt(worldPt, 5);
+      if (!id) return null;
+      openStrokeContextMenu(id, ev);
+      return id;
+    },
   });
   viewer.attachTooltip($('hotspot-tooltip'));
   onActiveToolChange(() => { if (viewer) viewer.refreshCursor(); });
@@ -1230,7 +1265,7 @@ function setupArrowLayer() {
     getTransform: () => viewer.getTransform(),
     onEdgesChange: () => {},
     onScheduleSave: () => scheduleSave(),
-    onBeforeMutation: () => { pushHistory(); },
+    onBeforeMutation: (kind, edgeId) => { pushHistory(edgeMutationLabel(kind), { nodeId: edgeId || null }); },
     onEdgeMutation: (kind, id, edge) => {
       if (!state.backendOnline || !isLoggedIn()) return;
       if (kind === 'create' && edge) {
@@ -1486,6 +1521,7 @@ function setupEditNodeModal() {
     onCropImage: (id, currentUrl) => doCropImage(id, currentUrl),
     onReplaceImage: (id) => doReplaceImage(id),
     onRecompressFile: (id, quality) => doRecompressFile(id, quality),
+    onRestoreOriginal: (id, imageId) => doRestoreOriginal(id, imageId),
     onStatusChange: (id, status) => {
       if (!isLoggedIn()) {
         const n0 = findNode(state.nodes, id);
@@ -1562,7 +1598,10 @@ function setupEditNodeModal() {
         if (authUI) authUI.openLogin();
         return;
       }
-      pushHistory();
+      const label = (patch && Object.prototype.hasOwnProperty.call(patch, 'bookmarked'))
+        ? tr('history_label_toggle_bookmark')
+        : tr('history_label_metadata');
+      pushHistory(label, { nodeId: id });
       updatePuzzleNode(state.nodes, id, patch);
       refreshPuzzleViewsInViewer();
       if (bookmarksPanel) bookmarksPanel.refresh();
@@ -1622,7 +1661,7 @@ function setupEditNodeModal() {
         if (authUI) authUI.openLogin();
         return;
       }
-      pushHistory();
+      pushHistory(tr('history_label_annotations'), { nodeId: id });
       updatePuzzleNode(state.nodes, id, { annotations });
       const n = findNode(state.nodes, id);
       if (n && viewer && typeof viewer.setBlockAnnotations === 'function') {
@@ -1805,7 +1844,7 @@ async function replaceVideoUrl(id) {
   if (!n) return;
   const info = await openVideoUrlDialog();
   if (!info) return;
-  pushHistory();
+  pushHistory(tr('history_label_replace_video'), { nodeId: id });
   updatePuzzleNode(state.nodes, id, { media: { ...info }, url: info.url });
   refreshPuzzleViewsInViewer();
   pushNodePatch(id, { media: { ...info }, url: info.url });
@@ -1961,7 +2000,7 @@ function doReplaceAudio(nodeId) {
     try {
       const uploaded = await apiUploadImage(file, file.name);
       if (!uploaded || !uploaded.url) return;
-      pushHistory();
+      pushHistory(tr('history_label_replace_audio'), { nodeId });
       const currentNode = findNode(state.nodes, nodeId);
       if (!currentNode) return;
       const nextMedia = { ...(currentNode.media || {}), kind: 'audio', url: uploaded.url, provider: 'local' };
@@ -2090,12 +2129,12 @@ function setupUploader() {
     isEnabled: () => isLoggedIn() && state.backendOnline,
     toClientToImage: (cx, cy) => viewer ? viewer.imagePointFromClient(cx, cy) : null,
     onPickerCancel: () => setActiveTool('select'),
-    onUpload: async (file) => {
+    onUpload: async (file, opts) => {
       if (!isLoggedIn()) {
         if (authUI) authUI.openLogin();
         throw Object.assign(new Error('auth_required'), { kind: 'auth_expired' });
       }
-      return apiUploadImage(file, file.name);
+      return apiUploadImage(file, file.name, opts || null);
     },
     onPlaceNode: async (placement) => placeUploadedImageNode(placement),
     onToast: (msg, kind) => toast(msg, kind),
@@ -2190,7 +2229,7 @@ function doCropImage(nodeId, currentUrl) {
       try {
         const uploaded = await apiUploadImage(blob, 'crop.webp');
         if (!uploaded || !uploaded.url) { resolve(null); return; }
-        pushHistory();
+        pushHistory(tr('history_label_crop'), { nodeId });
         await replaceImageForNode(nodeId, uploaded.url);
         resolve(uploaded.url);
       } catch (e) {
@@ -2214,7 +2253,7 @@ async function doCropImageFallback(nodeId, currentUrl) {
   try {
     const uploaded = await apiUploadImage(blob, 'crop.webp');
     if (!uploaded || !uploaded.url) return null;
-    pushHistory();
+    pushHistory(tr('history_label_crop'), { nodeId });
     await replaceImageForNode(nodeId, uploaded.url);
     return uploaded.url;
   } catch (e) {
@@ -2260,7 +2299,7 @@ function doReplaceImage(nodeId) {
         }
         const uploaded = await apiUploadImage(blob, name);
         if (!uploaded || !uploaded.url) { resolve(null); return; }
-        pushHistory();
+        pushHistory(tr('history_label_replace_image'), { nodeId });
         await replaceImageForNode(nodeId, uploaded.url);
         resolve(uploaded.url);
       } catch (e) {
@@ -2307,7 +2346,7 @@ async function doRecompressFile(nodeId, quality) {
     const file = new File([out], baseName, { type: 'image/webp' });
     const uploaded = await apiUploadImage(file, baseName);
     if (!uploaded || !uploaded.url) throw new Error('upload_failed');
-    pushHistory();
+    pushHistory(tr('history_label_recompress'), { nodeId });
     const prevSize = Number.isFinite(n.size) ? n.size : sourceBlob.size;
     const prevOriginal = Number.isFinite(n.originalSize) ? n.originalSize : prevSize;
     const nextOriginal = Math.max(prevOriginal, prevSize);
@@ -2342,6 +2381,53 @@ async function doRecompressFile(nodeId, quality) {
     } else {
       console.warn('[app] recompress failed', e);
       toast(tr('file_info_recompress_failed'), 'error');
+    }
+    return null;
+  }
+}
+
+async function doRestoreOriginal(nodeId, imageId) {
+  if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return null; }
+  if (!nodeId || !imageId) return null;
+  const n = findNode(state.nodes, nodeId);
+  if (!n) return null;
+  try {
+    pushHistory(tr('history_label_restore_orig'), { nodeId });
+    const res = await apiRestoreOriginal(imageId);
+    if (!res || !res.url) throw new Error('restore_failed');
+    n.file = res.url;
+    n.imageId = res.id || imageId;
+    n.sha256 = res.sha256 || n.sha256 || null;
+    n.mime = res.mime || n.mime || 'application/octet-stream';
+    n.size = Number.isFinite(res.size) ? res.size : n.size;
+    delete n.originalSize;
+    if (viewer) {
+      await viewer.refreshBlock({ id: nodeId, rect: { x: n.x, y: n.y, w: n.width, h: n.height }, file: n.file });
+    }
+    refreshPuzzleViewsInViewer();
+    if (viewer) viewer.notifyNodesChanged();
+    if (state.backendOnline && isLoggedIn()) {
+      trackSelfMutation('node_updated', nodeId);
+      try {
+        const r = await apiPatchNode(nodeId, {
+          file: n.file, imageId: n.imageId, sha256: n.sha256, mime: n.mime, size: n.size, originalSize: null,
+        });
+        if (r && typeof r.revision === 'number') state.revision = r.revision;
+      } catch (e) {
+        if (e && e.kind !== 'auth_expired') console.warn('[app] restore patch failed', e);
+      }
+    }
+    scheduleSave();
+    toast(tr('file_info_restore_original_done', { size: formatBytes(n.size) }));
+    return { url: n.file, size: n.size, mime: n.mime, sha256: n.sha256, originalSize: null };
+  } catch (e) {
+    if (e && e.kind === 'auth_expired') {
+      if (authUI) authUI.openLogin();
+    } else if (e && e.status === 404) {
+      toast(tr('file_info_restore_original_missing'), 'error');
+    } else {
+      console.warn('[app] restore original failed', e);
+      toast(tr('file_info_restore_original_failed'), 'error');
     }
     return null;
   }
@@ -2417,7 +2503,7 @@ function handleDrawRect(rect) {
 }
 
 function createBlockAtPoint(rect) {
-  pushHistory();
+  pushHistory(tr('history_label_create_node'));
   const id = uniqueId(state.nodes, 'block');
   const title = `Block ${state.nodes.size + 1}`;
   const parent = nodeAtParentLookup(state.nodes, rect);
@@ -2440,7 +2526,7 @@ function createBlockAtPoint(rect) {
 }
 
 function createTextFromRect(rect) {
-  pushHistory();
+  pushHistory(tr('history_label_create_node'));
   const id = uniqueId(state.nodes, 'text');
   const parent = nodeAtParentLookup(state.nodes, rect);
   const initRect = (rect && rect.w >= 40 && rect.h >= 40)
@@ -2460,7 +2546,7 @@ function createTextFromRect(rect) {
 }
 
 function createStickyFromRect(rect) {
-  pushHistory();
+  pushHistory(tr('history_label_create_node'));
   const id = uniqueId(state.nodes, 'sticky');
   const parent = nodeAtParentLookup(state.nodes, rect);
   const md = `# Sticky\n`;
@@ -2473,7 +2559,7 @@ function createStickyFromRect(rect) {
 }
 
 function createGroupFromRect(rect) {
-  pushHistory();
+  pushHistory(tr('history_label_create_node'));
   const id = uniqueId(state.nodes, 'group');
   const label = tr('group_default_label', { n: nextGroupLabel(state.nodes) });
   addGroupNode(state.nodes, { id, label, rect });
@@ -2485,7 +2571,7 @@ function createGroupFromRect(rect) {
 }
 
 function createTransformFromRect(rect, opts) {
-  pushHistory();
+  pushHistory(tr('history_label_create_node'));
   const id = uniqueId(state.nodes, 'transform');
   const parent = nodeAtParentLookup(state.nodes, rect);
   const initRect = (rect && rect.w >= 60 && rect.h >= 60)
@@ -2715,10 +2801,8 @@ function pushHistoryForDragCommit(allIds) {
       node.y = o.y;
     }
   }
-  state.history.past.push(snap);
-  if (state.history.past.length > HISTORY_LIMIT) state.history.past.shift();
-  state.history.future = [];
-  void allIds;
+  const n = (allIds && allIds.size) || orig.size;
+  pushHistorySnapshot(snap, tr('history_label_move_n', { n }));
 }
 
 function computeSnapGuides(dragRect, otherRects) {
@@ -2754,7 +2838,7 @@ function computeSnapGuides(dragRect, otherRects) {
 function groupCurrentSelection() {
   if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
   if (state.selection.size === 0) return;
-  pushHistory();
+  pushHistory(tr('history_label_group_n', { n: state.selection.size }));
   const ids = Array.from(state.selection);
   const rect = computeUnionBbox(ids);
   if (!rect) return;
@@ -2792,7 +2876,7 @@ function ungroupGroup(groupId, opts) {
   if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
   const g = findNode(state.nodes, groupId);
   if (!g || !isGroupNode(g)) return;
-  if (!opts || !opts.skipHistory) pushHistory();
+  if (!opts || !opts.skipHistory) pushHistory(tr('history_label_ungroup'), { nodeId: groupId });
   const children = [];
   for (const n of state.nodes.values()) {
     if (n.parent === groupId) {
@@ -2815,7 +2899,7 @@ function deleteGroupWithChildren(groupId) {
   if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
   const g = findNode(state.nodes, groupId);
   if (!g || !isGroupNode(g)) return;
-  pushHistory();
+  pushHistory(tr('history_label_delete_group'), { nodeId: groupId });
   const desc = groupDescendantIds(state.nodes, groupId);
   for (const cid of desc) {
     removeNode(state.nodes, cid);
@@ -2861,7 +2945,8 @@ function deleteCurrentSelection() {
 }
 
 function _performDeleteSelection(strokeIds, edgeId) {
-  pushHistory();
+  const total = state.selection.size + (Array.isArray(strokeIds) ? strokeIds.length : 0) + (edgeId ? 1 : 0);
+  pushHistory(tr('history_label_delete_n', { n: total || 1 }));
   let skippedLocked = 0;
   for (const id of Array.from(state.selection)) {
     const n = findNode(state.nodes, id);
@@ -2885,7 +2970,7 @@ function _performDeleteSelection(strokeIds, edgeId) {
 function toggleLockSelection() {
   if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
   if (state.selection.size === 0) return;
-  pushHistory();
+  pushHistory(tr('history_label_toggle_lock'));
   const ids = Array.from(state.selection);
   const anyUnlocked = ids.some((id) => {
     const n = findNode(state.nodes, id);
@@ -2921,11 +3006,70 @@ function computeUnionBbox(ids) {
   return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
 }
 
-function pushHistory() {
+function pushHistory(label, opts) {
+  const o = opts || {};
   const snap = serializeFullState();
+  const now = Date.now();
+  const meta = {
+    label: typeof label === 'string' && label ? label : tr('history_label_unknown'),
+    at: now,
+    nodeId: typeof o.nodeId === 'string' && o.nodeId ? o.nodeId : null,
+  };
+  snap._historyMeta = meta;
+  const past = state.history.past;
+  const last = past.length ? past[past.length - 1] : null;
+  const lastMeta = last && last._historyMeta;
+  if (lastMeta
+      && lastMeta.label === meta.label
+      && lastMeta.nodeId === meta.nodeId
+      && now - lastMeta.at < HISTORY_COALESCE_MS) {
+    past[past.length - 1] = { ...last, _historyMeta: { ...lastMeta, at: now } };
+  } else {
+    past.push(snap);
+    if (past.length > HISTORY_LIMIT) past.shift();
+  }
+  state.history.future = [];
+  refreshHistoryUi();
+}
+
+function nextUndoLabel() {
+  const past = state.history.past;
+  if (!past.length) return '';
+  const meta = past[past.length - 1] && past[past.length - 1]._historyMeta;
+  return (meta && meta.label) || '';
+}
+
+function nextRedoLabel() {
+  const future = state.history.future;
+  if (!future.length) return '';
+  const meta = future[future.length - 1] && future[future.length - 1]._historyMeta;
+  return (meta && meta.label) || '';
+}
+
+function refreshHistoryUi() {
+  if (leftRail && typeof leftRail.refreshHistoryButtons === 'function') {
+    leftRail.refreshHistoryButtons({
+      canUndo: state.history.past.length > 0,
+      canRedo: state.history.future.length > 0,
+      undoLabel: nextUndoLabel(),
+      redoLabel: nextRedoLabel(),
+    });
+  }
+}
+
+function pushHistorySnapshot(snap, label, opts) {
+  if (!snap) return;
+  const o = opts || {};
+  const now = Date.now();
+  snap._historyMeta = {
+    label: typeof label === 'string' && label ? label : tr('history_label_unknown'),
+    at: now,
+    nodeId: typeof o.nodeId === 'string' && o.nodeId ? o.nodeId : null,
+  };
   state.history.past.push(snap);
   if (state.history.past.length > HISTORY_LIMIT) state.history.past.shift();
   state.history.future = [];
+  refreshHistoryUi();
 }
 
 function serializeNodes() {
@@ -3053,26 +3197,34 @@ async function pushEdgeDelete(id) {
 function doUndo() {
   if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
   if (state.history.past.length === 0) return;
-  state.history.future.push(serializeFullState());
+  const targetMeta = state.history.past[state.history.past.length - 1]._historyMeta || null;
+  const cur = serializeFullState();
+  cur._historyMeta = targetMeta ? { ...targetMeta, at: Date.now() } : null;
+  state.history.future.push(cur);
   const snap = state.history.past.pop();
   restoreFullState(snap);
   scheduleSave();
+  refreshHistoryUi();
 }
 
 function doRedo() {
   if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
   if (state.history.future.length === 0) return;
-  state.history.past.push(serializeFullState());
+  const targetMeta = state.history.future[state.history.future.length - 1]._historyMeta || null;
+  const cur = serializeFullState();
+  cur._historyMeta = targetMeta ? { ...targetMeta, at: Date.now() } : null;
+  state.history.past.push(cur);
   const snap = state.history.future.pop();
   restoreFullState(snap);
   scheduleSave();
+  refreshHistoryUi();
 }
 
 function persistRichEditSave(payload) {
   if (!payload || !payload.id) return;
   const n = findNode(state.nodes, payload.id);
   if (!n) return;
-  pushHistory();
+  pushHistory(tr('history_label_edit_node'), { nodeId: payload.id });
   const patch = {
     title: payload.title,
     status: payload.status,
@@ -3618,7 +3770,7 @@ async function doDuplicate() {
 function pasteText(text) {
   const pt = viewer.imagePointFromClient(window.innerWidth / 2, window.innerHeight / 2);
   const rect = { x: Math.round(pt.x), y: Math.round(pt.y), w: 280, h: 80 };
-  pushHistory();
+  pushHistory(tr('history_label_paste_text'));
   const id = uniqueId(state.nodes, 'text');
   addTextNode(state.nodes, { id, rect, md: text });
   refreshPuzzleViewsInViewer();
@@ -3672,7 +3824,8 @@ function readBlobDims(blob) {
 }
 
 function instantiatePastedNodes(payload, dx, dy) {
-  pushHistory();
+  const n = Array.isArray(payload && payload.nodes) ? payload.nodes.length : 0;
+  pushHistory(tr('history_label_paste_n', { n }));
   const idMap = new Map();
   const newNodes = [];
   for (const raw of payload.nodes) {
@@ -3948,6 +4101,13 @@ function setupKeyboard() {
       onMinimapToggle: () => minimap && minimap.toggle(),
       onFilterCycle: () => statusFilter && statusFilter.cycle(),
       onModeToggle: () => setMode(state.mode === 'viewer' ? 'editor' : 'viewer'),
+      onPenEraserToggle: () => {
+        if (penLayer) {
+          const next = penLayer.toggleEraser();
+          toast(next ? tr('pen_eraser_on') : tr('pen_eraser_off'));
+        }
+        return true;
+      },
       onCreateChild: () => createChildNode(),
       onCreateSibling: () => {
         if (state.selection.size === 1) {

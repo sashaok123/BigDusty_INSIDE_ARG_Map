@@ -397,7 +397,7 @@ export async function replyToComment(canvasId, commentId, payload) {
   });
 }
 
-export async function uploadImage(blob, filename) {
+export async function uploadImage(blob, filename, opts) {
   if (!isLoggedIn()) {
     const err = new Error('auth_required');
     err.kind = 'auth_expired';
@@ -406,10 +406,12 @@ export async function uploadImage(blob, filename) {
   }
   const form = new FormData();
   const name = filename || (blob && blob.name) || 'upload';
-  if (blob instanceof Blob && !(blob instanceof File)) {
-    form.append('file', blob, name);
-  } else {
-    form.append('file', blob, name);
+  form.append('file', blob, name);
+  const options = opts || {};
+  if (options.keepOriginal && options.originalBlob) {
+    form.append('keep_original', 'true');
+    const origName = options.originalName || (options.originalBlob.name) || 'original';
+    form.append('original', options.originalBlob, origName);
   }
   const headers = { 'X-Client-Id': getClientId() };
   const token = getAccessToken();
@@ -458,6 +460,22 @@ export async function uploadImage(blob, filename) {
     throw err;
   }
   const data = await res.json();
+  if (data && typeof data.url === 'string') {
+    data.url = absoluteImageUrl(data.url);
+  }
+  return data;
+}
+
+export async function apiRestoreOriginal(imageId) {
+  if (!imageId) {
+    const err = new Error('missing_image_id');
+    err.kind = 'bad_request';
+    throw err;
+  }
+  const data = await _request(`/canvas/${CANVAS_ID}/images/${encodeURIComponent(imageId)}/restore_original`, {
+    method: 'POST',
+    auth: true,
+  });
   if (data && typeof data.url === 'string') {
     data.url = absoluteImageUrl(data.url);
   }

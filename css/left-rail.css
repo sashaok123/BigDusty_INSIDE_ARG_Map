@@ -99,6 +99,20 @@
   border-color: var(--unsolved);
 }
 
+#left-rail .rail-btn[disabled],
+#left-rail .rail-btn.disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+  pointer-events: auto;
+}
+
+#left-rail .rail-btn[disabled]:hover,
+#left-rail .rail-btn.disabled:hover {
+  background: transparent;
+  color: inherit;
+  border-color: inherit;
+}
+
 #left-rail .rail-btn svg {
   width: 18px;
   height: 18px;

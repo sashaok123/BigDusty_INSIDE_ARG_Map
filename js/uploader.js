@@ -4,6 +4,7 @@
 
 import { tr } from './i18n.js';
 import { compressImageBlob, formatBytes, deriveCompressedName, shouldSkipCompression } from './image-pipeline.js';
+import { getSettings } from './settings.js';
 
 export const ALLOWED_IMAGE_MIMES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 export const ALLOWED_VIDEO_MIMES = new Set(['video/mp4', 'video/webm']);
@@ -227,7 +228,12 @@ export class Uploader {
         if (compressed) {
           this.onToast(tr('upload_compressed_to', { from: formatBytes(origSize), to: formatBytes(finalSize) }));
         }
-        const result = await this.onUpload(toUpload);
+        const settings = getSettings();
+        const keepOriginal = !!settings.keepOriginal && compressed && origSize > finalSize;
+        const uploadOpts = keepOriginal
+          ? { keepOriginal: true, originalBlob: f, originalName: f.name || 'original' }
+          : null;
+        const result = await this.onUpload(toUpload, uploadOpts);
         if (!result || !result.url) continue;
         let w = 400; let h = 300;
         if (kind === 'video') { w = 560; h = 320; }
