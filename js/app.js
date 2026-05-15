@@ -686,7 +686,14 @@ function setupViewer() {
       viewer.setActiveId(id);
       if (editNodeModal) editNodeModal.open(viewWithLang(view, getLang()));
     },
-    onHotspotDoubleClick: (id) => openRichEdit(id),
+    onHotspotDoubleClick: (id) => {
+      const n = findNode(state.nodes, id);
+      if (n && nodeIsImageFile(n)) {
+        doCropImage(id, n.file);
+        return;
+      }
+      openRichEdit(id);
+    },
     onHotspotRightClick: (id, ev) => {
       const items = buildContextMenuItemsForNode(id);
       if (items.length) contextMenu.open(ev.clientX, ev.clientY, items);

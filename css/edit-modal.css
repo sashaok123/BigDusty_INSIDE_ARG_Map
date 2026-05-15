@@ -38,15 +38,18 @@
 .em-row {
   display: flex;
   gap: 10px;
+  flex-wrap: wrap;
 }
-.em-row > .em-field { flex: 1; }
+.em-row > .em-field { flex: 1 1 180px; min-width: 0; }
 
 .em-segmented {
   display: inline-flex;
+  flex-wrap: wrap;
   border: 1px solid var(--field-border);
   border-radius: var(--radius);
   overflow: hidden;
   background: var(--field-bg);
+  max-width: 100%;
 }
 .em-segmented button {
   background: transparent;
@@ -158,9 +161,11 @@
 }
 
 .em-colors {
-  display: inline-flex;
+  display: flex;
   gap: 6px;
   align-items: center;
+  flex-wrap: wrap;
+  max-width: 100%;
 }
 .em-color {
   width: 22px;
