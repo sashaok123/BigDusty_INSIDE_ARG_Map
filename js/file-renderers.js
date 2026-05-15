@@ -27,10 +27,11 @@ export function isTextLikeMime(mime) {
 
 export function pickRenderer(mime, filename) {
   const m = String(mime || '').toLowerCase();
-  if (m === 'application/pdf') return 'pdf';
-  if (m === 'text/html') return 'html';
-  if (m === 'application/json') return 'json';
-  if (/^image\//.test(m)) return 'image';
+  const f = String(filename || '').toLowerCase();
+  if (m === 'application/pdf' || /\.pdf(?:\?|#|$)/.test(f)) return 'pdf';
+  if (m === 'text/html' || /\.x?html?(?:\?|#|$)/.test(f)) return 'html';
+  if (m === 'application/json' || /\.json(?:\?|#|$)/.test(f)) return 'json';
+  if (/^image\//.test(m) || /\.(png|jpe?g|webp|gif|bmp|svg|avif|ico|tiff?)(?:\?|#|$)/.test(f)) return 'image';
   if (isTextLikeMime(m)) return 'text';
   const lang = detectLanguage(mime, filename);
   if (lang !== 'plain') return 'text';

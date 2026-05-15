@@ -305,8 +305,10 @@ export class ArrowLayer {
 
   invalidateNode(nodeId) {
     const ids = this.boundEdges.get(nodeId);
-    if (!ids) return;
-    for (const eid of ids) this._pathCache.delete(eid);
+    if (ids) {
+      for (const eid of ids) this._pathCache.delete(eid);
+    }
+    this.requestDraw();
   }
 
   applyEdgePatch(id, patch, opts) {
