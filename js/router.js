@@ -88,7 +88,7 @@ function routeManhattan(a, b, sideA, sideB, obstacles) {
     const out = [a, a1, detour, b1, b];
     if (!pathIntersectsObstacles(out, obs)) return out;
   }
-  return routeOrthogonal(a, b);
+  return routeOrthogonal(a, b, obstacles);
 }
 
 function routeSmooth(a, b, sideA, sideB) {

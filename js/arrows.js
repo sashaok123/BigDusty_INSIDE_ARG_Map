@@ -80,13 +80,21 @@ function _routeStraightAroundObstacle(a, b, obstacles) {
   const pad = OBSTACLE_DETOUR_PAD;
   const cx = rect.x + rect.w / 2;
   const cy = rect.y + rect.h / 2;
-  const sides = [
-    { x: cx, y: rect.y - pad },
-    { x: cx, y: rect.y + rect.h + pad },
-    { x: rect.x - pad, y: cy },
-    { x: rect.x + rect.w + pad, y: cy },
+  const left = rect.x - pad;
+  const right = rect.x + rect.w + pad;
+  const top = rect.y - pad;
+  const bottom = rect.y + rect.h + pad;
+  const candidates = [
+    { x: left,  y: top    },
+    { x: right, y: top    },
+    { x: left,  y: bottom },
+    { x: right, y: bottom },
+    { x: cx,    y: top    },
+    { x: cx,    y: bottom },
+    { x: left,  y: cy     },
+    { x: right, y: cy     },
   ];
-  const evaluated = sides.map((cand) => ({
+  const evaluated = candidates.map((cand) => ({
     cand,
     len: Math.hypot(cand.x - a.x, cand.y - a.y) + Math.hypot(b.x - cand.x, b.y - cand.y),
   }));
