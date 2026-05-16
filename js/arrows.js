@@ -471,29 +471,40 @@ export class ArrowLayer {
   notifyNodeDeleted(nodeId) {
     const ids = this.boundEdges.get(nodeId);
     if (!ids) return;
-    const touched = [];
-    for (const eid of ids) {
+    const deletedIds = [];
+    const updatedIds = [];
+    for (const eid of Array.from(ids)) {
       const e = this.edges.get(eid);
       if (!e) continue;
-      const nodes = this.getNodes();
-      const otherPt = e.fromNode === nodeId
-        ? resolveAnchor(e, 'to', nodes, null).point
-        : resolveAnchor(e, 'from', nodes, null).point;
-      const danglingAt = otherPt || { x: 0, y: 0 };
-      if (e.fromNode === nodeId) setEndpointDangling(e, 'from', danglingAt);
-      if (e.toNode   === nodeId) setEndpointDangling(e, 'to',   danglingAt);
-      if (Array.isArray(e.branches)) {
-        e.branches = e.branches.filter((b) => b.toNode !== nodeId);
+      const mainHit = e.fromNode === nodeId || e.toNode === nodeId;
+      if (mainHit) {
+        this.onBeforeMutation('delete', eid);
+        this.edges.delete(eid);
+        this._pathCache.delete(eid);
+        if (this.selectedId === eid) this._deselect();
+        deletedIds.push(eid);
+        continue;
       }
-      this._pathCache.delete(eid);
-      touched.push(eid);
+      if (Array.isArray(e.branches)) {
+        const before = e.branches.length;
+        e.branches = e.branches.filter((b) => b.toNode !== nodeId);
+        if (e.branches.length === 0) {
+          delete e.branches;
+          delete e.junction;
+        }
+        if (e.branches !== undefined ? e.branches.length !== before : before > 0) {
+          this._pathCache.delete(eid);
+          updatedIds.push(eid);
+        }
+      }
     }
     this._rebuildBoundIndex();
-    for (const eid of touched) {
+    for (const eid of deletedIds) this.onEdgeMutation('delete', eid, null);
+    for (const eid of updatedIds) {
       const e = this.edges.get(eid);
       if (e) this.onEdgeMutation('update', eid, e);
     }
-    if (touched.length) {
+    if (deletedIds.length || updatedIds.length) {
       this.onEdgesChange();
       this.onScheduleSave();
     }
