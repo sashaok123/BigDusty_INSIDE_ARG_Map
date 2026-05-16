@@ -3868,6 +3868,82 @@ function _findOwnHistoryIndex(stack, ownerId) {
   return -1;
 }
 
+/* Per-author diff-aware undo (Phase 3C/2H).
+   Old behavior: restoreFullState(snap[idx]) — replaces the entire state with
+   YOUR pre-edit snapshot, blowing away any collaborator changes that landed
+   between your edit and your undo press.
+   New behavior:
+     1. find your most recent snap at idx
+     2. compute the set of ids whose contents differ between snap[idx] (state
+        before your edit) and snap[idx+1] OR current state (state after your
+        edit) — those are the ids YOU touched
+     3. for ONLY those ids, restore their pre-edit values from snap[idx];
+        leave every other id alone, preserving collaborator work
+   Known limitation: if a collaborator also edited one of YOUR ids between
+   your edit and your undo, that id gets reverted to your pre-edit value
+   (collaborator change on the same id is lost). This is a documented trade-
+   off vs. the previous behavior of losing ALL collaborator changes. */
+
+function _snapNodeMap(snap) {
+  return new Map(Array.isArray(snap && snap.nodes) ? snap.nodes : []);
+}
+function _snapEdgeMap(snap) {
+  return new Map(Array.isArray(snap && snap.edges) ? snap.edges.map((e) => [e.id, e]) : []);
+}
+function _idsChangedBetween(before, after) {
+  const nodeIds = new Set();
+  const edgeIds = new Set();
+  const beforeNodes = _snapNodeMap(before);
+  const afterNodes  = _snapNodeMap(after);
+  const beforeEdges = _snapEdgeMap(before);
+  const afterEdges  = _snapEdgeMap(after);
+  for (const id of beforeNodes.keys()) {
+    if (!afterNodes.has(id) || JSON.stringify(beforeNodes.get(id)) !== JSON.stringify(afterNodes.get(id))) {
+      nodeIds.add(id);
+    }
+  }
+  for (const id of afterNodes.keys()) {
+    if (!beforeNodes.has(id)) nodeIds.add(id);
+  }
+  for (const id of beforeEdges.keys()) {
+    if (!afterEdges.has(id) || JSON.stringify(beforeEdges.get(id)) !== JSON.stringify(afterEdges.get(id))) {
+      edgeIds.add(id);
+    }
+  }
+  for (const id of afterEdges.keys()) {
+    if (!beforeEdges.has(id)) edgeIds.add(id);
+  }
+  return { nodeIds, edgeIds };
+}
+function _applyPartialRestore(snap, changedIds) {
+  const snapNodes = _snapNodeMap(snap);
+  for (const id of changedIds.nodeIds) {
+    if (snapNodes.has(id)) {
+      state.nodes.set(id, JSON.parse(JSON.stringify(snapNodes.get(id))));
+    } else {
+      state.nodes.delete(id);
+    }
+  }
+  if (arrowLayer) {
+    const snapEdges = _snapEdgeMap(snap);
+    for (const id of changedIds.edgeIds) {
+      if (snapEdges.has(id)) {
+        arrowLayer.edges.set(id, JSON.parse(JSON.stringify(snapEdges.get(id))));
+      } else {
+        arrowLayer.edges.delete(id);
+      }
+    }
+    if (typeof arrowLayer._dirtyAll === 'function') arrowLayer._dirtyAll();
+    if (typeof arrowLayer._rebuildBoundIndex === 'function') arrowLayer._rebuildBoundIndex();
+    state.edges = arrowLayer.edges;
+  }
+  refreshPuzzleViewsInViewer();
+  if (viewer) viewer.notifyNodesChanged();
+  if (arrowLayer) arrowLayer.requestDraw();
+  if (branchesPanel) branchesPanel.setBranches();
+  if (penLayer) penLayer.requestDraw();
+}
+
 function doUndo() {
   if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
   if (state.history.past.length === 0) return;
@@ -3877,12 +3953,30 @@ function doUndo() {
     toast(tr('toolbar_undo_no_own'));
     return;
   }
-  const snap = state.history.past.splice(idx, 1)[0];
-  const targetMeta = snap._historyMeta || null;
+  const snap = state.history.past[idx];
+  // "After your edit" = the snap taken just before the NEXT edit, OR if your
+  // edit was the most recent thing, the current live state.
+  const afterSnap = (idx + 1 < state.history.past.length)
+    ? state.history.past[idx + 1]
+    : serializeFullState();
+  const changedIds = _idsChangedBetween(snap, afterSnap);
+
+  // Capture current state (pre-restore) for redo + backend sync delta.
+  const prevNodes = state.nodes;
+  const prevEdges = arrowLayer ? new Map(arrowLayer.edges) : new Map();
   const cur = serializeFullState();
-  cur._historyMeta = targetMeta ? { ...targetMeta, at: Date.now(), authorId: me } : { authorId: me, at: Date.now(), label: '', nodeId: null };
+  const targetMeta = snap._historyMeta || null;
+  cur._historyMeta = targetMeta
+    ? { ...targetMeta, at: Date.now(), authorId: me }
+    : { authorId: me, at: Date.now(), label: '', nodeId: null };
   state.history.future.push(cur);
-  restoreFullState(snap);
+
+  // Drop your snap from past.
+  state.history.past.splice(idx, 1);
+
+  // Partial restore: only the ids that YOUR edit touched.
+  _applyPartialRestore(snap, changedIds);
+  syncRestoredStateToBackend(prevNodes, prevEdges);
   scheduleSave();
   refreshHistoryUi();
 }
@@ -3896,12 +3990,27 @@ function doRedo() {
     toast(tr('toolbar_redo_no_own'));
     return;
   }
-  const snap = state.history.future.splice(idx, 1)[0];
-  const targetMeta = snap._historyMeta || null;
+  const snap = state.history.future[idx];
+  // Symmetric to undo: figure out what changed between this redo target and
+  // the surrounding context, then partial-restore.
+  const afterSnap = (idx + 1 < state.history.future.length)
+    ? state.history.future[idx + 1]
+    : serializeFullState();
+  const changedIds = _idsChangedBetween(snap, afterSnap);
+
+  const prevNodes = state.nodes;
+  const prevEdges = arrowLayer ? new Map(arrowLayer.edges) : new Map();
   const cur = serializeFullState();
-  cur._historyMeta = targetMeta ? { ...targetMeta, at: Date.now(), authorId: me } : { authorId: me, at: Date.now(), label: '', nodeId: null };
+  const targetMeta = snap._historyMeta || null;
+  cur._historyMeta = targetMeta
+    ? { ...targetMeta, at: Date.now(), authorId: me }
+    : { authorId: me, at: Date.now(), label: '', nodeId: null };
   state.history.past.push(cur);
-  restoreFullState(snap);
+
+  state.history.future.splice(idx, 1);
+
+  _applyPartialRestore(snap, changedIds);
+  syncRestoredStateToBackend(prevNodes, prevEdges);
   scheduleSave();
   refreshHistoryUi();
 }
