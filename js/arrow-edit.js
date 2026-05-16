@@ -115,9 +115,10 @@ export function renderEndpointHandle(group, edge, which, point, scale, onDown) {
   group.appendChild(handle);
 }
 
-export function renderWaypointHandles(group, edge, vertices, scale, onWaypointDown, onWaypointContext) {
+export function renderWaypointHandles(group, edge, vertices, scale, onWaypointDown, onWaypointContext, opts) {
   if (!Array.isArray(edge.waypoints) || !edge.waypoints.length) return;
   const r = 5 / scale;
+  const fillColour = (opts && opts.fillColour) || null;
   for (let i = 0; i < edge.waypoints.length; i++) {
     const wp = edge.waypoints[i];
     const c = document.createElementNS(SVG_NS, 'circle');
@@ -127,6 +128,10 @@ export function renderWaypointHandles(group, edge, vertices, scale, onWaypointDo
     c.setAttribute('class', 'arrow-waypoint-handle');
     c.setAttribute('data-edge', edge.id);
     c.setAttribute('data-index', String(i));
+    // Color the handle the same as the arrow stroke so it's visible against
+    // both light and dark canvases (the default CSS color #55aaff blends
+    // into our dark theme on top of black images).
+    if (fillColour) c.style.fill = fillColour;
     c.style.cursor = 'grab';
     c.addEventListener('mousedown', (ev) => {
       if (ev.button !== 0) return;

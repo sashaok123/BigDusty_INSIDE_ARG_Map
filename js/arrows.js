@@ -69,6 +69,23 @@ function _distPointToSegment(p, a, b) {
   return Math.hypot(p.x - projX, p.y - projY);
 }
 
+/* When resolveAnchor returned a null side (legacy edge, or binding shape
+   the side classifier didn't recognise), fall back to inferring the side
+   from the endpoint's position relative to its rect. Whichever rect-edge
+   the endpoint is closest to wins. Returns null if no rect provided. */
+function _inferSideFromRect(pt, rect) {
+  if (!rect || !pt) return null;
+  const dLeft   = Math.abs(pt.x - rect.x);
+  const dRight  = Math.abs(pt.x - (rect.x + rect.w));
+  const dTop    = Math.abs(pt.y - rect.y);
+  const dBottom = Math.abs(pt.y - (rect.y + rect.h));
+  const min = Math.min(dLeft, dRight, dTop, dBottom);
+  if (min === dLeft)   return 'left';
+  if (min === dRight)  return 'right';
+  if (min === dTop)    return 'top';
+  return 'bottom';
+}
+
 const ARROW_SIZE_DEFAULT = 8;
 const ARROW_SIZE_MIN = 4;
 const ARROW_SIZE_MAX = 20;
@@ -722,8 +739,8 @@ export class ArrowLayer {
     } else {
       const routeObs = edge.passThrough === true ? [] : detourObstacles;
       const routedVerts = routeEdge(edge.routing, fromInfo.point, toInfo.point, {
-        fromSide: fromInfo.side,
-        toSide:   toInfo.side,
+        fromSide: fromInfo.side || _inferSideFromRect(fromInfo.point, fromInfo.rect),
+        toSide:   toInfo.side   || _inferSideFromRect(toInfo.point,   toInfo.rect),
         obstacles: routeObs,
         waypoints: edge.waypoints,
       });
@@ -918,6 +935,7 @@ export class ArrowLayer {
         scale,
         (ev, edgeId, idx) => this._beginWaypointDrag(ev, edgeId, idx),
         (ev, edgeId, idx) => this._waypointContext(ev, edgeId, idx),
+        { fillColour: stroke.colour },
       );
       const aPt = vertices[0];
       const bPt = vertices[vertices.length - 1];

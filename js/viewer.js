@@ -192,7 +192,7 @@ export class Viewer {
     this.imageReady = true;
     this._refreshBg();
     this._refreshPalette();
-    this.fitToScreen();
+    this.setInitialView();
     this._loadVisibleBlocks();
     this.requestDraw();
     return { w: this.imageW, h: this.imageH };
@@ -527,6 +527,23 @@ export class Viewer {
     this.scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, s));
     this.panX = (vw - this.imageW * this.scale) / 2;
     this.panY = (vh - this.imageH * this.scale) / 2;
+    this._notifyTransform();
+    this.requestDraw();
+  }
+
+  /* 100% zoom, content centered in the viewport. Used as the initial view
+     so the user sees the canvas at its native scale instead of whatever
+     fitToScreen computes (which can be 10% or 300% depending on the
+     content's bounding box). */
+  setInitialView() {
+    if (!this.imageReady) return;
+    const r = this.canvas.getBoundingClientRect();
+    const vw = r.width;
+    const vh = r.height;
+    if (vw <= 0 || vh <= 0) return;
+    this.scale = 1.0;
+    this.panX = (vw - this.imageW) / 2;
+    this.panY = (vh - this.imageH) / 2;
     this._notifyTransform();
     this.requestDraw();
   }
