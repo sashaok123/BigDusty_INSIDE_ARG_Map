@@ -270,3 +270,16 @@ body.space-held #viewport #arrow-layer * { pointer-events: none !important; curs
 .arrow-props-arrow-size .arrow-props-label-style-row { flex-wrap: nowrap; }
 
 .arrow-props-stroke .arrow-props-label-style-row { gap: 4px; }
+
+.arrow-props-label-size-row { flex-wrap: wrap; }
+.arrow-props-size-preset { min-width: 26px; text-align: center; }
+.arrow-props-size-num {
+  width: 50px;
+  margin-left: 4px;
+}
+.arrow-props-xy-input {
+  width: 56px;
+}
+.arrow-props-label-xy-row { gap: 4px; }
+.arrow-props-bold-btn { font-weight: 700; }
+.arrow-props-italic-btn { font-style: italic; }

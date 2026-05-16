@@ -277,6 +277,7 @@ export function normaliseEdge(raw) {
   edge.stroke = normaliseEdgeStroke(raw.stroke);
   edge.arrowSize = normaliseArrowSize(raw.arrowSize);
   edge.bindings = normaliseBindings(raw.bindings);
+  if (raw.passThrough === true || raw.pass_through === true) edge.passThrough = true;
   return edge;
 }
 
@@ -295,9 +296,15 @@ export function normaliseEdgeStroke(raw) {
   return { width, color };
 }
 
+const LABEL_FONT_FAMILIES = ['sans', 'serif', 'mono'];
+
+function labelDefault() {
+  return { text: '', position: null, fontSize: 14, color: 'auto', rotation: 0, fontFamily: 'mono', bold: false, italic: false };
+}
+
 export function normaliseEdgeLabel(raw) {
-  if (raw == null) return { text: '', position: null, fontSize: 14, color: 'auto', rotation: 0 };
-  if (typeof raw === 'string') return { text: raw, position: null, fontSize: 14, color: 'auto', rotation: 0 };
+  if (raw == null) return labelDefault();
+  if (typeof raw === 'string') return { ...labelDefault(), text: raw };
   if (typeof raw === 'object') {
     const text = typeof raw.text === 'string' ? raw.text : '';
     let position = null;
@@ -305,12 +312,15 @@ export function normaliseEdgeLabel(raw) {
         && Number.isFinite(raw.position.x) && Number.isFinite(raw.position.y)) {
       position = { x: raw.position.x, y: raw.position.y };
     }
-    const fontSize = Number.isFinite(raw.fontSize) ? Math.max(8, Math.min(64, raw.fontSize)) : 14;
+    const fontSize = Number.isFinite(raw.fontSize) ? Math.max(8, Math.min(72, raw.fontSize)) : 14;
     const color = typeof raw.color === 'string' && raw.color ? raw.color : 'auto';
     const rotation = Number.isFinite(raw.rotation) ? Math.max(-180, Math.min(180, raw.rotation)) : 0;
-    return { text, position, fontSize, color, rotation };
+    const fontFamily = LABEL_FONT_FAMILIES.includes(raw.fontFamily) ? raw.fontFamily : 'mono';
+    const bold = !!raw.bold;
+    const italic = !!raw.italic;
+    return { text, position, fontSize, color, rotation, fontFamily, bold, italic };
   }
-  return { text: '', position: null, fontSize: 14, color: 'auto', rotation: 0 };
+  return labelDefault();
 }
 
 function normaliseBindings(b) {

@@ -660,6 +660,12 @@ export class Viewer {
       const k = this.handleAtImagePoint(b, pt);
       if (k) return { key: k, id: b.id, isImage: true };
     }
+    for (const g of this.groups) {
+      if (this._isLocked(g.id)) continue;
+      if (!(this.selection.has(g.id) || this.activeId === g.id)) continue;
+      const k = this.handleAtImagePoint(g, pt);
+      if (k) return { key: k, id: g.id, isGroup: true };
+    }
     return null;
   }
 
@@ -746,7 +752,7 @@ export class Viewer {
     const lod = this.getLod();
 
     for (const g of this.groups) {
-      this._drawGroup(ctx, g);
+      this._drawGroup(ctx, g, lod);
     }
 
     if (lod.thumbnailsVisible) {
@@ -858,7 +864,7 @@ export class Viewer {
     this._updateTooltip();
   }
 
-  _drawGroup(ctx, g) {
+  _drawGroup(ctx, g, lod) {
     const { x, y, w, h } = g.rect;
     ctx.save();
     const provOp = this._provenanceOpacityFor(g.id);
@@ -870,11 +876,24 @@ export class Viewer {
     ctx.setLineDash([8 / this.scale, 5 / this.scale]);
     ctx.strokeRect(x, y, w, h);
     ctx.setLineDash([]);
-    if (this.selection.has(g.id) || this.activeId === g.id) {
+    const selected = this.selection.has(g.id) || this.activeId === g.id;
+    if (selected) {
       ctx.lineWidth = 2.4 / this.scale;
       ctx.strokeStyle = this.accentColour;
       ctx.setLineDash([]);
       ctx.strokeRect(x, y, w, h);
+      const handlesLod = lod || this.getLod();
+      if (this.mode === 'editor' && !g.locked && handlesLod && handlesLod.handlesVisible) {
+        ctx.fillStyle = this.accentColour;
+        ctx.strokeStyle = this.handleStrokeColour;
+        ctx.lineWidth = 1.5 / this.scale;
+        const handles = this._handlePositions(x, y, w, h);
+        const hs = HANDLE_SIZE / this.scale;
+        for (const { hx, hy } of handles) {
+          ctx.fillRect(hx - hs / 2, hy - hs / 2, hs, hs);
+          ctx.strokeRect(hx - hs / 2, hy - hs / 2, hs, hs);
+        }
+      }
     }
     if (g.label && this.scale > 0.25) {
       const fontPx = Math.max(11, Math.min(18, 13 / this.scale));
@@ -1614,6 +1633,24 @@ export class Viewer {
         }
         if (grp) {
           const locked = this._isLocked(grp.id);
+          const isSelectedGrp = this.selection.has(grp.id) || this.activeId === grp.id;
+          if (!locked && isSelectedGrp) {
+            const handle = this.handleAtImagePoint(grp, img);
+            if (handle) {
+              this.dragState = {
+                kind: 'resize',
+                handle,
+                id: grp.id,
+                origRect: { ...grp.rect },
+                startImg: img,
+                startScreen: screen,
+                shiftKey: !!ev.shiftKey,
+                moved: false,
+                target: 'group',
+              };
+              return;
+            }
+          }
           this.dragState = {
             kind: 'edit-click',
             id: grp.id,
@@ -1924,6 +1961,15 @@ export class Viewer {
         const bidx = this.blocks.findIndex((b) => b.id === d.id);
         if (bidx >= 0) {
           this.blocks[bidx] = { ...this.blocks[bidx], rect };
+          this.requestDraw();
+          if (this.editorOptions.onHotspotResize) {
+            this.editorOptions.onHotspotResize(d.id, rect);
+          }
+        }
+      } else if (d.target === 'group') {
+        const gidx = this.groups.findIndex((g) => g.id === d.id);
+        if (gidx >= 0) {
+          this.groups[gidx] = { ...this.groups[gidx], rect };
           this.requestDraw();
           if (this.editorOptions.onHotspotResize) {
             this.editorOptions.onHotspotResize(d.id, rect);

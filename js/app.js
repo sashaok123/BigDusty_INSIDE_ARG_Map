@@ -3489,7 +3489,7 @@ function groupCurrentSelection() {
   const ids = Array.from(state.selection);
   const rect = computeUnionBbox(ids);
   if (!rect) return;
-  const pad = 24;
+  const pad = 12;
   const expandedRect = { x: rect.x - pad, y: rect.y - pad, w: rect.w + pad * 2, h: rect.h + pad * 2 };
   const newId = uniqueId(state.nodes, 'group');
   const label = tr('group_default_label', { n: nextGroupLabel(state.nodes) });

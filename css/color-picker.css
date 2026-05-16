@@ -129,3 +129,94 @@
 }
 .cp-compact .cp-hex-input { width: 78px; font-size: 10px; }
 .cp-compact .cp-hex-apply { padding: 3px 7px; font-size: 9px; }
+
+.cp-toggle-row {
+  display: flex;
+  align-items: center;
+}
+.cp-toggle {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 2px 0;
+}
+.cp-toggle:hover { color: var(--accent); }
+
+.cp-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.cp-hue-slider {
+  position: relative;
+  width: 100%;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  background-image: linear-gradient(to right,
+    #ff0000 0%,
+    #ffff00 16.66%,
+    #00ff00 33.33%,
+    #00ffff 50%,
+    #0000ff 66.66%,
+    #ff00ff 83.33%,
+    #ff0000 100%);
+  cursor: crosshair;
+  user-select: none;
+}
+.cp-hue-marker {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 3px;
+  background: var(--text);
+  border: 1px solid var(--bg, #000);
+  border-radius: 2px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.cp-sv-square {
+  position: relative;
+  width: 100%;
+  height: 140px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  cursor: crosshair;
+  overflow: hidden;
+  user-select: none;
+}
+.cp-sv-white {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to right, #ffffff, #ff0000);
+}
+.cp-sv-black {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, transparent, #000000);
+}
+.cp-marker {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 1px #000, 0 1px 3px rgba(0, 0, 0, 0.4);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  background: transparent;
+}
+.cp-sv-marker { top: 0; left: 100%; }
+
+.cp-compact .cp-sv-square { height: 120px; }
+.cp-compact .cp-hue-slider { height: 10px; }
+.cp-compact .cp-marker { width: 10px; height: 10px; }
+.cp-compact .cp-toggle { font-size: 9px; }

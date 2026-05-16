@@ -9,7 +9,7 @@ import { isSpaceHeld } from './tools.js';
 import { resolveAnchor, ensureBindings, setEndpointToNode, setEndpointDangling, findSnapTarget, defaultJunction, renderAnchorHandles, renderEndpointHandle, renderWaypointHandles, renderJunctionHandle, EdgePropsPopover, EdgeContextMenu } from './arrow-edit.js';
 import { routeEdge, ROUTINGS, isValidRouting, pointAlong } from './router.js';
 import { vertexPathD, dashFor, STYLES, isValidStyle } from './connector.js';
-import { rectOf } from './bindings.js';
+import { rectOf, rectIntersectsSegment } from './bindings.js';
 import { lodFor } from './lod.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -58,20 +58,99 @@ function _adjustArrowTipApproach(vertices, toInfo, edge) {
   return vertices;
 }
 
+const OBSTACLE_DETOUR_PAD = 18;
+
+function _firstSegmentIntersection(a, b, obstacles) {
+  let bestRect = null;
+  let bestArea = 0;
+  for (const r of obstacles) {
+    if (!rectIntersectsSegment(r, a, b)) continue;
+    const area = (r.w || 0) * (r.h || 0);
+    if (area > bestArea) {
+      bestArea = area;
+      bestRect = r;
+    }
+  }
+  return bestRect;
+}
+
+function _routeStraightAroundObstacle(a, b, obstacles) {
+  const rect = _firstSegmentIntersection(a, b, obstacles);
+  if (!rect) return null;
+  const cx = rect.x + rect.w / 2;
+  const cy = rect.y + rect.h / 2;
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const nx = -dy / len;
+  const ny = dx / len;
+  const halfPerpX = Math.abs(nx) > Math.abs(ny) ? (rect.w / 2 + OBSTACLE_DETOUR_PAD) : (rect.h / 2 + OBSTACLE_DETOUR_PAD);
+  const candidatesA = { x: cx + nx * halfPerpX, y: cy + ny * halfPerpX };
+  const candidatesB = { x: cx - nx * halfPerpX, y: cy - ny * halfPerpX };
+  const distA = Math.hypot(candidatesA.x - (a.x + b.x) / 2, candidatesA.y - (a.y + b.y) / 2);
+  const distB = Math.hypot(candidatesB.x - (a.x + b.x) / 2, candidatesB.y - (a.y + b.y) / 2);
+  const ordered = distA <= distB ? [candidatesA, candidatesB] : [candidatesB, candidatesA];
+  for (const cand of ordered) {
+    if (_segmentClearOf(rect, a, cand) && _segmentClearOf(rect, cand, b)) return cand;
+  }
+  return null;
+}
+
+function _segmentClearOf(rect, p, q) {
+  return !rectIntersectsSegment(rect, p, q);
+}
+
+function _applyObstacleDetour(vertices, routing, obstacles, edge) {
+  if (!obstacles || !obstacles.length) return vertices;
+  if (edge && edge.passThrough === true) return vertices;
+  if (Array.isArray(edge && edge.waypoints) && edge.waypoints.length) return vertices;
+  if (routing !== 'straight' && routing !== 'smooth') return vertices;
+  if (!Array.isArray(vertices) || vertices.length < 2) return vertices;
+  const a = vertices[0];
+  const b = vertices[vertices.length - 1];
+  const span = Math.hypot(b.x - a.x, b.y - a.y);
+  if (span < 40) return vertices;
+  const detour = _routeStraightAroundObstacle(a, b, obstacles);
+  if (!detour) return vertices;
+  return [a, detour, b];
+}
+
+function _obstacleDigestKey(obstacles, a, b) {
+  if (!obstacles || !obstacles.length) return '';
+  const minX = Math.min(a.x, b.x) - 80;
+  const maxX = Math.max(a.x, b.x) + 80;
+  const minY = Math.min(a.y, b.y) - 80;
+  const maxY = Math.max(a.y, b.y) + 80;
+  let n = 0;
+  let acc = '';
+  for (const r of obstacles) {
+    if (r.x + r.w < minX || r.x > maxX || r.y + r.h < minY || r.y > maxY) continue;
+    acc += `${r.x.toFixed(0)},${r.y.toFixed(0)},${r.w.toFixed(0)},${r.h.toFixed(0)};`;
+    n++;
+    if (n >= 6) break;
+  }
+  return acc;
+}
+
 export { STROKE_COLOR_SWATCHES, ensureStrokeShape, ensureArrowSize, ARROW_SIZE_DEFAULT, ARROW_SIZE_MIN, ARROW_SIZE_MAX };
+
+const LABEL_FONT_FAMILIES = ['sans', 'serif', 'mono'];
 
 function ensureLabelShape(label) {
   if (label && typeof label === 'object' && typeof label.text === 'string') {
     const pos = label.position;
     const safePos = (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y))
       ? { x: pos.x, y: pos.y } : null;
-    const fontSize = Number.isFinite(label.fontSize) ? Math.max(8, Math.min(64, label.fontSize)) : 14;
+    const fontSize = Number.isFinite(label.fontSize) ? Math.max(8, Math.min(72, label.fontSize)) : 14;
     const color = typeof label.color === 'string' && label.color ? label.color : 'auto';
     const rotation = Number.isFinite(label.rotation) ? Math.max(-180, Math.min(180, label.rotation)) : 0;
-    return { text: label.text, position: safePos, fontSize, color, rotation };
+    const fontFamily = LABEL_FONT_FAMILIES.includes(label.fontFamily) ? label.fontFamily : 'mono';
+    const bold = !!label.bold;
+    const italic = !!label.italic;
+    return { text: label.text, position: safePos, fontSize, color, rotation, fontFamily, bold, italic };
   }
-  if (typeof label === 'string') return { text: label, position: null, fontSize: 14, color: 'auto', rotation: 0 };
-  return { text: '', position: null, fontSize: 14, color: 'auto', rotation: 0 };
+  if (typeof label === 'string') return { text: label, position: null, fontSize: 14, color: 'auto', rotation: 0, fontFamily: 'mono', bold: false, italic: false };
+  return { text: '', position: null, fontSize: 14, color: 'auto', rotation: 0, fontFamily: 'mono', bold: false, italic: false };
 }
 
 function normaliseLabelValue(value, current) {
@@ -85,10 +164,15 @@ function normaliseLabelValue(value, current) {
       fontSize: Number.isFinite(value.fontSize) ? next.fontSize : cur.fontSize,
       color: typeof value.color === 'string' && value.color ? next.color : cur.color,
       rotation: Number.isFinite(value.rotation) ? next.rotation : cur.rotation,
+      fontFamily: LABEL_FONT_FAMILIES.includes(value.fontFamily) ? next.fontFamily : cur.fontFamily,
+      bold: typeof value.bold === 'boolean' ? next.bold : cur.bold,
+      italic: typeof value.italic === 'boolean' ? next.italic : cur.italic,
     };
   }
   return cur;
 }
+
+export { LABEL_FONT_FAMILIES };
 
 
 export class ArrowLayer {
@@ -131,7 +215,7 @@ export class ArrowLayer {
       const mk = document.createElementNS(SVG_NS, 'marker');
       mk.setAttribute('id', `arrowhead-${c}`);
       mk.setAttribute('viewBox', '0 0 10 10');
-      mk.setAttribute('refX', '8');
+      mk.setAttribute('refX', '10');
       mk.setAttribute('refY', '5');
       mk.setAttribute('markerWidth',  '6');
       mk.setAttribute('markerHeight', '6');
@@ -166,7 +250,7 @@ export class ArrowLayer {
     const mk = document.createElementNS(SVG_NS, 'marker');
     mk.setAttribute('id', id);
     mk.setAttribute('viewBox', '0 0 10 10');
-    mk.setAttribute('refX', '8');
+    mk.setAttribute('refX', '10');
     mk.setAttribute('refY', '5');
     mk.setAttribute('markerWidth', String(sz * 0.75));
     mk.setAttribute('markerHeight', String(sz * 0.75));
@@ -187,7 +271,7 @@ export class ArrowLayer {
     const mk = document.createElementNS(SVG_NS, 'marker');
     mk.setAttribute('id', id);
     mk.setAttribute('viewBox', '0 0 10 10');
-    mk.setAttribute('refX', '8');
+    mk.setAttribute('refX', '10');
     mk.setAttribute('refY', '5');
     mk.setAttribute('markerWidth', String(sz * 0.75));
     mk.setAttribute('markerHeight', String(sz * 0.75));
@@ -331,7 +415,7 @@ export class ArrowLayer {
       id,
       fromNode: opts && opts.fromId ? opts.fromId : '',
       toNode:   opts && opts.toId   ? opts.toId   : '',
-      routing: 'orthogonal',
+      routing: 'smooth',
       style:   'solid',
       color:   'accent',
       label:   '',
@@ -392,6 +476,13 @@ export class ArrowLayer {
     if (ids) {
       for (const eid of ids) this._pathCache.delete(eid);
     }
+    for (const [eid, e] of this.edges) {
+      if (e.passThrough === true) continue;
+      if (Array.isArray(e.waypoints) && e.waypoints.length) continue;
+      if (e.routing === 'straight' || e.routing === 'smooth') {
+        this._pathCache.delete(eid);
+      }
+    }
     this.requestDraw();
   }
 
@@ -415,6 +506,11 @@ export class ArrowLayer {
     if (patch.arrowSize !== undefined) {
       e.arrowSize = ensureArrowSize(patch.arrowSize);
     }
+    if (patch.passThrough !== undefined) {
+      if (patch.passThrough === true) e.passThrough = true;
+      else delete e.passThrough;
+      this._pathCache.delete(id);
+    }
     if (patch.routing !== undefined) this._pathCache.delete(id);
     if (patch.label   !== undefined) e.label   = normaliseLabelValue(patch.label, e.label);
     if (patch.labelText !== undefined) {
@@ -428,7 +524,7 @@ export class ArrowLayer {
     if (patch.labelFontSize !== undefined) {
       const cur = ensureLabelShape(e.label);
       const fs = Number(patch.labelFontSize);
-      e.label = { ...cur, fontSize: Number.isFinite(fs) ? Math.max(8, Math.min(64, fs)) : cur.fontSize };
+      e.label = { ...cur, fontSize: Number.isFinite(fs) ? Math.max(8, Math.min(72, fs)) : cur.fontSize };
     }
     if (patch.labelColor !== undefined) {
       const cur = ensureLabelShape(e.label);
@@ -439,6 +535,19 @@ export class ArrowLayer {
       const cur = ensureLabelShape(e.label);
       const r = Number(patch.labelRotation);
       e.label = { ...cur, rotation: Number.isFinite(r) ? Math.max(-180, Math.min(180, r)) : 0 };
+    }
+    if (patch.labelFontFamily !== undefined) {
+      const cur = ensureLabelShape(e.label);
+      const ff = LABEL_FONT_FAMILIES.includes(patch.labelFontFamily) ? patch.labelFontFamily : cur.fontFamily;
+      e.label = { ...cur, fontFamily: ff };
+    }
+    if (patch.labelBold !== undefined) {
+      const cur = ensureLabelShape(e.label);
+      e.label = { ...cur, bold: !!patch.labelBold };
+    }
+    if (patch.labelItalic !== undefined) {
+      const cur = ensureLabelShape(e.label);
+      e.label = { ...cur, italic: !!patch.labelItalic };
     }
     if (patch.labelPositionPreset !== undefined) {
       const cur = ensureLabelShape(e.label);
@@ -454,15 +563,18 @@ export class ArrowLayer {
       e.label = { ...cur, position: nextPos };
     }
     if (patch.branchLabel && typeof patch.branchLabel === 'object') {
-      const { index, text, position, fontSize, color, rotation, positionPreset } = patch.branchLabel;
+      const { index, text, position, fontSize, color, rotation, positionPreset, fontFamily, bold, italic } = patch.branchLabel;
       if (Array.isArray(e.branches) && Number.isInteger(index) && e.branches[index]) {
         const cur = ensureLabelShape(e.branches[index].label);
         let next = { ...cur };
         if (text !== undefined) next.text = String(text);
         if (position !== undefined) next.position = position || null;
-        if (Number.isFinite(fontSize)) next.fontSize = Math.max(8, Math.min(64, fontSize));
+        if (Number.isFinite(fontSize)) next.fontSize = Math.max(8, Math.min(72, fontSize));
         if (typeof color === 'string' && color) next.color = color;
         if (Number.isFinite(rotation)) next.rotation = Math.max(-180, Math.min(180, rotation));
+        if (LABEL_FONT_FAMILIES.includes(fontFamily)) next.fontFamily = fontFamily;
+        if (typeof bold === 'boolean') next.bold = bold;
+        if (typeof italic === 'boolean') next.italic = italic;
         if (positionPreset) {
           const nodes = this.getNodes();
           const junction = e.junction || resolveAnchor(e, 'from', nodes, null).point;
@@ -602,7 +714,8 @@ export class ArrowLayer {
       return;
     }
 
-    const cacheKey = this._edgeRouteKey(edge, fromInfo, toInfo);
+    const detourObstacles = this._obstaclesExcluding(obstacles, [fromInfo.rect, toInfo.rect]);
+    const cacheKey = this._edgeRouteKey(edge, fromInfo, toInfo, detourObstacles);
     const cached = this._pathCache.get(edge.id);
     let vertices;
     let d;
@@ -613,11 +726,13 @@ export class ArrowLayer {
       const routedVerts = routeEdge(edge.routing, fromInfo.point, toInfo.point, {
         fromSide: fromInfo.side,
         toSide:   toInfo.side,
-        obstacles: this._obstaclesExcluding(obstacles, [fromInfo.rect, toInfo.rect]),
+        obstacles: detourObstacles,
         waypoints: edge.waypoints,
       });
-      vertices = _adjustArrowTipApproach(routedVerts, toInfo, edge);
-      d = vertexPathD(vertices, edge.routing);
+      const detoured = _applyObstacleDetour(routedVerts, edge.routing, detourObstacles, edge);
+      vertices = _adjustArrowTipApproach(detoured, toInfo, edge);
+      const renderRouting = (detoured !== routedVerts && edge.routing === 'smooth') ? 'straight' : edge.routing;
+      d = vertexPathD(vertices, renderRouting);
       this._pathCache.set(edge.id, { key: cacheKey, vertices, d });
     }
     this._appendEdgePath(edge, d, colour, scale, vertices, { opacity });
@@ -626,14 +741,20 @@ export class ArrowLayer {
     }
   }
 
-  _edgeRouteKey(edge, fromInfo, toInfo) {
+  _edgeRouteKey(edge, fromInfo, toInfo, obstacles) {
     const wp = Array.isArray(edge.waypoints)
       ? edge.waypoints.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(';')
       : '';
     const arrowSz = ensureArrowSize(edge.arrowSize);
     const tcx = toInfo.rect ? (toInfo.rect.x + toInfo.rect.w / 2).toFixed(2) : '';
     const tcy = toInfo.rect ? (toInfo.rect.y + toInfo.rect.h / 2).toFixed(2) : '';
-    return `${edge.routing}|${fromInfo.point.x.toFixed(2)},${fromInfo.point.y.toFixed(2)}|${toInfo.point.x.toFixed(2)},${toInfo.point.y.toFixed(2)}|${fromInfo.side || ''}|${toInfo.side || ''}|${wp}|a${arrowSz}|c${tcx},${tcy}`;
+    const detour = (!Array.isArray(edge.waypoints) || !edge.waypoints.length)
+                 && (edge.routing === 'straight' || edge.routing === 'smooth')
+                 && edge.passThrough !== true
+      ? _obstacleDigestKey(obstacles, fromInfo.point, toInfo.point)
+      : '';
+    const pass = edge.passThrough === true ? 'p1' : '';
+    return `${edge.routing}|${fromInfo.point.x.toFixed(2)},${fromInfo.point.y.toFixed(2)}|${toInfo.point.x.toFixed(2)},${toInfo.point.y.toFixed(2)}|${fromInfo.side || ''}|${toInfo.side || ''}|${wp}|a${arrowSz}|c${tcx},${tcy}|${pass}|${detour}`;
   }
 
   _edgeOpacity(edge, nodes) {
@@ -703,23 +824,29 @@ export class ArrowLayer {
       edge.junction = defaultJunction(fromInfo.point, branchTargets.map((b) => b.point));
     }
     const junction = edge.junction;
-    const trunkVerts = routeEdge(edge.routing, fromInfo.point, junction, {
+    const trunkObstacles = this._obstaclesExcluding(obstacles, [fromInfo.rect]);
+    const trunkRouted = routeEdge(edge.routing, fromInfo.point, junction, {
       fromSide: fromInfo.side,
       toSide: null,
-      obstacles: this._obstaclesExcluding(obstacles, [fromInfo.rect]),
+      obstacles: trunkObstacles,
     });
-    const trunkPath = vertexPathD(trunkVerts, edge.routing);
+    const trunkVerts = _applyObstacleDetour(trunkRouted, edge.routing, trunkObstacles, edge);
+    const trunkRouting = (trunkVerts !== trunkRouted && edge.routing === 'smooth') ? 'straight' : edge.routing;
+    const trunkPath = vertexPathD(trunkVerts, trunkRouting);
     this._appendEdgePath(edge, trunkPath, colour, scale, trunkVerts, { isTrunk: true, opacity });
 
     for (let i = 0; i < edge.branches.length; i++) {
       const b = edge.branches[i];
       const target = branchTargets[i];
-      const verts = routeEdge(edge.routing, junction, target.point, {
+      const branchObstacles = this._obstaclesExcluding(obstacles, [target.rect]);
+      const routed = routeEdge(edge.routing, junction, target.point, {
         fromSide: null,
         toSide: target.side,
-        obstacles: this._obstaclesExcluding(obstacles, [target.rect]),
+        obstacles: branchObstacles,
       });
-      const d = vertexPathD(verts, edge.routing);
+      const verts = _applyObstacleDetour(routed, edge.routing, branchObstacles, edge);
+      const branchRouting = (verts !== routed && edge.routing === 'smooth') ? 'straight' : edge.routing;
+      const d = vertexPathD(verts, branchRouting);
       this._appendBranchPath(edge, i, d, b.color || colour, scale, verts, opacity);
       if (lod && lod.edgeLabelsVisible) {
         this._appendBranchLabel(b.label, verts, scale, opacity, { edgeId: edge.id, branchIndex: i });
@@ -873,7 +1000,8 @@ export class ArrowLayer {
     const padX = 5;
     const padY = 2;
     const fontPx = customFontSize / scale;
-    const approxW = text.length * fontPx * 0.55 + padX * 2;
+    const widthMul = shape.bold ? 0.62 : 0.55;
+    const approxW = text.length * fontPx * widthMul + padX * 2;
     const approxH = fontPx + padY * 2;
     const labelOpacity = Number.isFinite(opacity) ? opacity : 1;
     const isFree = refs && refs.free;
@@ -921,7 +1049,12 @@ export class ArrowLayer {
     textEl.setAttribute('x', String(anchor.x));
     textEl.setAttribute('y', String(anchor.y));
     textEl.setAttribute('font-size', String(fontPx));
-    textEl.setAttribute('font-family', 'var(--font-mono)');
+    const family = shape.fontFamily === 'sans' ? 'var(--font-ui)'
+                 : shape.fontFamily === 'serif' ? 'Georgia, serif'
+                 : 'var(--font-mono)';
+    textEl.setAttribute('font-family', family);
+    if (shape.bold) textEl.setAttribute('font-weight', '700');
+    if (shape.italic) textEl.setAttribute('font-style', 'italic');
     textEl.setAttribute('class', 'arrow-label-text');
     textEl.setAttribute('fill', customColor === 'auto' ? 'var(--label-text)' : customColor);
     textEl.setAttribute('text-anchor', 'middle');
@@ -1029,8 +1162,13 @@ export class ArrowLayer {
     path.setAttribute('d', `M ${a.x} ${a.y} L ${b.x} ${b.y}`);
     path.setAttribute('fill', 'none');
     path.setAttribute('stroke', snapped ? COLOUR_VAR.solved : COLOUR_VAR.accent);
-    path.setAttribute('stroke-width', String(2.2 / scale));
-    path.setAttribute('stroke-dasharray', `${6 / scale} ${4 / scale}`);
+    path.setAttribute('stroke-width', String(2.8 / scale));
+    path.setAttribute('stroke-linecap', 'round');
+    path.setAttribute('stroke-opacity', '1');
+    path.setAttribute('opacity', '1');
+    if (!snapped) {
+      path.setAttribute('stroke-dasharray', `${8 / scale} ${4 / scale}`);
+    }
     path.setAttribute('pointer-events', 'none');
     this.previewGroup.appendChild(path);
   }
@@ -1193,6 +1331,7 @@ export class ArrowLayer {
         return;
       }
       this.dragState.cursorImg = img;
+      this.dragState.shiftKey = !!ev.shiftKey;
       if (this.dragState.kind === 'draw-branch') {
         this.dragState.snapped = this._findSnapExcluding(img, this.dragState.excludeIds);
       } else {
@@ -1229,6 +1368,7 @@ export class ArrowLayer {
   _onMouseUp(ev) {
     if (!this.dragState) return;
     const d = this.dragState;
+    d.shiftKey = d.shiftKey || !!(ev && ev.shiftKey);
     this.dragState = null;
     if (d.kind === 'draw-edge') {
       if (d.snapped) {
@@ -1278,7 +1418,7 @@ export class ArrowLayer {
       id,
       fromNode: d.fromNode,
       toNode:   d.snapped.nodeId,
-      routing: 'orthogonal',
+      routing: 'smooth',
       style:   'solid',
       color:   'accent',
       label:   '',
@@ -1287,6 +1427,7 @@ export class ArrowLayer {
         to:   { mode: 'orbit', fixedPoint: [d.snapped.fixedPoint[0], d.snapped.fixedPoint[1]] },
       },
     };
+    if (d.shiftKey) newEdge.passThrough = true;
     const fromSide = sideFromFixedPoint(fromFP);
     if (fromSide) newEdge.fromSide = fromSide;
     const toSide = sideFromFixedPoint(d.snapped.fixedPoint);

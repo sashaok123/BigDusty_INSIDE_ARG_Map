@@ -167,8 +167,9 @@ export function findSnapTarget(nodes, imgPt, scale) {
   let best = null;
   let bestScore = Infinity;
   for (const n of nodes.values()) {
-    if (!isBlock(n)) continue;
+    if (!isSnapTargetNode(n)) continue;
     const rect = rectOf(n);
+    if (!rect || !(rect.w > 0) || !(rect.h > 0)) continue;
     const inside = rectContains(rect, imgPt);
     const reachable = inside || pointWithinHalo(rect, imgPt, halo);
     if (!reachable) continue;
@@ -190,6 +191,16 @@ function pointWithinHalo(rect, pt, halo) {
 
 function isBlock(n) {
   return n && n.kind === 'block' && n.type === 'file';
+}
+
+function isSnapTargetNode(n) {
+  if (!n) return false;
+  if (n.kind === 'block' && n.type === 'file') return true;
+  if (n.kind === 'group' || n.type === 'group') return true;
+  if (n.kind === 'sticky' || n.kind === 'text' || n.kind === 'puzzle') return true;
+  if (n.kind === 'video' || n.kind === 'audio' || n.kind === 'document') return true;
+  if (n.kind === 'transform') return true;
+  return false;
 }
 
 export function defaultJunction(fromPt, branchPts) {
@@ -241,10 +252,17 @@ const LABEL_COLOR_SWATCHES = [
 ];
 
 const LABEL_FONT_SIZE_PRESETS = [
-  { key: 'S', value: 12 },
-  { key: 'M', value: 16 },
-  { key: 'L', value: 20 },
+  { key: 'XS',   value: 10 },
+  { key: 'S',    value: 12 },
+  { key: 'M',    value: 16 },
+  { key: 'L',    value: 20 },
+  { key: 'XL',   value: 28 },
+  { key: 'XXL',  value: 36 },
+  { key: 'XXXL', value: 48 },
 ];
+
+const LABEL_FONT_SIZE_MIN = 8;
+const LABEL_FONT_SIZE_MAX = 72;
 
 const LABEL_POSITION_PRESETS = [
   { value: 'free',        labelKey: 'arrow_label_pos_free'        },
@@ -252,6 +270,35 @@ const LABEL_POSITION_PRESETS = [
   { value: 'near_source', labelKey: 'arrow_label_pos_near_source' },
   { value: 'near_target', labelKey: 'arrow_label_pos_near_target' },
 ];
+
+const LABEL_FONT_FAMILY_OPTS = [
+  { value: 'sans',  labelKey: 'edit_modal_text_family_system' },
+  { value: 'serif', labelKey: 'edit_modal_text_family_serif'  },
+  { value: 'mono',  labelKey: 'edit_modal_text_family_mono'   },
+];
+
+function popoverLabelFontFamily(label) {
+  if (label && typeof label === 'object' && LABEL_FONT_FAMILY_OPTS.some((o) => o.value === label.fontFamily)) return label.fontFamily;
+  return 'mono';
+}
+
+function popoverLabelBold(label) {
+  return !!(label && typeof label === 'object' && label.bold);
+}
+
+function popoverLabelItalic(label) {
+  return !!(label && typeof label === 'object' && label.italic);
+}
+
+function popoverLabelPosX(label) {
+  if (label && typeof label === 'object' && label.position && Number.isFinite(label.position.x)) return label.position.x;
+  return 0;
+}
+
+function popoverLabelPosY(label) {
+  if (label && typeof label === 'object' && label.position && Number.isFinite(label.position.y)) return label.position.y;
+  return 0;
+}
 
 const STROKE_WIDTH_PRESETS = [1, 2, 3, 4, 6, 8];
 const STROKE_COLOR_SWATCHES_EDIT = ['#ffffff', '#000000', '#e83d3d', '#e88a3d', '#e8c83d', '#5fa854', '#2e6fe8', '#9a6ce8'];
@@ -422,22 +469,98 @@ function buildLabelStyleRow(currentLabel, onPatch) {
   wrap.className = 'arrow-props-row arrow-props-row-block arrow-props-label-style';
 
   const sizeRow = document.createElement('div');
-  sizeRow.className = 'arrow-props-label-style-row';
+  sizeRow.className = 'arrow-props-label-style-row arrow-props-label-size-row';
   const sizeLab = document.createElement('span');
   sizeLab.className = 'arrow-props-mini-label';
   sizeLab.textContent = tr('arrow_label_font_size');
   sizeRow.appendChild(sizeLab);
   const currentFS = popoverLabelFontSize(currentLabel);
+  const sizeBtns = [];
   for (const preset of LABEL_FONT_SIZE_PRESETS) {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'arrow-props-mini-btn';
+    b.className = 'arrow-props-mini-btn arrow-props-size-preset';
     b.textContent = preset.key;
     if (preset.value === currentFS) b.classList.add('active');
-    b.addEventListener('click', () => onPatch({ fontSize: preset.value }));
+    b.addEventListener('click', () => {
+      onPatch({ fontSize: preset.value });
+      syncSizeActive(preset.value);
+      sizeNum.value = String(preset.value);
+    });
     sizeRow.appendChild(b);
+    sizeBtns.push({ value: preset.value, el: b });
   }
+  const sizeNum = document.createElement('input');
+  sizeNum.type = 'number';
+  sizeNum.min = String(LABEL_FONT_SIZE_MIN);
+  sizeNum.max = String(LABEL_FONT_SIZE_MAX);
+  sizeNum.step = '1';
+  sizeNum.className = 'arrow-props-mini-input arrow-props-size-num';
+  sizeNum.value = String(currentFS);
+  const sizePx = document.createElement('span');
+  sizePx.className = 'arrow-props-mini-value';
+  sizePx.textContent = 'px';
+  function commitSizeNum() {
+    const n = Number(sizeNum.value);
+    if (!Number.isFinite(n)) return;
+    const clamped = Math.max(LABEL_FONT_SIZE_MIN, Math.min(LABEL_FONT_SIZE_MAX, Math.round(n)));
+    sizeNum.value = String(clamped);
+    onPatch({ fontSize: clamped });
+    syncSizeActive(clamped);
+  }
+  sizeNum.addEventListener('change', commitSizeNum);
+  sizeNum.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') { ev.preventDefault(); commitSizeNum(); }
+  });
+  function syncSizeActive(active) {
+    for (const it of sizeBtns) it.el.classList.toggle('active', it.value === active);
+  }
+  sizeRow.appendChild(sizeNum);
+  sizeRow.appendChild(sizePx);
   wrap.appendChild(sizeRow);
+
+  const familyRow = document.createElement('div');
+  familyRow.className = 'arrow-props-label-style-row';
+  const familyLab = document.createElement('span');
+  familyLab.className = 'arrow-props-mini-label';
+  familyLab.textContent = tr('arrow_label_font_family');
+  familyRow.appendChild(familyLab);
+  const familySel = document.createElement('select');
+  familySel.className = 'arrow-props-mini-select';
+  for (const opt of LABEL_FONT_FAMILY_OPTS) {
+    const o = document.createElement('option');
+    o.value = opt.value;
+    o.textContent = tr(opt.labelKey);
+    familySel.appendChild(o);
+  }
+  familySel.value = popoverLabelFontFamily(currentLabel);
+  familySel.addEventListener('change', () => onPatch({ fontFamily: familySel.value }));
+  familyRow.appendChild(familySel);
+  const boldBtn = document.createElement('button');
+  boldBtn.type = 'button';
+  boldBtn.className = 'arrow-props-mini-btn arrow-props-bold-btn';
+  boldBtn.textContent = 'B';
+  boldBtn.title = tr('arrow_label_bold');
+  if (popoverLabelBold(currentLabel)) boldBtn.classList.add('active');
+  boldBtn.addEventListener('click', () => {
+    const next = !boldBtn.classList.contains('active');
+    boldBtn.classList.toggle('active', next);
+    onPatch({ bold: next });
+  });
+  familyRow.appendChild(boldBtn);
+  const italBtn = document.createElement('button');
+  italBtn.type = 'button';
+  italBtn.className = 'arrow-props-mini-btn arrow-props-italic-btn';
+  italBtn.textContent = 'I';
+  italBtn.title = tr('arrow_label_italic');
+  if (popoverLabelItalic(currentLabel)) italBtn.classList.add('active');
+  italBtn.addEventListener('click', () => {
+    const next = !italBtn.classList.contains('active');
+    italBtn.classList.toggle('active', next);
+    onPatch({ italic: next });
+  });
+  familyRow.appendChild(italBtn);
+  wrap.appendChild(familyRow);
 
   const colorRow = document.createElement('div');
   colorRow.className = 'arrow-props-label-style-row';
@@ -510,9 +633,50 @@ function buildLabelStyleRow(currentLabel, onPatch) {
     posSel.appendChild(o);
   }
   posSel.value = popoverLabelHasPosition(currentLabel) ? 'free' : 'midpoint';
-  posSel.addEventListener('change', () => onPatch({ positionPreset: posSel.value }));
   posRow.appendChild(posSel);
   wrap.appendChild(posRow);
+
+  const xyRow = document.createElement('div');
+  xyRow.className = 'arrow-props-label-style-row arrow-props-label-xy-row';
+  const xyLab = document.createElement('span');
+  xyLab.className = 'arrow-props-mini-label';
+  xyLab.textContent = tr('arrow_label_offset');
+  xyRow.appendChild(xyLab);
+  const xIn = document.createElement('input');
+  xIn.type = 'number';
+  xIn.step = '1';
+  xIn.placeholder = 'X';
+  xIn.title = 'X';
+  xIn.className = 'arrow-props-mini-input arrow-props-xy-input';
+  xIn.value = String(Math.round(popoverLabelPosX(currentLabel)));
+  const yIn = document.createElement('input');
+  yIn.type = 'number';
+  yIn.step = '1';
+  yIn.placeholder = 'Y';
+  yIn.title = 'Y';
+  yIn.className = 'arrow-props-mini-input arrow-props-xy-input';
+  yIn.value = String(Math.round(popoverLabelPosY(currentLabel)));
+  function commitXY() {
+    const x = Number(xIn.value);
+    const y = Number(yIn.value);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    onPatch({ position: { x, y } });
+  }
+  xIn.addEventListener('change', commitXY);
+  yIn.addEventListener('change', commitXY);
+  xIn.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); commitXY(); } });
+  yIn.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); commitXY(); } });
+  xyRow.appendChild(xIn);
+  xyRow.appendChild(yIn);
+  wrap.appendChild(xyRow);
+  function syncXYVisibility() {
+    xyRow.style.display = posSel.value === 'free' ? '' : 'none';
+  }
+  syncXYVisibility();
+  posSel.addEventListener('change', () => {
+    onPatch({ positionPreset: posSel.value });
+    syncXYVisibility();
+  });
 
   const rotRow = document.createElement('div');
   rotRow.className = 'arrow-props-label-style-row';
@@ -644,6 +808,10 @@ export class EdgePropsPopover {
       if (p.color !== undefined) patch.labelColor = p.color;
       if (p.positionPreset !== undefined) patch.labelPositionPreset = p.positionPreset;
       if (p.rotation !== undefined) patch.labelRotation = p.rotation;
+      if (p.fontFamily !== undefined) patch.labelFontFamily = p.fontFamily;
+      if (p.bold !== undefined) patch.labelBold = p.bold;
+      if (p.italic !== undefined) patch.labelItalic = p.italic;
+      if (p.position !== undefined) patch.labelPosition = p.position;
       this.layer.applyEdgePatch(edge.id, patch);
     }));
 
@@ -683,6 +851,10 @@ export class EdgePropsPopover {
           if (p.color !== undefined) branchLabel.color = p.color;
           if (p.positionPreset !== undefined) branchLabel.positionPreset = p.positionPreset;
           if (p.rotation !== undefined) branchLabel.rotation = p.rotation;
+          if (p.fontFamily !== undefined) branchLabel.fontFamily = p.fontFamily;
+          if (p.bold !== undefined) branchLabel.bold = p.bold;
+          if (p.italic !== undefined) branchLabel.italic = p.italic;
+          if (p.position !== undefined) branchLabel.position = p.position;
           this.layer.applyEdgePatch(edge.id, { branchLabel });
         }));
       }
