@@ -36,12 +36,13 @@
 
 const CURVED_BOW_FRACTION = 0.18;
 
-/* Length of the perpendicular straight segment we force right before the
-   endpoint (and right after the start) so the marker tip always approaches
-   the rect perpendicular to the bound side, and so the arrowhead has a
-   short visible straight body in front of it instead of fading into a
-   curve. Auto-collapses if the segment otherwise would be shorter. */
-const RUNWAY_LEN = 22;
+/* Length of the perpendicular straight segment we insert after the start
+   point so the line exits its source-rect perpendicular to the bound side.
+   The corresponding END-side runway is handled in arrows.js because the
+   length there has to account for the marker geometry (arrow tip should
+   land on the perimeter, not the rect interior). Auto-collapses when the
+   adjacent segment would be shorter than the runway. */
+const RUNWAY_LEN = 8;
 
 /* INTO-rect unit vector per bound side (used both as 'end runway shifts
    AWAY from endpoint by this vector × runway-length' and as 'start runway
@@ -100,11 +101,11 @@ function _withStartRunway(verts, start, fromSide, len) {
 
 function _withRunways(verts, start, end, fromSide, toSide) {
   let v = _withStartRunway(verts, start, fromSide, RUNWAY_LEN);
-  v = _withEndRunway(v, end, toSide, RUNWAY_LEN);
-  // When the geometric router already produced a perpendicular leg (elbow
-  // with sides), the inserted runway is collinear with its neighbours; drop
-  // those redundant vertices so the rounded-corner renderer doesn't emit
-  // degenerate Q commands.
+  // End runway intentionally NOT inserted here — see arrows.js
+  // _adjustEndForMarker which inserts a marker-aware perpendicular runway
+  // (shifting the endpoint outward so the arrow tip lands on the bound rect's
+  // perimeter rather than inside it).
+  void toSide; void end;
   return simplifyCollinear(v);
 }
 

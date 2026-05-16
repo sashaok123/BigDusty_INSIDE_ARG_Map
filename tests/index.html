@@ -375,36 +375,10 @@ suite('routing/findRoute — geometric (no A*)', (t) => {
   t('simplifyCollinear: preserves L bend',
     () => simplifyCollinear([{ x: 0, y: 0 }, { x: 50, y: 0 }, { x: 50, y: 50 }]).length === 3);
 
-  // RUNWAYS — perpendicular straight before endpoint so marker is square-on
-  // Straight route from (0,0) diagonally to (200,200) with toSide='left'
-  // should get an end-runway at (200 - 22, 200) so the final segment is
-  // horizontal pointing right (perpendicular to left side).
-  const runStraight = findRoute({ x: 0, y: 0 }, { x: 200, y: 200 }, {
-    kind: 'straight', toSide: 'left',
-  });
-  t('straight + toSide=left: last segment is HORIZONTAL (runway inserted)',
-    () => {
-      const v = runStraight.vertices;
-      const last = v[v.length - 1];
-      const prev = v[v.length - 2];
-      return last.y === prev.y && last.x > prev.x;
-    },
-    () => `verts: ${runStraight.vertices.map(p => `(${p.x},${p.y})`).join('→')}`);
-
-  // Curved with toSide=top: last segment should be VERTICAL going down
-  const runCurved = findRoute({ x: 0, y: 0 }, { x: 200, y: 200 }, {
-    kind: 'curved', toSide: 'top',
-  });
-  t('curved + toSide=top: last segment is VERTICAL (marker points down)',
-    () => {
-      const v = runCurved.vertices;
-      const last = v[v.length - 1];
-      const prev = v[v.length - 2];
-      return last.x === prev.x && last.y > prev.y;
-    },
-    () => `verts: ${runCurved.vertices.map(p => `(${p.x},${p.y})`).join('→')}`);
-
-  // Symmetric: start runway when fromSide='right' — first segment horizontal
+  // Start-side runway: findRoute still inserts a perpendicular start
+  // runway when fromSide is known. End-side perpendicular is now handled
+  // by arrows.js _adjustEndForMarker (marker-aware) and not in findRoute,
+  // so we only assert the START guarantees at this layer.
   const runStart = findRoute({ x: 0, y: 0 }, { x: 200, y: 200 }, {
     kind: 'straight', fromSide: 'right',
   });
@@ -412,14 +386,24 @@ suite('routing/findRoute — geometric (no A*)', (t) => {
     () => {
       const v = runStart.vertices;
       return v[0].y === v[1].y && v[1].x > v[0].x;
-    });
+    },
+    () => `verts: ${runStart.vertices.map(p => `(${p.x},${p.y})`).join('→')}`);
 
-  // Degenerate: prev is closer than RUNWAY_LEN → no runway inserted
-  const runShort = findRoute({ x: 0, y: 0 }, { x: 10, y: 10 }, {
+  // Degenerate: when endpoints sit within RUNWAY_LEN of each other no
+  // start runway is inserted (would overshoot)
+  const runShort = findRoute({ x: 0, y: 0 }, { x: 5, y: 5 }, {
+    kind: 'straight', fromSide: 'right',
+  });
+  t('start runway capped when endpoints are within RUNWAY_LEN',
+    () => runShort.vertices.length === 2);
+
+  // No toSide insertion at findRoute layer (arrows.js handles end-side)
+  const noEndRunway = findRoute({ x: 0, y: 0 }, { x: 200, y: 200 }, {
     kind: 'straight', toSide: 'left',
   });
-  t('runway capped when endpoints are within RUNWAY_LEN of each other',
-    () => runShort.vertices.length === 2);
+  t('findRoute no longer inserts end-side runway (arrows.js does it)',
+    () => noEndRunway.vertices.length === 2,
+    () => `verts: ${noEndRunway.vertices.map(p => `(${p.x},${p.y})`).join('→')}`);
 });
 
 // --- summary --------------------------------------------------------------
