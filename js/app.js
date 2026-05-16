@@ -1071,6 +1071,36 @@ function setupGithubImportModal() {
       toast(tr('github_import_failed', { error: msg }), 'error');
     },
   });
+  installImportToolbarButton();
+}
+
+function installImportToolbarButton() {
+  const zoneRight = document.querySelector('#toolbar .tb-zone-right .tb-group-view');
+  if (!zoneRight) return;
+  if (document.getElementById('btn-import-toggle')) return;
+  const btn = document.createElement('button');
+  btn.id = 'btn-import-toggle';
+  btn.type = 'button';
+  btn.className = 'tb-icon-btn';
+  btn.title = tr('toolbar_import_title');
+  btn.setAttribute('aria-label', tr('toolbar_import_aria'));
+  btn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3v12m-5-5l5 5l5-5M5 21h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  btn.addEventListener('click', () => {
+    if (!githubImportModal) return;
+    const u = getCurrentUser();
+    if (!u || !u.is_admin) {
+      toast(tr('toolbar_import_admin_only'), 'error');
+      return;
+    }
+    githubImportModal.open();
+  });
+  const bookmarksBtn = zoneRight.querySelector('#btn-bookmarks-toggle');
+  if (bookmarksBtn) zoneRight.insertBefore(btn, bookmarksBtn);
+  else zoneRight.appendChild(btn);
+  document.addEventListener('i18n:changed', () => {
+    btn.title = tr('toolbar_import_title');
+    btn.setAttribute('aria-label', tr('toolbar_import_aria'));
+  });
 }
 
 async function applyLocalImportPayload(payload) {

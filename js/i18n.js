@@ -1565,6 +1565,9 @@ const _I18N_DATA = {
   bookmark_added: ['Bookmarked', 'Добавлено в закладки', 'Lesezeichen gesetzt', 'Aggiunto ai segnalibri', 'Bogmærket'],
   bookmark_removed: ['Unbookmarked', 'Закладка снята', 'Lesezeichen entfernt', 'Rimosso dai segnalibri', 'Bogmærke fjernet'],
   bookmarks_dropdown_title: ['Bookmarks', 'Закладки', 'Lesezeichen', 'Segnalibri', 'Bogmærker'],
+  toolbar_import_title: ['Import from GitHub', 'Импорт с GitHub', 'Von GitHub importieren', 'Importa da GitHub', 'Importer fra GitHub'],
+  toolbar_import_aria: ['Open GitHub import', 'Открыть импорт с GitHub', 'GitHub-Import öffnen', 'Apri importazione GitHub', 'Åbn GitHub-import'],
+  toolbar_import_admin_only: ['Import is admin-only', 'Импорт доступен только админу', 'Import nur für Admins', 'Importazione solo per admin', 'Import kun for admin'],
   bookmarks_empty: [
     'No bookmarks yet.',
     'Закладок пока нет.',
