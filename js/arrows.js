@@ -106,7 +106,10 @@ function _routeStraightAroundObstacle(a, b, obstacles) {
 }
 
 function _segmentClearOf(rect, p, q) {
-  return !rectIntersectsSegment(rect, p, q);
+  const inset = 1;
+  const shrunk = { x: rect.x + inset, y: rect.y + inset, w: Math.max(0, rect.w - inset * 2), h: Math.max(0, rect.h - inset * 2) };
+  if (shrunk.w <= 0 || shrunk.h <= 0) return true;
+  return !rectIntersectsSegment(shrunk, p, q);
 }
 
 function _applyObstacleDetour(vertices, routing, obstacles, edge) {
@@ -723,7 +726,7 @@ export class ArrowLayer {
       return;
     }
 
-    const detourObstacles = this._obstaclesExcluding(obstacles, [fromInfo.rect, toInfo.rect]);
+    const detourObstacles = this._obstaclesExcluding(obstacles, [fromInfo.rect]);
     const cacheKey = this._edgeRouteKey(edge, fromInfo, toInfo, detourObstacles);
     const cached = this._pathCache.get(edge.id);
     let vertices;
@@ -1168,11 +1171,19 @@ export class ArrowLayer {
 
   _renderPreviewLine(a, b, scale, snapped) {
     const d = `M ${a.x} ${a.y} L ${b.x} ${b.y}`;
+    const dark = document.createElementNS(SVG_NS, 'path');
+    dark.setAttribute('d', d);
+    dark.setAttribute('fill', 'none');
+    dark.setAttribute('stroke', 'rgba(0,0,0,0.55)');
+    dark.setAttribute('stroke-width', String(9 / scale));
+    dark.setAttribute('stroke-linecap', 'round');
+    dark.setAttribute('pointer-events', 'none');
+    this.previewGroup.appendChild(dark);
     const halo = document.createElementNS(SVG_NS, 'path');
     halo.setAttribute('d', d);
     halo.setAttribute('fill', 'none');
-    halo.setAttribute('stroke', 'rgba(255,255,255,0.85)');
-    halo.setAttribute('stroke-width', String(6 / scale));
+    halo.setAttribute('stroke', 'rgba(255,255,255,0.95)');
+    halo.setAttribute('stroke-width', String(7 / scale));
     halo.setAttribute('stroke-linecap', 'round');
     halo.setAttribute('pointer-events', 'none');
     this.previewGroup.appendChild(halo);
@@ -1180,12 +1191,12 @@ export class ArrowLayer {
     path.setAttribute('d', d);
     path.setAttribute('fill', 'none');
     path.setAttribute('stroke', snapped ? COLOUR_VAR.solved : COLOUR_VAR.accent);
-    path.setAttribute('stroke-width', String(3 / scale));
+    path.setAttribute('stroke-width', String(4 / scale));
     path.setAttribute('stroke-linecap', 'round');
     path.setAttribute('stroke-opacity', '1');
     path.setAttribute('opacity', '1');
     if (!snapped) {
-      path.setAttribute('stroke-dasharray', `${10 / scale} ${5 / scale}`);
+      path.setAttribute('stroke-dasharray', `${12 / scale} ${6 / scale}`);
     }
     path.setAttribute('pointer-events', 'none');
     this.previewGroup.appendChild(path);

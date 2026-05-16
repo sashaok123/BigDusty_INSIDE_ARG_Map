@@ -1579,6 +1579,28 @@ export class Viewer {
         return;
       }
 
+      if (typeof this.onAnchorMouseDown === 'function') {
+        const hoverAny = this.hotspotAtImagePoint(img) || this.groupAtImagePoint(img) || this.blockAtImagePoint(img);
+        if (hoverAny && !this._isLocked(hoverAny.id)) {
+          const sc = (this.getTransform && this.getTransform().scale) || 1;
+          const ar = 12 / sc;
+          const rr = hoverAny.rect;
+          const sides = [
+            { side: 'left',   x: rr.x,                y: rr.y + rr.h / 2 },
+            { side: 'right',  x: rr.x + rr.w,         y: rr.y + rr.h / 2 },
+            { side: 'top',    x: rr.x + rr.w / 2,     y: rr.y            },
+            { side: 'bottom', x: rr.x + rr.w / 2,     y: rr.y + rr.h     },
+          ];
+          for (const pt of sides) {
+            const dx = img.x - pt.x, dy = img.y - pt.y;
+            if (dx*dx + dy*dy <= ar * ar) {
+              this.onAnchorMouseDown(ev, hoverAny.id, pt.side);
+              return;
+            }
+          }
+        }
+      }
+
       const hover = this.hotspotAtImagePoint(img);
       const grp = hover ? null : this.groupAtImagePoint(img);
 
