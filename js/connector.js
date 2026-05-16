@@ -72,15 +72,48 @@ export function vertexPathD(vertices, kind, opts) {
   return _polylineRoundedD(vertices, radius);
 }
 
-/* Centripetal Catmull-Rom converted to cubic Bezier per segment. With t=1/6
-   tension the resulting curve interpolates every control point (so user-
-   placed waypoints lie exactly on the visible line). Endpoints use the
-   doubled-vertex trick so the tangent at start/end is in the direction of
-   the NEXT vertex — which, because findRoute inserts a perpendicular
-   runway vertex next to each endpoint, is exactly perpendicular to the
-   bound rect side. The marker auto-orients to that tangent → always square-
-   on to the side. */
+/* Catmull-Rom-to-cubic-Bezier chain that interpolates every vertex AND
+   keeps the first and last segments as STRAIGHT lines.
+
+   The straight runways are what guarantee the marker tip ends perpendicular
+   to the bound rect side: with a perpendicular runway vertex inserted by
+   findRoute as second-to-last, the L command from runway → endpoint travels
+   strictly perpendicular, the marker auto-orients to that tangent. If we
+   ran Catmull-Rom over the runway segment too, its tangent at the endpoint
+   would be a function of the previous-prev vertex too, which generally
+   isn't perpendicular — the marker would rotate to the curve's tangent and
+   end up at an angle (the user's complaint).
+
+   For N < 4 we don't have a runway buffer and fall back to either polyline
+   (N ≤ 2) or full Catmull-Rom (N = 3, the curved-no-waypoints case where
+   smoothness across the only interior vertex matters more than runway). */
 function _catmullRomD(verts) {
+  const n = verts.length;
+  if (n === 0) return '';
+  if (n === 1) return `M ${fmt(verts[0].x)} ${fmt(verts[0].y)}`;
+  if (n === 2) return _polylineD(verts);
+  if (n === 3) return _fullCatmullRomD(verts);
+  let d = `M ${fmt(verts[0].x)} ${fmt(verts[0].y)}`;
+  // Straight runway exit (verts[0] → verts[1]).
+  d += ` L ${fmt(verts[1].x)} ${fmt(verts[1].y)}`;
+  // Interior Catmull-Rom segments.
+  for (let i = 1; i < n - 2; i++) {
+    const p0 = verts[Math.max(0, i - 1)];
+    const p1 = verts[i];
+    const p2 = verts[i + 1];
+    const p3 = verts[Math.min(n - 1, i + 2)];
+    const c1x = p1.x + (p2.x - p0.x) / 6;
+    const c1y = p1.y + (p2.y - p0.y) / 6;
+    const c2x = p2.x - (p3.x - p1.x) / 6;
+    const c2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C ${fmt(c1x)} ${fmt(c1y)} ${fmt(c2x)} ${fmt(c2y)} ${fmt(p2.x)} ${fmt(p2.y)}`;
+  }
+  // Straight runway entry (verts[n-2] → verts[n-1]).
+  d += ` L ${fmt(verts[n - 1].x)} ${fmt(verts[n - 1].y)}`;
+  return d;
+}
+
+function _fullCatmullRomD(verts) {
   const n = verts.length;
   let d = `M ${fmt(verts[0].x)} ${fmt(verts[0].y)}`;
   for (let i = 0; i < n - 1; i++) {

@@ -192,7 +192,14 @@ export class Viewer {
     this.imageReady = true;
     this._refreshBg();
     this._refreshPalette();
-    this.setInitialView();
+    // setInitialView() resets pan + scale to 100% centered. We only want
+    // that on the FIRST canvas load — not on every backend resync (which
+    // re-runs setBlocks). Otherwise the user's zoom/pan resets every few
+    // seconds against their will.
+    if (!this._initialViewApplied) {
+      this.setInitialView();
+      this._initialViewApplied = true;
+    }
     this._loadVisibleBlocks();
     this.requestDraw();
     return { w: this.imageW, h: this.imageH };

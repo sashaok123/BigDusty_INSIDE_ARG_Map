@@ -201,7 +201,7 @@ export class ArrowLayer {
       const mk = document.createElementNS(SVG_NS, 'marker');
       mk.setAttribute('id', `arrowhead-${c}`);
       mk.setAttribute('viewBox', '0 0 10 10');
-      mk.setAttribute('refX', '10');
+      mk.setAttribute('refX', '0');
       mk.setAttribute('refY', '5');
       mk.setAttribute('markerWidth',  '6');
       mk.setAttribute('markerHeight', '6');
@@ -236,7 +236,7 @@ export class ArrowLayer {
     const mk = document.createElementNS(SVG_NS, 'marker');
     mk.setAttribute('id', id);
     mk.setAttribute('viewBox', '0 0 10 10');
-    mk.setAttribute('refX', '10');
+    mk.setAttribute('refX', '0');
     mk.setAttribute('refY', '5');
     mk.setAttribute('markerWidth', String(sz * 0.75));
     mk.setAttribute('markerHeight', String(sz * 0.75));
@@ -257,7 +257,7 @@ export class ArrowLayer {
     const mk = document.createElementNS(SVG_NS, 'marker');
     mk.setAttribute('id', id);
     mk.setAttribute('viewBox', '0 0 10 10');
-    mk.setAttribute('refX', '10');
+    mk.setAttribute('refX', '0');
     mk.setAttribute('refY', '5');
     mk.setAttribute('markerWidth', String(sz * 0.75));
     mk.setAttribute('markerHeight', String(sz * 0.75));
