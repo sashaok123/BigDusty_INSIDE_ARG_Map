@@ -59,10 +59,18 @@ export function vertexPathD(vertices, kind, opts) {
     if (vertices.length < 3) return _polylineD(vertices);
     return _catmullRomD(vertices);
   }
-  // Elbow / straight: orthogonal-style with optional corner rounding. Sharp
-  // polyline when the user has placed waypoints (they want a precise corner
-  // at the waypoint position); rounded when the route was auto-shaped.
   const hasUserWaypoints = !!(opts && opts.hasUserWaypoints);
+  // Elbow / orthogonal / manhattan WITH user waypoints: render as smooth
+  // Catmull-Rom so the corners at user waypoints are soft (the user's
+  // explicit request — they want elbow as default but smooth bends when
+  // they actually route the line manually).
+  if (hasUserWaypoints
+      && (kind === 'elbow' || kind === 'orthogonal' || kind === 'manhattan')) {
+    if (vertices.length < 3) return _polylineD(vertices);
+    return _catmullRomD(vertices);
+  }
+  // Straight: always sharp (straight should stay straight).
+  // Elbow without user waypoints: orthogonal polyline with auto-rounded corners.
   const radius = hasUserWaypoints
     ? 0
     : (CORNER_RADIUS[kind] != null ? CORNER_RADIUS[kind] : CORNER_RADIUS.elbow);
