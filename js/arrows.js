@@ -878,13 +878,35 @@ export class ArrowLayer {
     }
   }
 
+  _trimPathForMarker(d, vertices, edge) {
+    if (!Array.isArray(vertices) || vertices.length < 2) return d;
+    const stroke = ensureStrokeShape(edge.stroke);
+    const arrowSize = ensureArrowSize(edge.arrowSize);
+    const markerLen = arrowSize * 0.75 * Math.max(1, stroke.width);
+    const last = vertices[vertices.length - 1];
+    const prev = vertices[vertices.length - 2];
+    const dx = last.x - prev.x;
+    const dy = last.y - prev.y;
+    const len = Math.hypot(dx, dy);
+    if (len <= markerLen * 0.8) return d;
+    const ux = dx / len;
+    const uy = dy / len;
+    const trim = markerLen * 0.7;
+    const newLast = { x: last.x - ux * trim, y: last.y - uy * trim };
+    const trimmed = vertices.slice(0, -1);
+    trimmed.push(newLast);
+    return vertexPathD(trimmed, edge.routing);
+  }
+
   _appendEdgePath(edge, d, colour, scale, vertices, opts) {
     const stroke = strokeFor(edge, colour);
     const selectedBoost = this.selectedId === edge.id ? 1.0 : 0;
     const baseWidth = stroke.width + selectedBoost;
     const dash = dashFor(edge.style, scale);
+    const markerEnd = (!opts || !opts.isTrunk) ? this._markerEndUrlFor(edge, colour) : null;
+    const haloD = markerEnd ? this._trimPathForMarker(d, vertices, edge) : d;
     const halo = document.createElementNS(SVG_NS, 'path');
-    halo.setAttribute('d', d);
+    halo.setAttribute('d', haloD);
     halo.setAttribute('fill', 'none');
     halo.style.stroke = 'rgba(255,255,255,0.85)';
     halo.setAttribute('stroke-linecap',  'round');
@@ -906,8 +928,8 @@ export class ArrowLayer {
     path.setAttribute('stroke-linejoin', 'round');
     path.setAttribute('stroke-width', String(baseWidth / scale));
     if (dash) path.setAttribute('stroke-dasharray', dash);
-    if (!opts || !opts.isTrunk) {
-      path.setAttribute('marker-end', this._markerEndUrlFor(edge, colour));
+    if (markerEnd) {
+      path.setAttribute('marker-end', markerEnd);
     }
     if (opts && Number.isFinite(opts.opacity) && opts.opacity < 1) {
       path.setAttribute('opacity', String(opts.opacity));
