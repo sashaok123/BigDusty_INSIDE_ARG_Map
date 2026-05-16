@@ -124,8 +124,9 @@ function _applyObstacleDetour(vertices, routing, obstacles, edge) {
   } else {
     current = vertices.slice();
   }
+  const maxIter = routing === 'smooth' ? 1 : 4;
   let anyChange = false;
-  for (let iter = 0; iter < 5; iter++) {
+  for (let iter = 0; iter < maxIter; iter++) {
     const next = [current[0]];
     let changed = false;
     for (let i = 0; i < current.length - 1; i++) {
@@ -748,7 +749,7 @@ export class ArrowLayer {
       return;
     }
 
-    const detourObstacles = this._obstaclesExcluding(obstacles, [fromInfo.rect]);
+    const detourObstacles = this._obstaclesExcluding(obstacles, [fromInfo.rect, toInfo.rect]);
     const cacheKey = this._edgeRouteKey(edge, fromInfo, toInfo, detourObstacles);
     const cached = this._pathCache.get(edge.id);
     let vertices;

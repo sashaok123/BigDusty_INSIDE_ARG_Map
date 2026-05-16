@@ -4479,8 +4479,10 @@ async function doDuplicate() {
   if (state.mode !== 'editor') return;
   if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
   if (state.selection.size === 0) return;
-  await doCopy();
-  await doPaste();
+  const payload = _buildCopyPayload();
+  if (!payload || !payload.nodes.length) return;
+  if (clipboardMgr) clipboardMgr._internal = payload;
+  instantiatePastedNodes(payload, 20, 20);
 }
 
 function pasteText(text) {
@@ -4785,7 +4787,108 @@ function setupMinimap() {
   if (mmBtn) mmBtn.addEventListener('click', () => minimap && minimap.toggle());
 }
 
+function _eventTargetIsTextLike(t) {
+  if (!t) return false;
+  if (t.isContentEditable) return true;
+  const tag = t.tagName;
+  if (tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  if (tag === 'INPUT') {
+    const type = (t.getAttribute('type') || 'text').toLowerCase();
+    const textLike = ['text', 'search', 'password', 'email', 'url', 'tel', 'number'];
+    return textLike.includes(type);
+  }
+  return false;
+}
+
+function _buildCopyPayload() {
+  if (state.selection.size === 0) return null;
+  const ids = Array.from(state.selection);
+  const allIds = new Set();
+  for (const id of ids) {
+    allIds.add(id);
+    const n = findNode(state.nodes, id);
+    if (n && isGroupNode(n)) {
+      for (const sid of groupDescendantIds(state.nodes, id)) allIds.add(sid);
+    }
+  }
+  const nodes = [];
+  for (const id of allIds) {
+    const n = findNode(state.nodes, id);
+    if (!n) continue;
+    nodes.push(JSON.parse(JSON.stringify(n)));
+  }
+  const edges = [];
+  for (const e of state.edges.values()) {
+    if (allIds.has(e.fromNode) && allIds.has(e.toNode)) edges.push(JSON.parse(JSON.stringify(e)));
+  }
+  return { nodes, edges };
+}
+
 function setupKeyboard() {
+  document.addEventListener('copy', (ev) => {
+    if (state.mode !== 'editor' && !isLoggedIn()) return;
+    if (_eventTargetIsTextLike(ev.target)) return;
+    const payload = _buildCopyPayload();
+    if (!payload || !payload.nodes.length) return;
+    const obj = { kind: 'arg_map_nodes', version: 1, ...payload };
+    try {
+      ev.clipboardData.setData('text/plain', JSON.stringify(obj));
+      ev.preventDefault();
+    } catch (e) { void e; }
+    if (clipboardMgr) clipboardMgr._internal = payload;
+    toast(tr('copy_paste_copied', { n: payload.nodes.length }));
+  });
+
+  document.addEventListener('cut', (ev) => {
+    if (state.mode !== 'editor') return;
+    if (_eventTargetIsTextLike(ev.target)) return;
+    const payload = _buildCopyPayload();
+    if (!payload || !payload.nodes.length) return;
+    const obj = { kind: 'arg_map_nodes', version: 1, ...payload };
+    try {
+      ev.clipboardData.setData('text/plain', JSON.stringify(obj));
+      ev.preventDefault();
+    } catch (e) { void e; }
+    if (clipboardMgr) clipboardMgr._internal = payload;
+    deleteCurrentSelection();
+  });
+
+  document.addEventListener('paste', (ev) => {
+    if (state.mode !== 'editor') return;
+    if (_eventTargetIsTextLike(ev.target)) return;
+    const items = ev.clipboardData ? ev.clipboardData.items : null;
+    if (items) {
+      for (const item of items) {
+        if (item.kind === 'file' && item.type && item.type.startsWith('image/')) {
+          const blob = item.getAsFile();
+          if (blob) {
+            ev.preventDefault();
+            pasteImage(blob);
+            return;
+          }
+        }
+      }
+    }
+    const text = ev.clipboardData ? ev.clipboardData.getData('text/plain') : '';
+    if (text) {
+      try {
+        const obj = JSON.parse(text);
+        if (obj && obj.kind === 'arg_map_nodes' && Array.isArray(obj.nodes)) {
+          ev.preventDefault();
+          instantiatePastedNodes(obj, 20, 20);
+          return;
+        }
+      } catch (e) { void e; }
+      ev.preventDefault();
+      pasteText(text);
+      return;
+    }
+    if (clipboardMgr && clipboardMgr.hasInternal()) {
+      ev.preventDefault();
+      instantiatePastedNodes(clipboardMgr.getInternal(), 20, 20);
+    }
+  });
+
   keyboard = new KeyboardShortcuts({
     overlayContainer: document.body,
     handlers: {

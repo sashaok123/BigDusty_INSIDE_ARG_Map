@@ -104,21 +104,9 @@ export class KeyboardShortcuts {
       else this._call('onGroupSelection', ev);
       return;
     }
-    if (meta && (k === 'c' || k === 'C')) {
-      ev.preventDefault();
-      this._call('onCopy', ev);
-      return;
-    }
-    if (meta && (k === 'v' || k === 'V')) {
-      ev.preventDefault();
-      this._call('onPaste', ev);
-      return;
-    }
-    if (meta && (k === 'x' || k === 'X')) {
-      ev.preventDefault();
-      this._call('onCut', ev);
-      return;
-    }
+    // Ctrl+C / Ctrl+V / Ctrl+X are handled by native copy/cut/paste event
+    // listeners in app.js. preventDefault on keydown would suppress the
+    // native paste event and break image-from-system-clipboard pasting.
     if (meta && (k === 'd' || k === 'D')) {
       ev.preventDefault();
       this._call('onDuplicate', ev);
