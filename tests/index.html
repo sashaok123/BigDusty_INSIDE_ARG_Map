@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Inside ARG Map Editor — test harness</title>
+<style>
+  :root { color-scheme: dark; }
+  body { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: #0e0f12; color: #e2e8f0; margin: 0; padding: 24px; }
+  h1 { font-size: 18px; font-weight: 600; margin: 0 0 4px; letter-spacing: 0.5px; }
+  h1 + p { color: #9ca3af; margin: 0 0 24px; font-size: 12px; }
+  .suite { border: 1px solid #2d3138; border-radius: 6px; margin-bottom: 16px; }
+  .suite-head { padding: 10px 14px; border-bottom: 1px solid #2d3138; font-weight: 600; display: flex; gap: 12px; align-items: center; }
+  .suite-head .badge { font-size: 11px; padding: 2px 8px; border-radius: 4px; letter-spacing: 0.5px; }
+  .suite-head .badge.pending { background: #374151; color: #9ca3af; }
+  .suite-head .badge.pass    { background: #064e3b; color: #6ee7b7; }
+  .suite-head .badge.fail    { background: #7f1d1d; color: #fca5a5; }
+  .case { padding: 8px 14px; border-top: 1px solid #1f2227; display: flex; gap: 10px; font-size: 12px; }
+  .case:first-child { border-top: 0; }
+  .case .dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 4px; flex: 0 0 auto; }
+  .case.pass .dot { background: #10b981; }
+  .case.fail .dot { background: #ef4444; }
+  .case .label { flex: 1 1 auto; }
+  .case .detail { color: #9ca3af; margin-top: 2px; font-size: 11px; word-break: break-word; }
+  .case.fail .detail { color: #fca5a5; }
+  #summary { margin-top: 24px; padding: 12px 14px; border-radius: 6px; font-weight: 600; }
+  #summary.pass { background: #064e3b; color: #6ee7b7; }
+  #summary.fail { background: #7f1d1d; color: #fca5a5; }
+  code { background: #1c1f25; padding: 1px 5px; border-radius: 3px; }
+  a { color: #93c5fd; }
+</style>
+</head>
+<body>
+<h1>Inside ARG Map Editor — vendored-deps smoke test</h1>
+<p>Open this page directly (file:// or via a local HTTP server). Every suite must turn green. If any test fails, the corresponding vendored file is broken.</p>
+<div id="suites"></div>
+<div id="summary">Running…</div>
+
+<script type="module">
+import RBush from '../js/vendor/rbush.js';
+import { hierarchy, tree, stratify, pack } from '../js/vendor/d3-hierarchy.js';
+import { getArrow, getBoxToBoxArrow } from '../js/vendor/perfect-arrows.js';
+
+const suitesEl = document.getElementById('suites');
+const summaryEl = document.getElementById('summary');
+let totalPass = 0;
+let totalFail = 0;
+
+function suite(name, fn) {
+  const wrap = document.createElement('div');
+  wrap.className = 'suite';
+  const head = document.createElement('div');
+  head.className = 'suite-head';
+  const title = document.createElement('span');
+  title.textContent = name;
+  const badge = document.createElement('span');
+  badge.className = 'badge pending';
+  badge.textContent = 'PENDING';
+  head.appendChild(title); head.appendChild(badge);
+  wrap.appendChild(head);
+  suitesEl.appendChild(wrap);
+
+  let pass = 0, fail = 0;
+  const t = (label, predicate, detailFn) => {
+    const row = document.createElement('div');
+    row.className = 'case';
+    const dot = document.createElement('span');
+    dot.className = 'dot';
+    const lbl = document.createElement('div');
+    lbl.className = 'label';
+    const lblText = document.createElement('div');
+    lblText.textContent = label;
+    lbl.appendChild(lblText);
+    let ok = false;
+    let detailText = '';
+    try {
+      const v = typeof predicate === 'function' ? predicate() : predicate;
+      ok = !!v;
+      if (detailFn) detailText = detailFn(v);
+    } catch (err) {
+      ok = false;
+      detailText = `threw: ${err && err.message ? err.message : err}`;
+    }
+    row.className = `case ${ok ? 'pass' : 'fail'}`;
+    if (detailText) {
+      const d = document.createElement('div');
+      d.className = 'detail';
+      d.textContent = detailText;
+      lbl.appendChild(d);
+    }
+    row.appendChild(dot); row.appendChild(lbl);
+    wrap.appendChild(row);
+    if (ok) { pass++; totalPass++; } else { fail++; totalFail++; }
+  };
+
+  try { fn(t); }
+  catch (err) {
+    const row = document.createElement('div');
+    row.className = 'case fail';
+    row.innerHTML = `<span class="dot"></span><div class="label">suite threw at top-level<div class="detail">${err && err.message ? err.message : err}</div></div>`;
+    wrap.appendChild(row);
+    fail++; totalFail++;
+  }
+  badge.className = `badge ${fail === 0 ? 'pass' : 'fail'}`;
+  badge.textContent = fail === 0 ? `PASS (${pass})` : `FAIL ${fail}/${pass + fail}`;
+}
+
+// --- rbush ----------------------------------------------------------------
+suite('rbush 4.0.1 — spatial index', (t) => {
+  const tree = new RBush();
+  t('constructor builds an empty tree', () => tree.all().length === 0);
+
+  tree.load([
+    { minX: 0,  minY: 0,  maxX: 10, maxY: 10, id: 'a' },
+    { minX: 20, minY: 0,  maxX: 30, maxY: 10, id: 'b' },
+    { minX: 5,  minY: 5,  maxX: 15, maxY: 15, id: 'c' },
+  ]);
+  t('load() inserts 3 items', () => tree.all().length === 3);
+
+  const hits = tree.search({ minX: 7, minY: 7, maxX: 12, maxY: 12 });
+  t('search() returns {a, c} for (7,7)-(12,12)',
+    () => hits.length === 2 && hits.map(h => h.id).sort().join(',') === 'a,c',
+    (v) => `actual ids: [${hits.map(h => h.id).sort().join(',')}]`);
+
+  t('collides() with overlapping bbox', () => tree.collides({ minX: 8, minY: 8, maxX: 9, maxY: 9 }));
+  t('collides() returns false when disjoint', () => !tree.collides({ minX: 100, minY: 100, maxX: 200, maxY: 200 }));
+
+  tree.remove(tree.all().find(it => it.id === 'b'));
+  t('remove() drops item b', () => tree.all().length === 2 && !tree.all().some(it => it.id === 'b'));
+
+  tree.clear();
+  t('clear() empties the tree', () => tree.all().length === 0);
+});
+
+// --- d3-hierarchy ---------------------------------------------------------
+suite('d3-hierarchy 3.1.2 — tree layout', (t) => {
+  const root = hierarchy({
+    name: 'root',
+    children: [
+      { name: 'a', children: [{ name: 'a1' }, { name: 'a2' }] },
+      { name: 'b', children: [{ name: 'b1' }] },
+    ],
+  });
+  t('hierarchy() builds a node tree', () => root.descendants().length === 6);
+  t('depth is set per node', () => {
+    const a1 = root.descendants().find(n => n.data.name === 'a1');
+    return a1 && a1.depth === 2;
+  });
+
+  const layout = tree().nodeSize([100, 100])(root);
+  const positions = Object.fromEntries(layout.descendants().map(n => [n.data.name, [Math.round(n.x), Math.round(n.y)]]));
+  t('tree().nodeSize() places root at (0,0)', () => positions.root[0] === 0 && positions.root[1] === 0,
+    (v) => `root @ ${positions.root}`);
+  t('a and b are at depth y=100',
+    () => positions.a[1] === 100 && positions.b[1] === 100,
+    (v) => `a @ ${positions.a}, b @ ${positions.b}`);
+  t('a1 and a2 are siblings at y=200',
+    () => positions.a1[1] === 200 && positions.a2[1] === 200);
+
+  // stratify (parent-id form) — used by github-import layout for d3-hierarchy
+  const flat = [
+    { id: 'root', parent: null },
+    { id: 'a', parent: 'root' },
+    { id: 'b', parent: 'root' },
+    { id: 'a1', parent: 'a' },
+  ];
+  const strat = stratify().id(d => d.id).parentId(d => d.parent)(flat);
+  t('stratify() rebuilds the tree from flat parent-id list', () => strat.descendants().length === 4);
+
+  // pack — also used in some layouts
+  const packed = pack().size([400, 400])(hierarchy({ children: [{ value: 1 }, { value: 1 }, { value: 1 }] }).sum(d => d.value));
+  t('pack() assigns x/y/r to leaves', () => packed.leaves().every(n => typeof n.x === 'number' && typeof n.r === 'number'));
+});
+
+// --- perfect-arrows -------------------------------------------------------
+suite('perfect-arrows 0.3.7 — arc geometry', (t) => {
+  const arr = getArrow(0, 0, 200, 200);
+  t('getArrow() returns a 9-tuple', () => Array.isArray(arr) && arr.length === 9);
+  const [sx, sy, cx, cy, ex, ey, ae, as, ac] = arr;
+  t('endpoints are finite numbers',
+    () => [sx, sy, cx, cy, ex, ey].every(Number.isFinite),
+    () => `(${Math.round(sx)},${Math.round(sy)}) → (${Math.round(cx)},${Math.round(cy)}) → (${Math.round(ex)},${Math.round(ey)})`);
+
+  const box = getBoxToBoxArrow(0, 0, 100, 100, 300, 200, 100, 100);
+  t('getBoxToBoxArrow() returns a 9-tuple', () => Array.isArray(box) && box.length === 9);
+  const [bsx, bsy, bcx, bcy, bex, bey] = box;
+  // getBoxToBoxArrow leaves padEnd=20 default space between the end-point and the
+  // target box edge so an arrowhead fits. We just verify the endpoints sit near
+  // the right boxes (within padEnd+1) and aren't at the box centers.
+  const srcCx = 50, srcCy = 50, tgtCx = 350, tgtCy = 250;
+  const padTol = 25;
+  t('start point is on the source-box perimeter (within padding)',
+    () => Math.min(Math.abs(bsx - 0), Math.abs(bsx - 100), Math.abs(bsy - 0), Math.abs(bsy - 100)) <= padTol,
+    () => `start (${Math.round(bsx)},${Math.round(bsy)})`);
+  t('end point is just outside the target-box perimeter (within padEnd)',
+    () => {
+      const minDistToTargetEdge = Math.min(Math.abs(bex - 300), Math.abs(bex - 400), Math.abs(bey - 200), Math.abs(bey - 300));
+      return minDistToTargetEdge <= padTol;
+    },
+    () => `end (${Math.round(bex)},${Math.round(bey)})`);
+  t('endpoints are not at box centers (i.e. line actually exits the box)',
+    () => !(bsx === srcCx && bsy === srcCy) && !(bex === tgtCx && bey === tgtCy));
+
+  // Overlapping boxes — the lib should still return without throwing
+  let ok = false;
+  try {
+    const olap = getBoxToBoxArrow(0, 0, 100, 100, 50, 50, 100, 100);
+    ok = Array.isArray(olap) && olap.length === 9;
+  } catch (e) { ok = false; }
+  t('getBoxToBoxArrow() handles overlapping boxes without throwing', ok);
+});
+
+// --- summary --------------------------------------------------------------
+summaryEl.className = totalFail === 0 ? 'pass' : 'fail';
+summaryEl.textContent = totalFail === 0
+  ? `ALL GREEN — ${totalPass} test${totalPass === 1 ? '' : 's'} passed.`
+  : `FAILED — ${totalFail} of ${totalPass + totalFail} tests failed.`;
+</script>
+</body>
+</html>
