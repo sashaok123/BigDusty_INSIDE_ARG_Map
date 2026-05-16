@@ -54,33 +54,8 @@ function ensureArrowSize(value) {
 }
 
 function _adjustArrowTipApproach(vertices, toInfo, edge) {
-  if (!Array.isArray(vertices) || vertices.length < 2) return vertices;
-  if (!toInfo || !toInfo.rect) return vertices;
-  if (edge && (edge.routing === 'smooth' || edge.routing === 'orthogonal' || edge.routing === 'manhattan')) return vertices;
-  const last = vertices[vertices.length - 1];
-  const prev = vertices[vertices.length - 2];
-  const cx = toInfo.rect.x + toInfo.rect.w / 2;
-  const cy = toInfo.rect.y + toInfo.rect.h / 2;
-  const dxCenter = last.x - cx;
-  const dyCenter = last.y - cy;
-  const dCenter = Math.hypot(dxCenter, dyCenter);
-  if (dCenter < 1e-3) return vertices;
-  const ux = dxCenter / dCenter;
-  const uy = dyCenter / dCenter;
-  const segDx = last.x - prev.x;
-  const segDy = last.y - prev.y;
-  const segLen = Math.hypot(segDx, segDy);
-  if (segLen < 1e-3) return vertices;
-  const sx = segDx / segLen;
-  const sy = segDy / segLen;
-  const dot = sx * ux + sy * uy;
-  if (dot > 0.97) return vertices;
-  const approachLen = Math.min(Math.max(segLen * 0.12, 4), 10);
-  const blendPt = { x: last.x - ux * approachLen, y: last.y - uy * approachLen };
-  const out = vertices.slice(0, -1);
-  out.push(blendPt);
-  out.push(last);
-  return out;
+  void toInfo; void edge;
+  return vertices;
 }
 
 export { STROKE_COLOR_SWATCHES, ensureStrokeShape, ensureArrowSize, ARROW_SIZE_DEFAULT, ARROW_SIZE_MIN, ARROW_SIZE_MAX };
