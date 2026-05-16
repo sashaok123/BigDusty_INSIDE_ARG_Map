@@ -1581,7 +1581,7 @@ export class Viewer {
 
       if (typeof this.onAnchorMouseDown === 'function') {
         const hoverAny = this.hotspotAtImagePoint(img) || this.groupAtImagePoint(img) || this.blockAtImagePoint(img);
-        if (hoverAny && !this._isLocked(hoverAny.id)) {
+        if (hoverAny) {
           const sc = (this.getTransform && this.getTransform().scale) || 1;
           const ar = 12 / sc;
           const rr = hoverAny.rect;
