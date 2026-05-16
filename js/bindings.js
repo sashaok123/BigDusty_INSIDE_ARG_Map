@@ -3,7 +3,7 @@
    the anchor onto the perimeter (plus a 6 px gap) along the line towards the
    other endpoint. Also exposes perimeter projection used by drag-to-create. */
 
-const ORBIT_GAP = 6;
+const ORBIT_GAP = 0;
 
 export function rectOf(node) {
   return { x: node.x, y: node.y, w: node.width, h: node.height };
