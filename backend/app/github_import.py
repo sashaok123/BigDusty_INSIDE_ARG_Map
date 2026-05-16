@@ -49,6 +49,24 @@ DOC_EXT_MIME = {
     ".sh": "application/x-sh",
     ".css": "text/css",
     ".pdf": "application/pdf",
+    # Binary / archive formats accepted as document-nodes (raw bytes kept;
+    # rendering side will show a file-icon placeholder). Skipped if size
+    # exceeds MAX_BLOB_BYTES.
+    ".dat":  "application/octet-stream",
+    ".bin":  "application/octet-stream",
+    ".raw":  "application/octet-stream",
+    ".7z":   "application/x-7z-compressed",
+    ".zip":  "application/zip",
+    ".tar":  "application/x-tar",
+    ".gz":   "application/gzip",
+    ".log":  "text/plain",
+    ".yaml": "application/yaml",
+    ".yml":  "application/yaml",
+    ".toml": "application/toml",
+    ".ini":  "text/plain",
+    ".md5":  "text/plain",
+    ".sha":  "text/plain",
+    ".sha256": "text/plain",
 }
 ALL_IMAGE_MIMES = set(IMAGE_EXT_MIME.values())
 ALL_DOC_MIMES = set(DOC_EXT_MIME.values())
@@ -268,40 +286,100 @@ def _layout_grid(
     file_entries: list[dict[str, Any]],
     folder_layout: bool,
 ) -> dict[str, dict[str, int]]:
-    by_folder: dict[str, list[dict[str, Any]]] = {}
-    for e in file_entries:
-        folder, _ = _split_path(e["path"])
-        by_folder.setdefault(folder, []).append(e)
-    placements: dict[str, dict[str, int]] = {}
-    col_x = 0
+    """Position files on the canvas.
+
+    folder_layout=False  → flat grid, 6 files per row, in input order.
+    folder_layout=True   → recursive folder-tree layout: a parent folder
+      lays out its files in a vertical stack on the LEFT, then its
+      subfolders side-by-side on the RIGHT, recursively. This produces a
+      tree-like visual where nested folders nest visually too, instead of
+      every folder becoming a top-level column (the old behavior).
+    """
     column_w = 260
     row_h = 180
     margin = 60
+    cell_w = column_w - 20
+    cell_h = row_h - 20
+
     if not folder_layout:
-        x = 0
-        y = 0
+        placements: dict[str, dict[str, int]] = {}
         per_row = 6
         for i, e in enumerate(file_entries):
             placements[e["path"]] = {
-                "x": x + (i % per_row) * (column_w + margin // 2),
-                "y": y + (i // per_row) * (row_h + margin // 2),
-                "w": column_w - 20,
-                "h": row_h - 20,
+                "x": (i % per_row) * (column_w + margin // 2),
+                "y": (i // per_row) * (row_h + margin // 2),
+                "w": cell_w,
+                "h": cell_h,
             }
         return placements
-    folders = sorted(by_folder.keys())
-    for folder in folders:
-        items = by_folder[folder]
-        col_y = 80
-        for e in items:
+
+    # Build folder tree: map "parent_folder" -> { files: [...], subfolders: set }
+    # using the relpaths.
+    children_of: dict[str, list[str]] = {}
+    files_in: dict[str, list[dict[str, Any]]] = {}
+    all_folders: set[str] = set()
+    for e in file_entries:
+        folder, _ = _split_path(e["relpath"])
+        files_in.setdefault(folder, []).append(e)
+        # Walk every ancestor folder.
+        parts = folder.split("/") if folder else []
+        cur = ""
+        for part in parts:
+            parent = cur
+            cur = f"{cur}/{part}" if cur else part
+            all_folders.add(cur)
+            if cur not in children_of.get(parent, []):
+                children_of.setdefault(parent, []).append(cur)
+        all_folders.add(folder)
+
+    # Make sure root entry exists and that children lists are sorted/unique.
+    if "" not in children_of:
+        children_of[""] = []
+    # Top-level folders are roots; collect them in sorted order.
+    top_folders = sorted({f.split("/")[0] for f in all_folders if f})
+    for parent in list(children_of.keys()):
+        children_of[parent] = sorted(set(children_of[parent]))
+    # Add root's top-level folders if not already there.
+    children_of[""] = sorted(set(children_of.get("", []) + top_folders))
+
+    placements: dict[str, dict[str, int]] = {}
+
+    def layout(folder: str, origin_x: int, origin_y: int) -> tuple[int, int]:
+        """Lay out `folder`'s files and subfolders starting at (origin_x, origin_y).
+        Returns the (width, height) consumed."""
+        files = files_in.get(folder, [])
+        # Files stacked vertically in a single column.
+        files_h = max(0, len(files) * row_h)
+        # Place files.
+        for i, e in enumerate(files):
             placements[e["path"]] = {
-                "x": col_x,
-                "y": col_y,
-                "w": column_w - 20,
-                "h": row_h - 20,
+                "x": origin_x,
+                "y": origin_y + i * row_h,
+                "w": cell_w,
+                "h": cell_h,
             }
-            col_y += row_h
-        col_x += column_w + margin
+        # Subfolders go to the RIGHT of the files column.
+        sub_origin_x = origin_x + (column_w + margin if files else 0)
+        sub_origin_y = origin_y
+        subs = children_of.get(folder, [])
+        if not subs:
+            return (cell_w, files_h)
+        sub_w_total = 0
+        sub_h_max = 0
+        for sub in subs:
+            sw, sh = layout(sub, sub_origin_x + sub_w_total, sub_origin_y)
+            sub_w_total += sw + margin
+            if sh > sub_h_max:
+                sub_h_max = sh
+        # Trim trailing margin.
+        sub_w_total = max(0, sub_w_total - margin)
+        total_w = (cell_w + margin if files else 0) + sub_w_total
+        total_h = max(files_h, sub_h_max)
+        return (total_w, total_h)
+
+    # Root has no own files in the typical case (top-level files at "" go in
+    # the root row); subfolders fan out to the right.
+    layout("", 0, 0)
     return placements
 
 
