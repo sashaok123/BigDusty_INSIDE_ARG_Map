@@ -29,8 +29,15 @@ export class KeyboardShortcuts {
     const t = ev.target;
     if (!t || !t.tagName) return false;
     const tag = t.tagName.toLowerCase();
-    if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
     if (t.isContentEditable) return true;
+    if (tag === 'textarea') return true;
+    if (tag === 'select') return true;
+    if (tag === 'input') {
+      const type = (t.getAttribute('type') || 'text').toLowerCase();
+      const textLike = ['text', 'search', 'password', 'email', 'url', 'tel', 'number'];
+      if (textLike.includes(type)) return true;
+      return false;
+    }
     return false;
   }
 
