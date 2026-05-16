@@ -360,19 +360,66 @@ suite('routing/findRoute — geometric (no A*)', (t) => {
     () => elbowNoSides.vertices.length === 3);
 
   // Obstacles passed in are now IGNORED (manual routing model)
-  const ignored = findRoute({ x: 0, y: 0 }, { x: 200, y: 0 }, {
+  const ignored = findRoute({ x: 0, y: 0 }, { x: 200, y: 100 }, {
     kind: 'elbow',
-    obstacles: [{ x: 50, y: -50, w: 100, h: 100 }],
+    obstacles: [{ x: 50, y: 25, w: 100, h: 50 }],
     fromSide: 'right', toSide: 'left',
   });
-  t('obstacles parameter is ignored (geometric router, no A*)',
-    () => ignored.vertices.length === 4);
+  t('obstacles parameter ignored: path is still a Z (4 verts, not detoured)',
+    () => ignored.vertices.length === 4,
+    () => `verts: ${ignored.vertices.map(v => `(${v.x},${v.y})`).join('→')}`);
 
   // simplifyCollinear identity for non-redundant input
   t('simplifyCollinear: drops collinear horizontal middle',
     () => simplifyCollinear([{ x: 0, y: 0 }, { x: 50, y: 0 }, { x: 100, y: 0 }]).length === 2);
   t('simplifyCollinear: preserves L bend',
     () => simplifyCollinear([{ x: 0, y: 0 }, { x: 50, y: 0 }, { x: 50, y: 50 }]).length === 3);
+
+  // RUNWAYS — perpendicular straight before endpoint so marker is square-on
+  // Straight route from (0,0) diagonally to (200,200) with toSide='left'
+  // should get an end-runway at (200 - 22, 200) so the final segment is
+  // horizontal pointing right (perpendicular to left side).
+  const runStraight = findRoute({ x: 0, y: 0 }, { x: 200, y: 200 }, {
+    kind: 'straight', toSide: 'left',
+  });
+  t('straight + toSide=left: last segment is HORIZONTAL (runway inserted)',
+    () => {
+      const v = runStraight.vertices;
+      const last = v[v.length - 1];
+      const prev = v[v.length - 2];
+      return last.y === prev.y && last.x > prev.x;
+    },
+    () => `verts: ${runStraight.vertices.map(p => `(${p.x},${p.y})`).join('→')}`);
+
+  // Curved with toSide=top: last segment should be VERTICAL going down
+  const runCurved = findRoute({ x: 0, y: 0 }, { x: 200, y: 200 }, {
+    kind: 'curved', toSide: 'top',
+  });
+  t('curved + toSide=top: last segment is VERTICAL (marker points down)',
+    () => {
+      const v = runCurved.vertices;
+      const last = v[v.length - 1];
+      const prev = v[v.length - 2];
+      return last.x === prev.x && last.y > prev.y;
+    },
+    () => `verts: ${runCurved.vertices.map(p => `(${p.x},${p.y})`).join('→')}`);
+
+  // Symmetric: start runway when fromSide='right' — first segment horizontal
+  const runStart = findRoute({ x: 0, y: 0 }, { x: 200, y: 200 }, {
+    kind: 'straight', fromSide: 'right',
+  });
+  t('straight + fromSide=right: first segment HORIZONTAL going right',
+    () => {
+      const v = runStart.vertices;
+      return v[0].y === v[1].y && v[1].x > v[0].x;
+    });
+
+  // Degenerate: prev is closer than RUNWAY_LEN → no runway inserted
+  const runShort = findRoute({ x: 0, y: 0 }, { x: 10, y: 10 }, {
+    kind: 'straight', toSide: 'left',
+  });
+  t('runway capped when endpoints are within RUNWAY_LEN of each other',
+    () => runShort.vertices.length === 2);
 });
 
 // --- summary --------------------------------------------------------------

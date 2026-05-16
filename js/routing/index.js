@@ -36,6 +36,23 @@
 
 const CURVED_BOW_FRACTION = 0.18;
 
+/* Length of the perpendicular straight segment we force right before the
+   endpoint (and right after the start) so the marker tip always approaches
+   the rect perpendicular to the bound side, and so the arrowhead has a
+   short visible straight body in front of it instead of fading into a
+   curve. Auto-collapses if the segment otherwise would be shorter. */
+const RUNWAY_LEN = 22;
+
+/* INTO-rect unit vector per bound side (used both as 'end runway shifts
+   AWAY from endpoint by this vector × runway-length' and as 'start runway
+   shifts AWAY from start by NEGATIVE this vector × length'). */
+const SIDE_INWARD = {
+  left:   { x:  1, y:  0 },
+  right:  { x: -1, y:  0 },
+  top:    { x:  0, y:  1 },
+  bottom: { x:  0, y: -1 },
+};
+
 const LEGACY_KIND_MAP = {
   orthogonal: 'elbow',
   manhattan:  'elbow',
@@ -52,6 +69,43 @@ export function migrateRouting(legacyKind) {
 
 function ptEq(a, b) {
   return a && b && a.x === b.x && a.y === b.y;
+}
+
+/* Force the LAST segment of the route to be a perpendicular straight runway
+   into the endpoint. Without this, the last segment can sit at an angle
+   (curved bow, straight from offset start), and the marker — which orients
+   along the path tangent at the endpoint — would render rotated to that
+   angle instead of pointing straight into the bound side. */
+function _withEndRunway(verts, end, toSide, len) {
+  if (!toSide || !SIDE_INWARD[toSide] || verts.length < 2) return verts;
+  const dir = SIDE_INWARD[toSide];
+  const runway = { x: end.x - dir.x * len, y: end.y - dir.y * len };
+  const prev = verts[verts.length - 2];
+  const distPrevToEnd = Math.hypot(end.x - prev.x, end.y - prev.y);
+  if (distPrevToEnd <= len) return verts;
+  return [...verts.slice(0, -1), runway, end];
+}
+
+/* Symmetric: force the FIRST segment to leave the source perpendicular to
+   the bound side. Visually parallel to the end-runway treatment. */
+function _withStartRunway(verts, start, fromSide, len) {
+  if (!fromSide || !SIDE_INWARD[fromSide] || verts.length < 2) return verts;
+  const dir = SIDE_INWARD[fromSide];
+  const runway = { x: start.x - dir.x * len, y: start.y - dir.y * len };
+  const next = verts[1];
+  const distStartToNext = Math.hypot(next.x - start.x, next.y - start.y);
+  if (distStartToNext <= len) return verts;
+  return [start, runway, ...verts.slice(1)];
+}
+
+function _withRunways(verts, start, end, fromSide, toSide) {
+  let v = _withStartRunway(verts, start, fromSide, RUNWAY_LEN);
+  v = _withEndRunway(v, end, toSide, RUNWAY_LEN);
+  // When the geometric router already produced a perpendicular leg (elbow
+  // with sides), the inserted runway is collinear with its neighbours; drop
+  // those redundant vertices so the rounded-corner renderer doesn't emit
+  // degenerate Q commands.
+  return simplifyCollinear(v);
 }
 
 function _isHorizSide(side) {
@@ -159,18 +213,22 @@ export function findRoute(start, end, opts = {}) {
   }
 
   if (kind === 'straight') {
-    return {
-      vertices: [{ x: start.x, y: start.y }, { x: end.x, y: end.y }],
-      kind,
-    };
+    const verts = [{ x: start.x, y: start.y }, { x: end.x, y: end.y }];
+    return { vertices: _withRunways(verts, start, end, opts.fromSide, opts.toSide), kind };
   }
 
   if (kind === 'elbow') {
-    return { vertices: _elbowAuto(start, end, opts.fromSide, opts.toSide), kind };
+    // Elbow corners are already placed perpendicular to the bound sides by
+    // _elbowAuto, but applying runways here is a no-op via collinear-collapse
+    // when the geometry already matches, and adds the perpendicular runway
+    // when fromSide/toSide were null (geometric fallback path).
+    const verts = _elbowAuto(start, end, opts.fromSide, opts.toSide);
+    return { vertices: _withRunways(verts, start, end, opts.fromSide, opts.toSide), kind };
   }
 
   // curved
-  return { vertices: _curvedAuto(start, end), kind };
+  const verts = _curvedAuto(start, end);
+  return { vertices: _withRunways(verts, start, end, opts.fromSide, opts.toSide), kind };
 }
 
 /* Identity simplifier kept exported for existing test imports. The geometric
