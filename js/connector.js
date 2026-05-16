@@ -49,11 +49,19 @@ export function vertexPathD(vertices, kind, opts) {
     const [a, c1, c2, b] = vertices;
     return `M ${fmt(a.x)} ${fmt(a.y)} C ${fmt(c1.x)} ${fmt(c1.y)}, ${fmt(c2.x)} ${fmt(c2.y)}, ${fmt(b.x)} ${fmt(b.y)}`;
   }
-  // User-added waypoints must lie EXACTLY on the rendered path so the
-  // waypoint handle (a small circle at the waypoint coord) appears on the
-  // line, not 'floating beside it'. Sharp polyline does that. Auto-shaped
-  // paths (no user waypoints) get the kind-specific corner radius for the
-  // smoother look.
+  // Smooth / curved: Catmull-Rom-to-cubic-Bezier chain. The curve passes
+  // through EVERY vertex (so user waypoints sit exactly on the rendered
+  // line and the handle circle sits on the curve), and remains smooth
+  // through every bend — no sharp angles. With the runway vertices
+  // inserted by findRoute the tangent at each endpoint is also perpendicular
+  // to the bound side, so the marker stays square-on.
+  if (kind === 'smooth' || kind === 'curved') {
+    if (vertices.length < 3) return _polylineD(vertices);
+    return _catmullRomD(vertices);
+  }
+  // Elbow / straight: orthogonal-style with optional corner rounding. Sharp
+  // polyline when the user has placed waypoints (they want a precise corner
+  // at the waypoint position); rounded when the route was auto-shaped.
   const hasUserWaypoints = !!(opts && opts.hasUserWaypoints);
   const radius = hasUserWaypoints
     ? 0
@@ -62,6 +70,31 @@ export function vertexPathD(vertices, kind, opts) {
     return _polylineD(vertices);
   }
   return _polylineRoundedD(vertices, radius);
+}
+
+/* Centripetal Catmull-Rom converted to cubic Bezier per segment. With t=1/6
+   tension the resulting curve interpolates every control point (so user-
+   placed waypoints lie exactly on the visible line). Endpoints use the
+   doubled-vertex trick so the tangent at start/end is in the direction of
+   the NEXT vertex — which, because findRoute inserts a perpendicular
+   runway vertex next to each endpoint, is exactly perpendicular to the
+   bound rect side. The marker auto-orients to that tangent → always square-
+   on to the side. */
+function _catmullRomD(verts) {
+  const n = verts.length;
+  let d = `M ${fmt(verts[0].x)} ${fmt(verts[0].y)}`;
+  for (let i = 0; i < n - 1; i++) {
+    const p0 = verts[Math.max(0, i - 1)];
+    const p1 = verts[i];
+    const p2 = verts[i + 1];
+    const p3 = verts[Math.min(n - 1, i + 2)];
+    const c1x = p1.x + (p2.x - p0.x) / 6;
+    const c1y = p1.y + (p2.y - p0.y) / 6;
+    const c2x = p2.x - (p3.x - p1.x) / 6;
+    const c2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C ${fmt(c1x)} ${fmt(c1y)} ${fmt(c2x)} ${fmt(c2y)} ${fmt(p2.x)} ${fmt(p2.y)}`;
+  }
+  return d;
 }
 
 /* Polyline with rounded corners. Each interior corner becomes a quadratic
