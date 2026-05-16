@@ -1056,22 +1056,40 @@ export function resolveAnchor(edge, which, nodes, otherPoint) {
   return { point: anchorWorld({ x: 0, y: 0, w: 100, h: 100 }, [0.5, 0.5]), side: null, rect: null, bound: false };
 }
 
-export function setEndpointToNode(edge, which, nodeId, fixedPoint) {
-  const key = which === 'from' ? 'fromNode' : 'toNode';
-  edge[key] = nodeId;
+/* Unified endpoint setter. target is a tagged union:
+     { kind: 'node',  nodeId, fixedPoint: [u, v] }   — bound to a node's
+                                                       normalized point [0..1]²
+     { kind: 'point', x, y }                          — free-floating
+                                                       (aka "dangling")
+   Both branches keep fromNode/toNode, bindings, and fallback fromPoint/toPoint
+   internally consistent, and syncLegacySide() runs in BOTH cases — the legacy
+   fromSide/toSide fields used to silently desync on dangling. */
+export function setEndpoint(edge, which, target) {
+  const nodeKey   = which === 'from' ? 'fromNode'  : 'toNode';
+  const pointKey  = which === 'from' ? 'fromPoint' : 'toPoint';
   ensureBindings(edge);
-  edge.bindings[which].fixedPoint = [fixedPoint[0], fixedPoint[1]];
-  edge.bindings[which].mode = edge.bindings[which].mode === 'inside' ? 'inside' : 'orbit';
-  if (which === 'from') edge.fromPoint = null;
-  else edge.toPoint = null;
+  if (target && target.kind === 'node') {
+    edge[nodeKey] = target.nodeId;
+    edge.bindings[which].fixedPoint = [target.fixedPoint[0], target.fixedPoint[1]];
+    edge.bindings[which].mode = edge.bindings[which].mode === 'inside' ? 'inside' : 'orbit';
+    edge[pointKey] = null;
+  } else if (target && target.kind === 'point') {
+    edge[nodeKey]  = '';
+    edge[pointKey] = { x: target.x, y: target.y };
+  } else {
+    throw new Error(`setEndpoint: target must be {kind:'node',...} or {kind:'point',...}, got ${JSON.stringify(target)}`);
+  }
   syncLegacySide(edge);
 }
 
+/* Back-compat shims so the dozen+ call sites compile until the call-site
+   sweep in 3A. Both call setEndpoint() under the hood. */
+export function setEndpointToNode(edge, which, nodeId, fixedPoint) {
+  setEndpoint(edge, which, { kind: 'node', nodeId, fixedPoint });
+}
+
 export function setEndpointDangling(edge, which, worldPoint) {
-  const key = which === 'from' ? 'fromNode' : 'toNode';
-  edge[key] = '';
-  if (which === 'from') edge.fromPoint = { x: worldPoint.x, y: worldPoint.y };
-  else                  edge.toPoint   = { x: worldPoint.x, y: worldPoint.y };
+  setEndpoint(edge, which, { kind: 'point', x: worldPoint.x, y: worldPoint.y });
 }
 
 export function rebindEndpointToNode(edge, which, node, fixedPoint) {

@@ -1479,6 +1479,14 @@ export class Viewer {
       viewport.addEventListener('wheel', this._onWheel.bind(this), { passive: false });
       viewport.addEventListener('contextmenu', this._onContextMenu.bind(this));
       viewport.addEventListener('mousedown', this._onViewportMouseDown.bind(this));
+      // Focus the viewport on pointer-down so the browser routes copy/paste
+      // and key events here instead of to whatever was focused before. Without
+      // this, native paste events never fire and Ctrl+V is silently dead.
+      viewport.addEventListener('pointerdown', () => {
+        if (viewport.focus && typeof viewport.focus === 'function') {
+          try { viewport.focus({ preventScroll: true }); } catch (e) { void e; }
+        }
+      });
     } else {
       c.addEventListener('wheel', this._onWheel.bind(this), { passive: false });
       c.addEventListener('contextmenu', this._onContextMenu.bind(this));
@@ -1579,7 +1587,11 @@ export class Viewer {
         return;
       }
 
-      if (typeof this.onAnchorMouseDown === 'function') {
+      // Universal anchor pre-check: drag from a node-side anchor starts an
+      // arrow. Only fires for tools where that gesture makes sense — not for
+      // pan/text/image/video/etc which have their own pointer semantics.
+      const ANCHOR_DRAG_TOOLS = new Set(['select', 'arrow']);
+      if (typeof this.onAnchorMouseDown === 'function' && ANCHOR_DRAG_TOOLS.has(tool)) {
         const hoverAny = this.hotspotAtImagePoint(img) || this.groupAtImagePoint(img) || this.blockAtImagePoint(img);
         if (hoverAny) {
           const sc = (this.getTransform && this.getTransform().scale) || 1;
@@ -1624,8 +1636,9 @@ export class Viewer {
             };
             return;
           }
+          // Lock prevents move/resize, NOT arrow-linking. Always detect anchor.
           let anchorSide = null;
-          if (!locked) {
+          {
             const sc = (this.getTransform && this.getTransform().scale) || 1;
             const ar = 12 / sc;
             const rr = hover.rect;
@@ -1725,8 +1738,9 @@ export class Viewer {
               return;
             }
           }
+          // Lock prevents move/resize, NOT arrow-linking. Always detect anchor.
           let anchorSide = null;
-          if (!locked) {
+          {
             const sc = (this.getTransform && this.getTransform().scale) || 1;
             const ar = 12 / sc;
             const rr = blk.rect;
@@ -2010,13 +2024,16 @@ export class Viewer {
       return;
     }
     if (d.kind === 'edit-click') {
-      if (d.locked) return;
+      // Anchor-from-locked is allowed (lock prevents move/resize, not linking).
+      // Check the anchor branch FIRST so a click-and-drag from a locked node's
+      // side anchor starts an arrow even when d.locked is true.
       if (d.moved && d.anchorSide && typeof this.onAnchorMouseDown === 'function') {
         const startEv = { button: 0, clientX: d.startScreen.x, clientY: d.startScreen.y, preventDefault: () => {}, stopPropagation: () => {} };
         this.dragState = null;
         this.onAnchorMouseDown(startEv, d.id, d.anchorSide);
         return;
       }
+      if (d.locked) return;
       if (d.moved && !d.shiftKey) {
         const ids = this.selection.has(d.id)
           ? Array.from(this.selection)

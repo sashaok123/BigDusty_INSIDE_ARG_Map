@@ -277,7 +277,7 @@ export class ArrowLayer {
     this.edges = edges instanceof Map ? edges : new Map();
     for (const e of this.edges.values()) ensureBindings(e);
     this._rebuildBoundIndex();
-    this._pathCache.clear();
+    this._dirtyAll();
     this.requestDraw();
   }
 
@@ -303,7 +303,7 @@ export class ArrowLayer {
     }
     this.edges = next;
     this._rebuildBoundIndex();
-    this._pathCache.clear();
+    this._dirtyAll();
     if (this.selectedId && !this.edges.has(this.selectedId)) this._deselect();
     this.requestDraw();
   }
@@ -405,7 +405,7 @@ export class ArrowLayer {
       if (mainHit) {
         this.onBeforeMutation('delete', eid);
         this.edges.delete(eid);
-        this._pathCache.delete(eid);
+        this._dirty(eid);
         if (this.selectedId === eid) this._deselect();
         deletedIds.push(eid);
         continue;
@@ -418,7 +418,7 @@ export class ArrowLayer {
           delete e.junction;
         }
         if (e.branches !== undefined ? e.branches.length !== before : before > 0) {
-          this._pathCache.delete(eid);
+          this._dirty(eid);
           updatedIds.push(eid);
         }
       }
@@ -436,22 +436,39 @@ export class ArrowLayer {
     this.requestDraw();
   }
 
-  invalidateEdge(id) {
-    if (id) this._pathCache.delete(id);
+  /* Centralized cache invalidation. Every mutation path that could change an
+     edge's geometry MUST route through one of these three calls instead of
+     poking _pathCache directly — that way new mutation entry points can't
+     forget to invalidate. */
+  _dirty(eid) {
+    if (eid) this._pathCache.delete(eid);
   }
 
-  invalidateNode(nodeId) {
+  _dirtyAll() {
+    this._pathCache.clear();
+  }
+
+  _dirtyNode(nodeId) {
     const ids = this.boundEdges.get(nodeId);
     if (ids) {
       for (const eid of ids) this._pathCache.delete(eid);
     }
+    // With the A* router, ANY edge could be affected by a moved node — not
+    // just straight/smooth as the legacy detour required. Walk every edge and
+    // invalidate any whose route was obstacle-aware.
     for (const [eid, e] of this.edges) {
       if (e.passThrough === true) continue;
       if (Array.isArray(e.waypoints) && e.waypoints.length) continue;
-      if (e.routing === 'straight' || e.routing === 'smooth') {
-        this._pathCache.delete(eid);
-      }
+      this._pathCache.delete(eid);
     }
+  }
+
+  invalidateEdge(id) {
+    this._dirty(id);
+  }
+
+  invalidateNode(nodeId) {
+    this._dirtyNode(nodeId);
     this.requestDraw();
   }
 
@@ -478,9 +495,9 @@ export class ArrowLayer {
     if (patch.passThrough !== undefined) {
       if (patch.passThrough === true) e.passThrough = true;
       else delete e.passThrough;
-      this._pathCache.delete(id);
+      this._dirty(id);
     }
-    if (patch.routing !== undefined) this._pathCache.delete(id);
+    if (patch.routing !== undefined) this._dirty(id);
     if (patch.label   !== undefined) e.label   = normaliseLabelValue(patch.label, e.label);
     if (patch.labelText !== undefined) {
       const cur = ensureLabelShape(e.label);
@@ -573,7 +590,7 @@ export class ArrowLayer {
     if (!this.edges.has(id)) return;
     this.onBeforeMutation('delete', id);
     this.edges.delete(id);
-    this._pathCache.delete(id);
+    this._dirty(id);
     if (this.selectedId === id) this._deselect();
     this._rebuildBoundIndex();
     this.onEdgesChange();
@@ -1370,7 +1387,7 @@ export class ArrowLayer {
         if (Array.isArray(e.waypoints) && e.waypoints.length) {
           delete e.waypoints;
         }
-        this._pathCache.delete(d.edgeId);
+        this._dirty(d.edgeId);
         this._rebuildBoundIndex();
         this.onEdgesChange();
         this.onScheduleSave();
