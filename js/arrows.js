@@ -84,14 +84,23 @@ function _routeStraightAroundObstacle(a, b, obstacles) {
   const len = Math.hypot(dx, dy) || 1;
   const nx = -dy / len;
   const ny = dx / len;
-  const halfPerpX = Math.abs(nx) > Math.abs(ny) ? (rect.w / 2 + OBSTACLE_DETOUR_PAD) : (rect.h / 2 + OBSTACLE_DETOUR_PAD);
-  const candidatesA = { x: cx + nx * halfPerpX, y: cy + ny * halfPerpX };
-  const candidatesB = { x: cx - nx * halfPerpX, y: cy - ny * halfPerpX };
-  const distA = Math.hypot(candidatesA.x - (a.x + b.x) / 2, candidatesA.y - (a.y + b.y) / 2);
-  const distB = Math.hypot(candidatesB.x - (a.x + b.x) / 2, candidatesB.y - (a.y + b.y) / 2);
-  const ordered = distA <= distB ? [candidatesA, candidatesB] : [candidatesB, candidatesA];
-  for (const cand of ordered) {
-    if (_segmentClearOf(rect, a, cand) && _segmentClearOf(rect, cand, b)) return cand;
+  const halfExtent = Math.abs(nx) * rect.w / 2 + Math.abs(ny) * rect.h / 2 + OBSTACLE_DETOUR_PAD;
+  const allOthers = obstacles.filter((r) => r !== rect);
+  for (let mult = 1; mult <= 4; mult++) {
+    const offset = halfExtent * mult;
+    const candidatesA = { x: cx + nx * offset, y: cy + ny * offset };
+    const candidatesB = { x: cx - nx * offset, y: cy - ny * offset };
+    const distA = Math.hypot(candidatesA.x - (a.x + b.x) / 2, candidatesA.y - (a.y + b.y) / 2);
+    const distB = Math.hypot(candidatesB.x - (a.x + b.x) / 2, candidatesB.y - (a.y + b.y) / 2);
+    const ordered = distA <= distB ? [candidatesA, candidatesB] : [candidatesB, candidatesA];
+    for (const cand of ordered) {
+      if (!_segmentClearOf(rect, a, cand) || !_segmentClearOf(rect, cand, b)) continue;
+      let blocked = false;
+      for (const r of allOthers) {
+        if (rectIntersectsSegment(r, a, cand) || rectIntersectsSegment(r, cand, b)) { blocked = true; break; }
+      }
+      if (!blocked) return cand;
+    }
   }
   return null;
 }
@@ -1158,16 +1167,25 @@ export class ArrowLayer {
   }
 
   _renderPreviewLine(a, b, scale, snapped) {
+    const d = `M ${a.x} ${a.y} L ${b.x} ${b.y}`;
+    const halo = document.createElementNS(SVG_NS, 'path');
+    halo.setAttribute('d', d);
+    halo.setAttribute('fill', 'none');
+    halo.setAttribute('stroke', 'rgba(255,255,255,0.85)');
+    halo.setAttribute('stroke-width', String(6 / scale));
+    halo.setAttribute('stroke-linecap', 'round');
+    halo.setAttribute('pointer-events', 'none');
+    this.previewGroup.appendChild(halo);
     const path = document.createElementNS(SVG_NS, 'path');
-    path.setAttribute('d', `M ${a.x} ${a.y} L ${b.x} ${b.y}`);
+    path.setAttribute('d', d);
     path.setAttribute('fill', 'none');
     path.setAttribute('stroke', snapped ? COLOUR_VAR.solved : COLOUR_VAR.accent);
-    path.setAttribute('stroke-width', String(2.8 / scale));
+    path.setAttribute('stroke-width', String(3 / scale));
     path.setAttribute('stroke-linecap', 'round');
     path.setAttribute('stroke-opacity', '1');
     path.setAttribute('opacity', '1');
     if (!snapped) {
-      path.setAttribute('stroke-dasharray', `${8 / scale} ${4 / scale}`);
+      path.setAttribute('stroke-dasharray', `${10 / scale} ${5 / scale}`);
     }
     path.setAttribute('pointer-events', 'none');
     this.previewGroup.appendChild(path);
