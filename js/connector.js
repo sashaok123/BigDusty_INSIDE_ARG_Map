@@ -80,62 +80,67 @@ export function vertexPathD(vertices, kind, opts) {
   return _polylineRoundedD(vertices, radius);
 }
 
-/* Catmull-Rom-to-cubic-Bezier chain that interpolates every vertex AND
-   keeps the first and last segments as STRAIGHT lines.
+/* CENTRIPETAL Catmull-Rom-to-cubic-Bezier chain (alpha = 0.5) that
+   interpolates every vertex. Centripetal parameterisation (vs the older
+   uniform variant) is the standard for tight, no-overshoot smoothing —
+   the curve never bulges far past a control point even when adjacent
+   waypoints have very different distances and sharp direction changes.
+   The waypoint handles always sit exactly on the visible curve, which
+   was the user's 'waypoints disappearing under high tension' complaint.
 
-   The straight runways are what guarantee the marker tip ends perpendicular
-   to the bound rect side: with a perpendicular runway vertex inserted by
-   findRoute as second-to-last, the L command from runway → endpoint travels
-   strictly perpendicular, the marker auto-orients to that tangent. If we
-   ran Catmull-Rom over the runway segment too, its tangent at the endpoint
-   would be a function of the previous-prev vertex too, which generally
-   isn't perpendicular — the marker would rotate to the curve's tangent and
-   end up at an angle (the user's complaint).
+   The FIRST segment is now a C (cubic Bezier) too — it used to be a
+   plain L which made the line look 'stiff' at the source. Now the line
+   flexes smoothly from a single perpendicular runway pixel after the
+   source point.
 
-   For N < 4 we don't have a runway buffer and fall back to either polyline
-   (N ≤ 2) or full Catmull-Rom (N = 3, the curved-no-waypoints case where
-   smoothness across the only interior vertex matters more than runway). */
+   The LAST segment stays as a straight L so the SVG marker (placed at
+   the path end with refX=0) auto-orients to a strict perpendicular
+   tangent. _adjustEndForMarker in arrows.js inserts a 1 px perpendicular
+   tail right before the endpoint exactly for this purpose. */
 function _catmullRomD(verts) {
   const n = verts.length;
   if (n === 0) return '';
   if (n === 1) return `M ${fmt(verts[0].x)} ${fmt(verts[0].y)}`;
   if (n === 2) return _polylineD(verts);
-  if (n === 3) return _fullCatmullRomD(verts);
+
   let d = `M ${fmt(verts[0].x)} ${fmt(verts[0].y)}`;
-  // Straight runway exit (verts[0] → verts[1]).
-  d += ` L ${fmt(verts[1].x)} ${fmt(verts[1].y)}`;
-  // Interior Catmull-Rom segments.
-  for (let i = 1; i < n - 2; i++) {
+  // Interior cubic Bezier segments via centripetal Catmull-Rom. Goes from
+  // i=0 (segment start→verts[1]) to i=n-3 (segment verts[n-3]→verts[n-2]).
+  for (let i = 0; i < n - 2; i++) {
     const p0 = verts[Math.max(0, i - 1)];
     const p1 = verts[i];
     const p2 = verts[i + 1];
     const p3 = verts[Math.min(n - 1, i + 2)];
-    const c1x = p1.x + (p2.x - p0.x) / 6;
-    const c1y = p1.y + (p2.y - p0.y) / 6;
-    const c2x = p2.x - (p3.x - p1.x) / 6;
-    const c2y = p2.y - (p3.y - p1.y) / 6;
-    d += ` C ${fmt(c1x)} ${fmt(c1y)} ${fmt(c2x)} ${fmt(c2y)} ${fmt(p2.x)} ${fmt(p2.y)}`;
+    const { c1, c2 } = _centripetalControls(p0, p1, p2, p3);
+    d += ` C ${fmt(c1.x)} ${fmt(c1.y)} ${fmt(c2.x)} ${fmt(c2.y)} ${fmt(p2.x)} ${fmt(p2.y)}`;
   }
-  // Straight runway entry (verts[n-2] → verts[n-1]).
+  // Final straight L for marker tangent.
   d += ` L ${fmt(verts[n - 1].x)} ${fmt(verts[n - 1].y)}`;
   return d;
 }
 
-function _fullCatmullRomD(verts) {
-  const n = verts.length;
-  let d = `M ${fmt(verts[0].x)} ${fmt(verts[0].y)}`;
-  for (let i = 0; i < n - 1; i++) {
-    const p0 = verts[Math.max(0, i - 1)];
-    const p1 = verts[i];
-    const p2 = verts[i + 1];
-    const p3 = verts[Math.min(n - 1, i + 2)];
-    const c1x = p1.x + (p2.x - p0.x) / 6;
-    const c1y = p1.y + (p2.y - p0.y) / 6;
-    const c2x = p2.x - (p3.x - p1.x) / 6;
-    const c2y = p2.y - (p3.y - p1.y) / 6;
-    d += ` C ${fmt(c1x)} ${fmt(c1y)} ${fmt(c2x)} ${fmt(c2y)} ${fmt(p2.x)} ${fmt(p2.y)}`;
-  }
-  return d;
+/* Centripetal Catmull-Rom → cubic Bezier conversion (Yuksel 2011).
+   Returns { c1, c2 } such that the cubic Bezier (p1, c1, c2, p2)
+   matches the centripetal CR spline segment between p1 and p2 with
+   p0 and p3 as neighbour context. alpha = 0.5 gives the centripetal
+   parameterisation (between uniform alpha=0 and chordal alpha=1). */
+function _centripetalControls(p0, p1, p2, p3) {
+  const EPS = 1e-6;
+  const d01 = Math.max(EPS, Math.pow(Math.hypot(p1.x - p0.x, p1.y - p0.y), 0.5));
+  const d12 = Math.max(EPS, Math.pow(Math.hypot(p2.x - p1.x, p2.y - p1.y), 0.5));
+  const d23 = Math.max(EPS, Math.pow(Math.hypot(p3.x - p2.x, p3.y - p2.y), 0.5));
+
+  // Tangents at p1 and p2 using Catmull-Rom formula adapted for
+  // non-uniform parameterisation.
+  const m1x = ((p1.x - p0.x) / d01 - (p2.x - p0.x) / (d01 + d12) + (p2.x - p1.x) / d12) * d12;
+  const m1y = ((p1.y - p0.y) / d01 - (p2.y - p0.y) / (d01 + d12) + (p2.y - p1.y) / d12) * d12;
+  const m2x = ((p2.x - p1.x) / d12 - (p3.x - p1.x) / (d12 + d23) + (p3.x - p2.x) / d23) * d12;
+  const m2y = ((p2.y - p1.y) / d12 - (p3.y - p1.y) / (d12 + d23) + (p3.y - p2.y) / d23) * d12;
+
+  return {
+    c1: { x: p1.x + m1x / 3, y: p1.y + m1y / 3 },
+    c2: { x: p2.x - m2x / 3, y: p2.y - m2y / 3 },
+  };
 }
 
 /* Polyline with rounded corners. Each interior corner becomes a quadratic
