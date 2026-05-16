@@ -293,12 +293,12 @@ suite('routing/astar — A* with bend cost', (t) => {
     });
 });
 
-// --- routing: findRoute end-to-end --------------------------------------
-suite('routing/findRoute — end-to-end pipeline', (t) => {
+// --- routing: findRoute geometric router --------------------------------
+suite('routing/findRoute — geometric (no A*)', (t) => {
   // Legacy mapping
-  t("migrateRouting('orthogonal') → elbow", () => migrateRouting('orthogonal') === 'elbow');
-  t("migrateRouting('manhattan')  → elbow", () => migrateRouting('manhattan')  === 'elbow');
-  t("migrateRouting('straight')   → curved", () => migrateRouting('straight')   === 'curved');
+  t("migrateRouting('orthogonal') → elbow",  () => migrateRouting('orthogonal') === 'elbow');
+  t("migrateRouting('manhattan')  → elbow",  () => migrateRouting('manhattan')  === 'elbow');
+  t("migrateRouting('straight')   → straight", () => migrateRouting('straight') === 'straight');
   t("migrateRouting('smooth')     → curved", () => migrateRouting('smooth')     === 'curved');
   t("migrateRouting('elbow')      → elbow",  () => migrateRouting('elbow')      === 'elbow');
   t("migrateRouting(undefined)    → elbow",  () => migrateRouting() === 'elbow');
@@ -307,70 +307,72 @@ suite('routing/findRoute — end-to-end pipeline', (t) => {
   const same = findRoute({ x: 5, y: 5 }, { x: 5, y: 5 });
   t('same-endpoints: one-vertex path', () => same.vertices.length === 1);
 
-  // Waypoints bypass
+  // Waypoints bypass (user-driven manual routing)
   const wp = findRoute({ x: 0, y: 0 }, { x: 100, y: 100 }, {
     waypoints: [{ x: 50, y: 0 }],
   });
-  t('explicit waypoints bypass A* (3 verts)',
+  t('explicit waypoints: passed straight through (3 verts)',
     () => wp.vertices.length === 3 && wp.vertices[1].x === 50 && wp.vertices[1].y === 0);
 
-  // The RED-arrow scenario from the user's screenshot:
-  // text "E" on left → bottom-right of lower-cover, with upper-cover in between.
-  // (-100, 50) → (150, 200), obstacle = (40, -20)-(140, 100)
-  const red = findRoute({ x: -100, y: 50 }, { x: 150, y: 200 }, {
-    kind: 'elbow',
-    obstacles: [{ x: 40, y: -20, w: 100, h: 120 }],
-    fromSide: 'right',
-    toSide: 'left',
-  });
-  t('RED arrow: path generated with ≥3 vertices',
-    () => red.vertices.length >= 3,
-    () => `route: ${red.vertices.map(v => `(${Math.round(v.x)},${Math.round(v.y)})`).join('→')}`);
-  t('RED arrow: every segment clears the cover obstacle',
-    () => {
-      const cover = { x: 40, y: -20, w: 100, h: 120 };
-      for (let i = 0; i + 1 < red.vertices.length; i++) {
-        if (segmentInsideRect(red.vertices[i], red.vertices[i + 1], cover)) return false;
-      }
-      return true;
-    });
+  // straight: just two vertices, direct line
+  const straight = findRoute({ x: 0, y: 0 }, { x: 100, y: 100 }, { kind: 'straight' });
+  t('straight: 2-vertex direct line', () => straight.vertices.length === 2);
 
-  // The GREEN-arrow scenario: short detour under a tall obstacle
-  // (-100, 50) → (60, 110), obstacle = (40, -20)-(140, 100)
-  const green = findRoute({ x: -100, y: 50 }, { x: 60, y: 110 }, {
-    kind: 'elbow',
-    obstacles: [{ x: 40, y: -20, w: 100, h: 120 }],
-    fromSide: 'right',
-    toSide: 'top',
+  // elbow with both sides horizontal → Z (4 vertices)
+  const elbowZ = findRoute({ x: 0, y: 0 }, { x: 200, y: 100 }, {
+    kind: 'elbow', fromSide: 'right', toSide: 'left',
   });
-  t('GREEN arrow: path clears the cover (no segment inside)',
-    () => {
-      const cover = { x: 40, y: -20, w: 100, h: 120 };
-      for (let i = 0; i + 1 < green.vertices.length; i++) {
-        if (segmentInsideRect(green.vertices[i], green.vertices[i + 1], cover)) return false;
-      }
-      return true;
-    },
-    () => `route: ${green.vertices.map(v => `(${Math.round(v.x)},${Math.round(v.y)})`).join('→')}`);
+  t('elbow right→left: 4-vertex Z shape',
+    () => elbowZ.vertices.length === 4,
+    () => `verts: ${elbowZ.vertices.map(v => `(${v.x},${v.y})`).join('→')}`);
+  t('elbow right→left: first segment HORIZONTAL (matches fromSide right)',
+    () => elbowZ.vertices[1].y === elbowZ.vertices[0].y);
+  t('elbow right→left: LAST segment HORIZONTAL (so marker points left, perpendicular to toSide left)',
+    () => elbowZ.vertices[elbowZ.vertices.length - 1].y === elbowZ.vertices[elbowZ.vertices.length - 2].y);
 
-  // simplifyCollinear: 3 collinear → 2 (drop middle)
-  t('simplifyCollinear: 3 collinear horizontal points → 2',
+  // elbow mixed: right (horiz) → top (vert) → simple L
+  const elbowL = findRoute({ x: 0, y: 0 }, { x: 100, y: 100 }, {
+    kind: 'elbow', fromSide: 'right', toSide: 'top',
+  });
+  t('elbow right→top: 3-vertex L', () => elbowL.vertices.length === 3);
+  t('elbow right→top: LAST segment VERTICAL (marker points down, perpendicular to top)',
+    () => elbowL.vertices[2].x === elbowL.vertices[1].x);
+
+  // elbow with both sides vertical → Z rotated (4 vertices)
+  const elbowZV = findRoute({ x: 0, y: 0 }, { x: 100, y: 200 }, {
+    kind: 'elbow', fromSide: 'bottom', toSide: 'top',
+  });
+  t('elbow bottom→top: 4-vertex Z', () => elbowZV.vertices.length === 4);
+  t('elbow bottom→top: first segment VERTICAL',
+    () => elbowZV.vertices[1].x === elbowZV.vertices[0].x);
+  t('elbow bottom→top: last segment VERTICAL (perpendicular to top)',
+    () => elbowZV.vertices[3].x === elbowZV.vertices[2].x);
+
+  // curved: 3 vertices with a perpendicular bow waypoint
+  const curved = findRoute({ x: 0, y: 0 }, { x: 100, y: 0 }, { kind: 'curved' });
+  t('curved: 3-vertex bow', () => curved.vertices.length === 3);
+  t('curved: middle vertex offset perpendicular to chord',
+    () => curved.vertices[1].x === 50 && curved.vertices[1].y !== 0);
+
+  // No sides specified, elbow falls back to geometry
+  const elbowNoSides = findRoute({ x: 0, y: 0 }, { x: 100, y: 50 }, { kind: 'elbow' });
+  t('elbow without sides: geometric fallback works',
+    () => elbowNoSides.vertices.length === 3);
+
+  // Obstacles passed in are now IGNORED (manual routing model)
+  const ignored = findRoute({ x: 0, y: 0 }, { x: 200, y: 0 }, {
+    kind: 'elbow',
+    obstacles: [{ x: 50, y: -50, w: 100, h: 100 }],
+    fromSide: 'right', toSide: 'left',
+  });
+  t('obstacles parameter is ignored (geometric router, no A*)',
+    () => ignored.vertices.length === 4);
+
+  // simplifyCollinear identity for non-redundant input
+  t('simplifyCollinear: drops collinear horizontal middle',
     () => simplifyCollinear([{ x: 0, y: 0 }, { x: 50, y: 0 }, { x: 100, y: 0 }]).length === 2);
-  t('simplifyCollinear: L-shape preserves the bend',
+  t('simplifyCollinear: preserves L bend',
     () => simplifyCollinear([{ x: 0, y: 0 }, { x: 50, y: 0 }, { x: 50, y: 50 }]).length === 3);
-
-  // No obstacles → straight 2-vertex path
-  const free = findRoute({ x: 0, y: 0 }, { x: 100, y: 100 }, { kind: 'elbow' });
-  t('no obstacles + no dongles: a→corner→b (elbow has a bend)',
-    () => free.vertices.length >= 2,
-    () => `verts: ${free.vertices.map(v => `(${v.x},${v.y})`).join('→')}`);
-
-  // Pathological: source inside an obstacle (should still work — that obstacle is filtered out)
-  const trapped = findRoute({ x: 50, y: 50 }, { x: 200, y: 200 }, {
-    obstacles: [{ x: 0, y: 0, w: 100, h: 100 }],
-  });
-  t('source inside obstacle: that obstacle is ignored, path returns',
-    () => trapped.vertices.length >= 2);
 });
 
 // --- summary --------------------------------------------------------------

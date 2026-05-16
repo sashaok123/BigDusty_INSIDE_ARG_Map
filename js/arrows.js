@@ -58,6 +58,17 @@ function strokeFor(edge, fallbackColour) {
   return { width: s.width, colour };
 }
 
+function _distPointToSegment(p, a, b) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq < 1e-6) return Math.hypot(p.x - a.x, p.y - a.y);
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq));
+  const projX = a.x + dx * t;
+  const projY = a.y + dy * t;
+  return Math.hypot(p.x - projX, p.y - projY);
+}
+
 const ARROW_SIZE_DEFAULT = 8;
 const ARROW_SIZE_MIN = 4;
 const ARROW_SIZE_MAX = 20;
@@ -1247,7 +1258,28 @@ export class ArrowLayer {
     if (!e) return;
     this.onBeforeMutation('waypoint-add', edgeId);
     if (!Array.isArray(e.waypoints)) e.waypoints = [];
-    e.waypoints.push({ x: point.x, y: point.y });
+    // Find the BEST insertion index: walk the full vertex sequence (from-anchor
+    // → ...waypoints → to-anchor) and pick the segment whose distance to the
+    // click point is smallest. The new waypoint is inserted just after that
+    // segment's start in e.waypoints[]. Without this, repeatedly adding
+    // waypoints would just append and the path would zigzag.
+    const nodes = this.getNodes();
+    const fromInfo = resolveAnchor(e, 'from', nodes, null);
+    const toInfo   = resolveAnchor(e, 'to',   nodes, fromInfo.point);
+    const fullVerts = [fromInfo.point, ...e.waypoints, toInfo.point];
+    let bestIdx = 0;
+    let bestDist = Infinity;
+    for (let i = 0; i + 1 < fullVerts.length; i++) {
+      const d = _distPointToSegment(point, fullVerts[i], fullVerts[i + 1]);
+      if (d < bestDist) {
+        bestDist = d;
+        bestIdx = i;
+      }
+    }
+    // bestIdx is the segment index; insert into waypoints at bestIdx (so the
+    // new wp lands between vertex bestIdx and bestIdx+1 in the full list).
+    e.waypoints.splice(bestIdx, 0, { x: point.x, y: point.y });
+    this._dirty(edgeId);
     this.onEdgesChange();
     this.onScheduleSave();
     this.onEdgeMutation('update', edgeId, e);
