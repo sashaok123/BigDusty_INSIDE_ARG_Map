@@ -77,30 +77,28 @@ function _firstSegmentIntersection(a, b, obstacles) {
 function _routeStraightAroundObstacle(a, b, obstacles) {
   const rect = _firstSegmentIntersection(a, b, obstacles);
   if (!rect) return null;
+  const pad = OBSTACLE_DETOUR_PAD;
   const cx = rect.x + rect.w / 2;
   const cy = rect.y + rect.h / 2;
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy) || 1;
-  const nx = -dy / len;
-  const ny = dx / len;
-  const halfExtent = Math.abs(nx) * rect.w / 2 + Math.abs(ny) * rect.h / 2 + OBSTACLE_DETOUR_PAD;
+  const sides = [
+    { x: cx, y: rect.y - pad },
+    { x: cx, y: rect.y + rect.h + pad },
+    { x: rect.x - pad, y: cy },
+    { x: rect.x + rect.w + pad, y: cy },
+  ];
+  const evaluated = sides.map((cand) => ({
+    cand,
+    len: Math.hypot(cand.x - a.x, cand.y - a.y) + Math.hypot(b.x - cand.x, b.y - cand.y),
+  }));
+  evaluated.sort((p, q) => p.len - q.len);
   const allOthers = obstacles.filter((r) => r !== rect);
-  for (let mult = 1; mult <= 4; mult++) {
-    const offset = halfExtent * mult;
-    const candidatesA = { x: cx + nx * offset, y: cy + ny * offset };
-    const candidatesB = { x: cx - nx * offset, y: cy - ny * offset };
-    const distA = Math.hypot(candidatesA.x - (a.x + b.x) / 2, candidatesA.y - (a.y + b.y) / 2);
-    const distB = Math.hypot(candidatesB.x - (a.x + b.x) / 2, candidatesB.y - (a.y + b.y) / 2);
-    const ordered = distA <= distB ? [candidatesA, candidatesB] : [candidatesB, candidatesA];
-    for (const cand of ordered) {
-      if (!_segmentClearOf(rect, a, cand) || !_segmentClearOf(rect, cand, b)) continue;
-      let blocked = false;
-      for (const r of allOthers) {
-        if (rectIntersectsSegment(r, a, cand) || rectIntersectsSegment(r, cand, b)) { blocked = true; break; }
-      }
-      if (!blocked) return cand;
+  for (const { cand } of evaluated) {
+    if (!_segmentClearOf(rect, a, cand) || !_segmentClearOf(rect, cand, b)) continue;
+    let blocked = false;
+    for (const r of allOthers) {
+      if (rectIntersectsSegment(r, a, cand) || rectIntersectsSegment(r, cand, b)) { blocked = true; break; }
     }
+    if (!blocked) return cand;
   }
   return null;
 }
@@ -898,26 +896,6 @@ export class ArrowLayer {
     }
   }
 
-  _trimPathForMarker(d, vertices, edge) {
-    if (!Array.isArray(vertices) || vertices.length < 2) return d;
-    const stroke = ensureStrokeShape(edge.stroke);
-    const arrowSize = ensureArrowSize(edge.arrowSize);
-    const markerLen = arrowSize * 0.75 * Math.max(1, stroke.width);
-    const last = vertices[vertices.length - 1];
-    const prev = vertices[vertices.length - 2];
-    const dx = last.x - prev.x;
-    const dy = last.y - prev.y;
-    const len = Math.hypot(dx, dy);
-    if (len <= markerLen * 0.8) return d;
-    const ux = dx / len;
-    const uy = dy / len;
-    const trim = markerLen * 0.7;
-    const newLast = { x: last.x - ux * trim, y: last.y - uy * trim };
-    const trimmed = vertices.slice(0, -1);
-    trimmed.push(newLast);
-    return vertexPathD(trimmed, edge.routing);
-  }
-
   _appendEdgePath(edge, d, colour, scale, vertices, opts) {
     const stroke = strokeFor(edge, colour);
     const selectedBoost = this.selectedId === edge.id ? 1.0 : 0;
@@ -925,9 +903,8 @@ export class ArrowLayer {
     const dash = dashFor(edge.style, scale);
     const markerEnd = (!opts || !opts.isTrunk) ? this._markerEndUrlFor(edge, colour) : null;
     const lineCap = markerEnd ? 'butt' : 'round';
-    const haloD = markerEnd ? this._trimPathForMarker(d, vertices, edge) : d;
     const halo = document.createElementNS(SVG_NS, 'path');
-    halo.setAttribute('d', haloD);
+    halo.setAttribute('d', d);
     halo.setAttribute('fill', 'none');
     halo.style.stroke = 'rgba(255,255,255,0.85)';
     halo.setAttribute('stroke-linecap',  lineCap);

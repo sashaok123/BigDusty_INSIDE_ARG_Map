@@ -4578,8 +4578,18 @@ function instantiatePastedNodes(payload, dx, dy) {
     }
   }
   state.selection = new Set(Array.from(idMap.values()));
+  let hasMedia = false;
+  for (const node of newNodes) {
+    if (node.kind === 'block' && node.type === 'file' && node.file && viewer) {
+      const rect = { x: node.x, y: node.y, w: node.width, h: node.height };
+      viewer.addBlock({ id: node.id, rect, file: node.file });
+    } else if ((node.kind === 'video' || node.kind === 'audio' || node.kind === 'document') && node.file) {
+      hasMedia = true;
+    }
+  }
   refreshPuzzleViewsInViewer();
   if (viewer) viewer.setSelection(state.selection);
+  if (hasMedia && typeof renderVideoOverlay === 'function') renderVideoOverlay();
   for (const n of newNodes) {
     pushNodeCreate(toViewShape(n), typeof n.text === 'string' ? n.text : '');
   }
