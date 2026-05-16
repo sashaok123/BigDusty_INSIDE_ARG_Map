@@ -20,7 +20,7 @@ export function routeEdge(kind, start, end, opts) {
   }
   switch (kind) {
     case 'straight':   return routeStraight(start, end);
-    case 'orthogonal': return routeOrthogonal(start, end);
+    case 'orthogonal': return routeOrthogonal(start, end, o.obstacles);
     case 'manhattan':  return routeManhattan(start, end, o.fromSide, o.toSide, o.obstacles);
     case 'smooth':     return routeSmooth(start, end, o.fromSide, o.toSide);
     default:           return routeStraight(start, end);
@@ -31,13 +31,48 @@ function routeStraight(a, b) {
   return [a, b];
 }
 
-function routeOrthogonal(a, b) {
+function routeOrthogonal(a, b, obstacles) {
   const dx = Math.abs(b.x - a.x);
   const dy = Math.abs(b.y - a.y);
-  if (dx <= dy) {
-    return [a, { x: a.x, y: b.y }, b];
+  const hv = [a, { x: a.x, y: b.y }, b];
+  const vh = [a, { x: b.x, y: a.y }, b];
+  const preferred = dx <= dy ? [hv, vh] : [vh, hv];
+  const obs = filterObstacles(obstacles, [a, b]);
+  if (!obs.length) return preferred[0];
+  for (const path of preferred) {
+    if (!pathIntersectsObstacles(path, obs)) return path;
   }
-  return [a, { x: b.x, y: a.y }, b];
+  const detour = _orthogonalDetour(a, b, obs);
+  if (detour) return detour;
+  return preferred[0];
+}
+
+function _orthogonalDetour(a, b, obstacles) {
+  const pad = 18;
+  const mx = (a.x + b.x) / 2;
+  const my = (a.y + b.y) / 2;
+  const sorted = obstacles.slice().sort((r1, r2) => {
+    const d1 = Math.hypot(r1.x + r1.w / 2 - mx, r1.y + r1.h / 2 - my);
+    const d2 = Math.hypot(r2.x + r2.w / 2 - mx, r2.y + r2.h / 2 - my);
+    return d1 - d2;
+  });
+  for (const r of sorted) {
+    const top    = r.y - pad;
+    const bottom = r.y + r.h + pad;
+    const left   = r.x - pad;
+    const right  = r.x + r.w + pad;
+    const variants = [
+      [a, { x: a.x, y: top },    { x: b.x, y: top },    b],
+      [a, { x: a.x, y: bottom }, { x: b.x, y: bottom }, b],
+      [a, { x: left,  y: a.y },  { x: left,  y: b.y },  b],
+      [a, { x: right, y: a.y },  { x: right, y: b.y },  b],
+    ];
+    variants.sort((p, q) => pathLength(p) - pathLength(q));
+    for (const path of variants) {
+      if (!pathIntersectsObstacles(path, obstacles)) return path;
+    }
+  }
+  return null;
 }
 
 function routeManhattan(a, b, sideA, sideB, obstacles) {

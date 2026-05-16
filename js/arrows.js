@@ -117,7 +117,14 @@ function _applyObstacleDetour(vertices, routing, obstacles, edge) {
   if (edge && edge.passThrough === true) return vertices;
   if (Array.isArray(edge && edge.waypoints) && edge.waypoints.length) return vertices;
   if (!Array.isArray(vertices) || vertices.length < 2) return vertices;
-  let current = vertices.slice();
+  if (routing === 'orthogonal' || routing === 'manhattan') return vertices;
+  let current;
+  if (routing === 'smooth') {
+    current = [vertices[0], vertices[vertices.length - 1]];
+  } else {
+    current = vertices.slice();
+  }
+  let anyChange = false;
   for (let iter = 0; iter < 5; iter++) {
     const next = [current[0]];
     let changed = false;
@@ -136,8 +143,9 @@ function _applyObstacleDetour(vertices, routing, obstacles, edge) {
     }
     if (!changed) break;
     current = next;
+    anyChange = true;
   }
-  void routing;
+  if (routing === 'smooth' && !anyChange) return vertices;
   return current;
 }
 
@@ -757,8 +765,7 @@ export class ArrowLayer {
       });
       const detoured = _applyObstacleDetour(routedVerts, edge.routing, detourObstacles, edge);
       vertices = _adjustArrowTipApproach(detoured, toInfo, edge);
-      const renderRouting = (detoured !== routedVerts && edge.routing === 'smooth') ? 'straight' : edge.routing;
-      d = vertexPathD(vertices, renderRouting);
+      d = vertexPathD(vertices, edge.routing);
       this._pathCache.set(edge.id, { key: cacheKey, vertices, d });
     }
     this._appendEdgePath(edge, d, colour, scale, vertices, { opacity });
@@ -775,7 +782,7 @@ export class ArrowLayer {
     const tcx = toInfo.rect ? (toInfo.rect.x + toInfo.rect.w / 2).toFixed(2) : '';
     const tcy = toInfo.rect ? (toInfo.rect.y + toInfo.rect.h / 2).toFixed(2) : '';
     const detour = (!Array.isArray(edge.waypoints) || !edge.waypoints.length)
-                 && (edge.routing === 'straight' || edge.routing === 'smooth')
+                 && (edge.routing === 'straight' || edge.routing === 'smooth' || edge.routing === 'orthogonal')
                  && edge.passThrough !== true
       ? _obstacleDigestKey(obstacles, fromInfo.point, toInfo.point)
       : '';
@@ -857,8 +864,7 @@ export class ArrowLayer {
       obstacles: trunkObstacles,
     });
     const trunkVerts = _applyObstacleDetour(trunkRouted, edge.routing, trunkObstacles, edge);
-    const trunkRouting = (trunkVerts !== trunkRouted && edge.routing === 'smooth') ? 'straight' : edge.routing;
-    const trunkPath = vertexPathD(trunkVerts, trunkRouting);
+    const trunkPath = vertexPathD(trunkVerts, edge.routing);
     this._appendEdgePath(edge, trunkPath, colour, scale, trunkVerts, { isTrunk: true, opacity });
 
     for (let i = 0; i < edge.branches.length; i++) {
@@ -871,8 +877,7 @@ export class ArrowLayer {
         obstacles: branchObstacles,
       });
       const verts = _applyObstacleDetour(routed, edge.routing, branchObstacles, edge);
-      const branchRouting = (verts !== routed && edge.routing === 'smooth') ? 'straight' : edge.routing;
-      const d = vertexPathD(verts, branchRouting);
+      const d = vertexPathD(verts, edge.routing);
       this._appendBranchPath(edge, i, d, b.color || colour, scale, verts, opacity);
       if (lod && lod.edgeLabelsVisible) {
         this._appendBranchLabel(b.label, verts, scale, opacity, { edgeId: edge.id, branchIndex: i });
