@@ -191,6 +191,7 @@ let themePicker;
 let activityFeed;
 let lockHeartbeatTimer = null;
 let _resizeHistoryPushed = false;
+let _resizeHistoryNodeId = null;
 let shareModal;
 let cursorsOverlay;
 let _shareViewerMode = false;
@@ -1528,7 +1529,7 @@ function setupViewer() {
       handleArrowDrawEnd(info);
     },
     onHotspotResize: (id, rect) => {
-      if (!_resizeHistoryPushed) {
+      if (!_resizeHistoryPushed || _resizeHistoryNodeId !== id) {
         const n = findNode(state.nodes, id);
         if (n) {
           const snap = serializeFullState();
@@ -1539,15 +1540,17 @@ function setupViewer() {
               break;
             }
           }
-          pushHistorySnapshot(snap, 'Resize node', { nodeId: id });
+          pushHistorySnapshot(snap, tr('history_label_resize'), { nodeId: id });
         }
         _resizeHistoryPushed = true;
+        _resizeHistoryNodeId = id;
       }
       updatePuzzleNode(state.nodes, id, { rect });
       if (arrowLayer) arrowLayer.invalidateNode(id);
     },
     onHotspotResizeEnd: (id) => {
       _resizeHistoryPushed = false;
+      _resizeHistoryNodeId = null;
       const n = findNode(state.nodes, id);
       if (n) {
         pushNodePatch(id, { x: n.x, y: n.y, width: n.width, height: n.height });
@@ -1720,6 +1723,7 @@ function setupEditorModal() {
         const slugClash = state.nodes.has(payload.slug) && payload.slug !== payload.id
           && state.nodes.get(payload.slug) !== existing;
         const finalSlug = slugClash ? `${payload.slug}-${Date.now().toString(36)}` : payload.slug;
+        pushHistory(tr('history_label_edit_node'), { nodeId: payload.id });
         updatePuzzleNode(state.nodes, payload.id, {
           title: payload.title,
           slug: finalSlug,
@@ -1749,6 +1753,7 @@ function setupEditorModal() {
         toast(tr('toast_hotspot_updated'));
         return;
       }
+      pushHistory(tr('history_label_create_node'));
       const id = uniqueId(state.nodes, payload.slug || payload.title);
       const finalSlug = payload.slug && !state.nodes.has(payload.slug)
         ? payload.slug
@@ -1776,10 +1781,11 @@ function setupEditorModal() {
   });
 }
 
-function deletePuzzleNode(id) {
+function deletePuzzleNode(id, opts) {
   const n = findNode(state.nodes, id);
   if (!n) return;
   if (n.locked) { toast(tr('node_locked_toast')); return; }
+  if (!opts || !opts.skipHistory) pushHistory(tr('history_label_delete_node'), { nodeId: id });
   const slug = n.slug;
   const wasFile = n.type === 'file';
   removeNode(state.nodes, id);
@@ -1805,10 +1811,20 @@ function refreshPuzzleViewsInViewer() {
   };
   viewer.setHotspots(puzzleViews(state.nodes).map((v) => applyBranch(viewWithLang(v, lang))));
   viewer.setGroups(groupViews(state.nodes).map((v) => applyBranch(viewWithLang(v, lang))));
+  syncViewerBlockRects();
   if (viewer) viewer.notifyNodesChanged();
   if (videoOverlay) videoOverlay.requestDraw();
   if (audioOverlay) audioOverlay.requestDraw();
   if (documentOverlay) documentOverlay.requestDraw();
+}
+
+function syncViewerBlockRects() {
+  if (!viewer || typeof viewer.updateBlockRect !== 'function') return;
+  for (const n of state.nodes.values()) {
+    if (n && n.kind === 'block') {
+      viewer.updateBlockRect(n.id, { x: n.x, y: n.y, w: n.width, h: n.height });
+    }
+  }
 }
 
 function setupLeftRail() {
@@ -1915,6 +1931,7 @@ function setupEditNodeModal() {
         if (authUI) authUI.openLogin();
         return;
       }
+      pushHistory(tr('history_label_status'), { nodeId: id });
       updatePuzzleNode(state.nodes, id, { status });
       const n = findNode(state.nodes, id);
       if (!n) return;
@@ -1931,6 +1948,7 @@ function setupEditNodeModal() {
         if (authUI) authUI.openLogin();
         return;
       }
+      pushHistory(tr('history_label_label'), { nodeId: id });
       updatePuzzleNode(state.nodes, id, { label, title: label });
       const n = findNode(state.nodes, id);
       if (!n) return;
@@ -1945,6 +1963,7 @@ function setupEditNodeModal() {
         if (authUI) authUI.openLogin();
         return;
       }
+      pushHistory(tr('history_label_tags'), { nodeId: id });
       updatePuzzleNode(state.nodes, id, { tags });
       refreshPuzzleViewsInViewer();
       pushNodePatch(id, { tags });
@@ -1957,6 +1976,7 @@ function setupEditNodeModal() {
         if (authUI) authUI.openLogin();
         return;
       }
+      pushHistory(tr('history_label_node_branches'), { nodeId: id });
       updatePuzzleNode(state.nodes, id, { branches });
       refreshPuzzleViewsInViewer();
       pushNodePatch(id, { branches });
@@ -1969,6 +1989,7 @@ function setupEditNodeModal() {
         if (authUI) authUI.openLogin();
         return;
       }
+      pushHistory(tr('history_label_toggle_lock'), { nodeId: id });
       const n = findNode(state.nodes, id);
       if (!n) return;
       if (locked) n.locked = true;
@@ -2035,7 +2056,7 @@ function setupEditNodeModal() {
       setTimeout(() => URL.revokeObjectURL(url), 200);
       toast(tr('toast_md_downloaded', { filename: `${slug}.md` }));
     },
-    onOpenFullViewer: (view) => { if (fileViewerModal && view) fileViewerModal.open(view); },
+    onOpenFullViewer: (view, opts) => { if (fileViewerModal && view) fileViewerModal.open(view, opts); },
     onProvenanceToggle: (id, active) => {
       setProvenanceActive(active, active ? id : null);
     },
@@ -2463,6 +2484,7 @@ function toggleNodeBranch(nodeId, branchId) {
   if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
   const node = findNode(state.nodes, nodeId);
   if (!node) return;
+  pushHistory(tr('history_label_node_branches'), { nodeId });
   const cur = Array.isArray(node.branches) ? node.branches.slice() : [];
   const idx = cur.indexOf(branchId);
   if (idx >= 0) cur.splice(idx, 1);
@@ -2506,6 +2528,7 @@ function setStatusForNode(id, status) {
   if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
   const n = findNode(state.nodes, id);
   if (!n) return;
+  pushHistory(tr('history_label_status'), { nodeId: id });
   updatePuzzleNode(state.nodes, id, { status });
   refreshPuzzleViewsInViewer();
   pushNodePatch(id, { status });
@@ -2519,6 +2542,7 @@ function renameGroupPrompt(id) {
   if (!n || !isGroupNode(n)) return;
   const next = window.prompt(tr('group_rename_prompt'), n.label || '');
   if (next === null) return;
+  pushHistory(tr('history_label_label'), { nodeId: id });
   updatePuzzleNode(state.nodes, id, { label: next, title: next });
   refreshPuzzleViewsInViewer();
   pushNodePatch(id, { label: next });
@@ -2531,6 +2555,7 @@ function setGroupColorPrompt(id) {
   if (!n || !isGroupNode(n)) return;
   const next = window.prompt(tr('group_set_color_prompt'), n.color || '');
   if (next === null) return;
+  pushHistory(tr('history_label_color'), { nodeId: id });
   updatePuzzleNode(state.nodes, id, { color: next || '' });
   refreshPuzzleViewsInViewer();
   pushNodePatch(id, { color: next || '' });
@@ -2543,6 +2568,7 @@ function setGroupBackgroundPrompt(id) {
   if (!n || !isGroupNode(n)) return;
   const next = window.prompt(tr('group_set_background_prompt'), n.background || '');
   if (next === null) return;
+  pushHistory(tr('history_label_background'), { nodeId: id });
   updatePuzzleNode(state.nodes, id, { background: next || '' });
   refreshPuzzleViewsInViewer();
   pushNodePatch(id, { background: next || '' });
@@ -2666,6 +2692,7 @@ function confirmAudioOversize(msg) {
 
 async function placeUploadedImageNode(placement) {
   if (!placement || !placement.file) return null;
+  pushHistory(tr('history_label_create_node'));
   const baseId = placement.name || 'image';
   const placementKind = placement.kind || (isVideoMime(placement.mime) ? 'video' : 'image');
   const prefixMap = { video: 'video', audio: 'audio', document: 'doc' };
@@ -3510,7 +3537,7 @@ function _performDeleteSelection(strokeIds, edgeId) {
     if (!n) continue;
     if (n.locked) { skippedLocked++; continue; }
     if (isGroupNode(n)) deleteGroupKeepChildren(id, { skipHistory: true });
-    else deletePuzzleNode(id);
+    else deletePuzzleNode(id, { skipHistory: true });
   }
   state.selection = new Set();
   if (viewer) viewer.setSelection(state.selection);
@@ -3844,6 +3871,7 @@ function setupToolbar() {
   const zin = $('btn-zoom-in');
   const zout = $('btn-zoom-out');
   const zfit = $('btn-zoom-fit');
+  const zlabel = $('zoom-label');
   if (zin) zin.addEventListener('click', () => {
     const r = $('map-canvas').getBoundingClientRect();
     viewer.zoomAt(r.width / 2, r.height / 2, 1.25);
@@ -3853,6 +3881,26 @@ function setupToolbar() {
     viewer.zoomAt(r.width / 2, r.height / 2, 1 / 1.25);
   });
   if (zfit) zfit.addEventListener('click', () => viewer.fitToScreen());
+  if (zlabel) {
+    zlabel.style.cursor = 'pointer';
+    zlabel.title = tr('zoom_reset_title');
+    zlabel.addEventListener('click', () => {
+      const r = $('map-canvas').getBoundingClientRect();
+      const target = 1;
+      const cur = viewer.scale || 1;
+      if (cur === 0) return;
+      viewer.zoomAt(r.width / 2, r.height / 2, target / cur);
+    });
+    if (viewer && typeof viewer.subscribe === 'function') {
+      viewer.subscribe((kind, payload) => {
+        if (kind !== 'transform' || !payload) return;
+        const pct = Math.round((payload.scale || 0) * 100);
+        zlabel.textContent = `${pct}%`;
+      });
+      const s0 = viewer.scale || 1;
+      zlabel.textContent = `${Math.round(s0 * 100)}%`;
+    }
+  }
 
   const fileImport = $('file-import');
   if (fileImport) fileImport.addEventListener('change', async (e) => {
@@ -4563,6 +4611,7 @@ function nodeToServer(view, md) {
 }
 
 function applyImportedCanvas(imported) {
+  pushHistory(tr('history_label_import'));
   state.nodes = new Map();
   for (const n of imported.nodes) state.nodes.set(n.id, n);
   state.edges = new Map();

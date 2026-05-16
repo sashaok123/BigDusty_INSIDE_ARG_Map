@@ -6,7 +6,8 @@
 import { tr, setI18nText } from './i18n.js';
 import {
   renderHtmlInto, renderTextInto, renderJsonInto, renderPdfInto,
-  renderImageInto, renderHexInto, fetchAsText, fetchAsBytes, pickRenderer,
+  renderImageInto, renderVideoInto, renderAudioInto, renderHexInto,
+  fetchAsText, fetchAsBytes, pickRenderer, sniffIsImage,
 } from './file-renderers.js';
 
 export class FileViewerModal {
@@ -79,17 +80,46 @@ export class FileViewerModal {
     if (this.titleEl) this.titleEl.textContent = this._currentName;
     this.bodyEl.textContent = tr('file_preview_loading');
     this.overlay.classList.add('open');
+    const nodeKind = (node.kind || '').toLowerCase();
     let kind = pickRenderer(this._currentMime, this._currentName);
+    if (kind === 'hex' && !this._forcedMode) {
+      if (nodeKind === 'block' || nodeKind === 'image') kind = 'image';
+      else if (nodeKind === 'video') kind = 'video';
+      else if (nodeKind === 'audio') kind = 'audio';
+    }
     if (this._forcedMode === 'hex') kind = 'hex';
     else if (this._forcedMode === 'source') kind = 'text';
     else if (this._forcedMode === 'render' && this._currentMime === 'text/html') kind = 'html';
     else if (this._forcedMode === 'image') kind = 'image';
+    else if (this._forcedMode === 'video') kind = 'video';
+    else if (this._forcedMode === 'audio') kind = 'audio';
+    this._setMediaMode(false);
     if (kind === 'pdf') { renderPdfInto(this.bodyEl, this._currentUrl); this._setTabsVisible(false); return; }
-    if (kind === 'image') { renderImageInto(this.bodyEl, this._currentUrl, this._currentName); this._setTabsVisible(false); return; }
+    if (kind === 'image') {
+      this._setMediaMode(true);
+      renderImageInto(this.bodyEl, this._currentUrl, this._currentName);
+      this._setTabsVisible(false); return;
+    }
+    if (kind === 'video') {
+      this._setMediaMode(true);
+      renderVideoInto(this.bodyEl, this._currentUrl, this._currentMime);
+      this._setTabsVisible(false); return;
+    }
+    if (kind === 'audio') {
+      this._setMediaMode(true);
+      renderAudioInto(this.bodyEl, this._currentUrl, this._currentMime);
+      this._setTabsVisible(false); return;
+    }
     if (kind === 'hex') {
       try {
         const bytes = await fetchAsBytes(this._currentUrl);
         this._currentBytes = bytes;
+        if (!this._forcedMode && sniffIsImage(bytes)) {
+          this._setTabsVisible(false);
+          this._setMediaMode(true);
+          renderImageInto(this.bodyEl, this._currentUrl, this._currentName);
+          return;
+        }
         this._setTabsVisible(false);
         renderHexInto(this.bodyEl, bytes, { onDownload: () => this._doDownload() });
       } catch (e) {
@@ -116,6 +146,12 @@ export class FileViewerModal {
       }
       const bytes = await fetchAsBytes(this._currentUrl);
       this._currentBytes = bytes;
+      if (!this._forcedMode && sniffIsImage(bytes)) {
+        this._setTabsVisible(false);
+        this._setMediaMode(true);
+        renderImageInto(this.bodyEl, this._currentUrl, this._currentName);
+        return;
+      }
       this._setTabsVisible(false);
       renderHexInto(this.bodyEl, bytes, { onDownload: () => this._doDownload() });
     } catch (e) {
@@ -123,8 +159,20 @@ export class FileViewerModal {
     }
   }
 
+  _setMediaMode(on) {
+    if (this.bodyEl) this.bodyEl.classList.toggle('has-media', !!on);
+  }
+
   close() {
+    if (this.bodyEl) {
+      const media = this.bodyEl.querySelectorAll('video, audio');
+      for (const el of media) {
+        try { el.pause(); } catch (e) { void e; }
+        try { el.removeAttribute('src'); el.load(); } catch (e) { void e; }
+      }
+    }
     if (this.overlay) this.overlay.classList.remove('open');
+    this._setMediaMode(false);
     this.bodyEl.innerHTML = '';
     this._currentText = '';
     this._currentBytes = null;

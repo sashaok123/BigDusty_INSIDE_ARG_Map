@@ -45,21 +45,49 @@
   color: var(--accent); border-color: var(--accent);
   position: relative; z-index: 1;
 }
-.file-viewer-actions { display: flex; gap: 6px; }
+.file-viewer-actions { display: flex; gap: 6px; flex: 0 0 auto; }
 .fv-action {
-  background: transparent; border: 1px solid transparent;
+  background: transparent; border: 1px solid var(--panel-border);
   color: var(--text); width: 30px; height: 30px;
   border-radius: var(--radius, 4px); cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center;
 }
+.fv-action svg {
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 .fv-action:hover {
   background: var(--accent-soft-bg, rgba(0,0,0,0.06));
-  border-color: var(--panel-border); color: var(--accent);
+  border-color: var(--accent); color: var(--accent);
 }
 .file-viewer-body {
   flex: 1 1 auto; overflow: auto;
   background: var(--field-bg, var(--panel-bg)); padding: 0; position: relative;
 }
+.file-viewer-body.has-media {
+  display: flex; align-items: center; justify-content: center;
+}
+.fr-image {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.fr-video {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  background: #000;
+}
+.fr-audio-wrap {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; padding: 24px;
+}
+.fr-audio { width: 100%; max-width: 720px; }
 .fv-pre {
   margin: 0; padding: 14px 18px;
   font: 13px/1.5 var(--font-mono); color: var(--text);

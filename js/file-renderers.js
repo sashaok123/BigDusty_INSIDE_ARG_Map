@@ -32,11 +32,37 @@ export function pickRenderer(mime, filename) {
   if (m === 'text/html' || /\.x?html?(?:\?|#|$)/.test(f)) return 'html';
   if (m === 'application/json' || /\.json(?:\?|#|$)/.test(f)) return 'json';
   if (/^image\//.test(m) || /\.(png|jpe?g|webp|gif|bmp|svg|avif|ico|tiff?)(?:\?|#|$)/.test(f)) return 'image';
+  if (/^video\//.test(m) || /\.(mp4|webm|ogg|ogv|mov|m4v)(?:\?|#|$)/.test(f)) return 'video';
+  if (/^audio\//.test(m) || /\.(mp3|wav|ogg|oga|m4a|aac|flac|opus)(?:\?|#|$)/.test(f)) return 'audio';
   if (isTextLikeMime(m)) return 'text';
   const lang = detectLanguage(mime, filename);
   if (lang !== 'plain') return 'text';
   if (m && /^application\//.test(m)) return 'hex';
   return 'hex';
+}
+
+const IMAGE_MAGIC = [
+  { magic: [0x89, 0x50, 0x4e, 0x47] },
+  { magic: [0xff, 0xd8, 0xff] },
+  { magic: [0x47, 0x49, 0x46, 0x38] },
+  { magic: [0x42, 0x4d] },
+];
+
+export function sniffIsImage(bytes) {
+  if (!bytes || bytes.length < 4) return false;
+  if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46
+      && bytes.length >= 12
+      && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) {
+    return true;
+  }
+  for (const entry of IMAGE_MAGIC) {
+    let ok = true;
+    for (let i = 0; i < entry.magic.length; i++) {
+      if (bytes[i] !== entry.magic[i]) { ok = false; break; }
+    }
+    if (ok) return true;
+  }
+  return false;
 }
 
 export function renderHtmlInto(el, text) {
@@ -138,6 +164,40 @@ export function renderImageInto(el, url, alt) {
   img.src = url;
   img.className = 'fr-image';
   el.appendChild(img);
+}
+
+export function renderVideoInto(el, url, mime) {
+  if (!el) return;
+  el.innerHTML = '';
+  if (!url) return;
+  const video = document.createElement('video');
+  video.controls = true;
+  video.preload = 'metadata';
+  video.className = 'fr-video';
+  video.playsInline = true;
+  const source = document.createElement('source');
+  source.src = url;
+  if (mime) source.type = mime;
+  video.appendChild(source);
+  el.appendChild(video);
+}
+
+export function renderAudioInto(el, url, mime) {
+  if (!el) return;
+  el.innerHTML = '';
+  if (!url) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'fr-audio-wrap';
+  const audio = document.createElement('audio');
+  audio.controls = true;
+  audio.preload = 'metadata';
+  audio.className = 'fr-audio';
+  const source = document.createElement('source');
+  source.src = url;
+  if (mime) source.type = mime;
+  audio.appendChild(source);
+  wrap.appendChild(audio);
+  el.appendChild(wrap);
 }
 
 export function renderHexInto(el, bytes, opts) {

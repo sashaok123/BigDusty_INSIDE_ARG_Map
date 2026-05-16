@@ -1166,7 +1166,12 @@ export class EditNodeModal {
     if (typeof this.onOpenFullViewer !== 'function') return;
     if (!this._state) return;
     const view = this.currentView || this._state;
-    try { this.onOpenFullViewer(view); } catch (e) { void e; }
+    const probe = { kind: view.kind, type: view.type, mime: view.mime, media: view.media };
+    let mode = null;
+    if (looksLikeImage(view)) mode = 'image';
+    else if (isVideoNode(probe)) mode = 'video';
+    else if (isAudioNode(probe)) mode = 'audio';
+    try { this.onOpenFullViewer(view, mode ? { mode } : undefined); } catch (e) { void e; }
   }
 
   _downloadPreviewFile(filename) {
