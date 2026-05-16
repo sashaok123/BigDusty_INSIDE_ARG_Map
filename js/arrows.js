@@ -7,9 +7,24 @@ import { tr } from './i18n.js';
 import { isBlockNode } from './nodes.js';
 import { isSpaceHeld } from './tools.js';
 import { resolveAnchor, ensureBindings, setEndpointToNode, setEndpointDangling, findSnapTarget, defaultJunction, renderAnchorHandles, renderEndpointHandle, renderWaypointHandles, renderJunctionHandle, EdgePropsPopover, EdgeContextMenu } from './arrow-edit.js';
-import { routeEdge, ROUTINGS, isValidRouting, pointAlong } from './router.js';
+import { ROUTINGS, isValidRouting, pointAlong } from './router.js';
+import { findRoute, migrateRouting } from './routing/index.js';
 import { vertexPathD, dashFor, STYLES, isValidStyle } from './connector.js';
-import { rectOf, rectIntersectsSegment } from './bindings.js';
+
+/* Phase 1 adapter: thin shim that keeps the old routeEdge signature so all
+   existing call sites continue working while we swap the engine underneath. */
+function routeEdge(kind, start, end, opts) {
+  const o = opts || {};
+  const result = findRoute(start, end, {
+    kind,
+    obstacles: o.obstacles,
+    fromSide: o.fromSide,
+    toSide: o.toSide,
+    waypoints: o.waypoints,
+  });
+  return result.vertices;
+}
+import { rectOf } from './bindings.js';
 import { lodFor } from './lod.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -56,104 +71,6 @@ function ensureArrowSize(value) {
 function _adjustArrowTipApproach(vertices, toInfo, edge) {
   void toInfo; void edge;
   return vertices;
-}
-
-const OBSTACLE_DETOUR_PAD = 18;
-
-function _firstSegmentIntersection(a, b, obstacles) {
-  let bestRect = null;
-  let bestArea = 0;
-  for (const r of obstacles) {
-    if (!rectIntersectsSegment(r, a, b)) continue;
-    const area = (r.w || 0) * (r.h || 0);
-    if (area > bestArea) {
-      bestArea = area;
-      bestRect = r;
-    }
-  }
-  return bestRect;
-}
-
-function _routeStraightAroundObstacle(a, b, obstacles) {
-  const rect = _firstSegmentIntersection(a, b, obstacles);
-  if (!rect) return null;
-  const pad = OBSTACLE_DETOUR_PAD;
-  const cx = rect.x + rect.w / 2;
-  const cy = rect.y + rect.h / 2;
-  const left = rect.x - pad;
-  const right = rect.x + rect.w + pad;
-  const top = rect.y - pad;
-  const bottom = rect.y + rect.h + pad;
-  const candidates = [
-    { x: left,  y: top    },
-    { x: right, y: top    },
-    { x: left,  y: bottom },
-    { x: right, y: bottom },
-    { x: cx,    y: top    },
-    { x: cx,    y: bottom },
-    { x: left,  y: cy     },
-    { x: right, y: cy     },
-  ];
-  const evaluated = candidates.map((cand) => ({
-    cand,
-    len: Math.hypot(cand.x - a.x, cand.y - a.y) + Math.hypot(b.x - cand.x, b.y - cand.y),
-  }));
-  evaluated.sort((p, q) => p.len - q.len);
-  const allOthers = obstacles.filter((r) => r !== rect);
-  for (const { cand } of evaluated) {
-    if (!_segmentClearOf(rect, a, cand) || !_segmentClearOf(rect, cand, b)) continue;
-    let blocked = false;
-    for (const r of allOthers) {
-      if (rectIntersectsSegment(r, a, cand) || rectIntersectsSegment(r, cand, b)) { blocked = true; break; }
-    }
-    if (!blocked) return cand;
-  }
-  return null;
-}
-
-function _segmentClearOf(rect, p, q) {
-  const inset = 1;
-  const shrunk = { x: rect.x + inset, y: rect.y + inset, w: Math.max(0, rect.w - inset * 2), h: Math.max(0, rect.h - inset * 2) };
-  if (shrunk.w <= 0 || shrunk.h <= 0) return true;
-  return !rectIntersectsSegment(shrunk, p, q);
-}
-
-function _applyObstacleDetour(vertices, routing, obstacles, edge) {
-  if (!obstacles || !obstacles.length) return vertices;
-  if (edge && edge.passThrough === true) return vertices;
-  if (Array.isArray(edge && edge.waypoints) && edge.waypoints.length) return vertices;
-  if (!Array.isArray(vertices) || vertices.length < 2) return vertices;
-  if (routing === 'orthogonal' || routing === 'manhattan') return vertices;
-  let current;
-  if (routing === 'smooth') {
-    current = [vertices[0], vertices[vertices.length - 1]];
-  } else {
-    current = vertices.slice();
-  }
-  const maxIter = routing === 'smooth' ? 1 : 4;
-  let anyChange = false;
-  for (let iter = 0; iter < maxIter; iter++) {
-    const next = [current[0]];
-    let changed = false;
-    for (let i = 0; i < current.length - 1; i++) {
-      const p = current[i];
-      const q = current[i + 1];
-      const span = Math.hypot(q.x - p.x, q.y - p.y);
-      if (span >= 20) {
-        const detour = _routeStraightAroundObstacle(p, q, obstacles);
-        if (detour) {
-          next.push(detour);
-          changed = true;
-        }
-      }
-      next.push(q);
-    }
-    if (!changed) break;
-    current = next;
-    anyChange = true;
-  }
-  if (routing === 'smooth' && !anyChange) return vertices;
-  return current;
 }
 
 function _obstacleDigestKey(obstacles, a, b) {
@@ -775,14 +692,14 @@ export class ArrowLayer {
       vertices = cached.vertices;
       d = cached.d;
     } else {
+      const routeObs = edge.passThrough === true ? [] : detourObstacles;
       const routedVerts = routeEdge(edge.routing, fromInfo.point, toInfo.point, {
         fromSide: fromInfo.side,
         toSide:   toInfo.side,
-        obstacles: detourObstacles,
+        obstacles: routeObs,
         waypoints: edge.waypoints,
       });
-      const detoured = _applyObstacleDetour(routedVerts, edge.routing, detourObstacles, edge);
-      vertices = _adjustArrowTipApproach(detoured, toInfo, edge);
+      vertices = _adjustArrowTipApproach(routedVerts, toInfo, edge);
       d = vertexPathD(vertices, edge.routing);
       this._pathCache.set(edge.id, { key: cacheKey, vertices, d });
     }
@@ -875,26 +792,25 @@ export class ArrowLayer {
       edge.junction = defaultJunction(fromInfo.point, branchTargets.map((b) => b.point));
     }
     const junction = edge.junction;
-    const trunkObstacles = this._obstaclesExcluding(obstacles, [fromInfo.rect]);
-    const trunkRouted = routeEdge(edge.routing, fromInfo.point, junction, {
+    const passThrough = edge.passThrough === true;
+    const trunkObstacles = passThrough ? [] : this._obstaclesExcluding(obstacles, [fromInfo.rect]);
+    const trunkVerts = routeEdge(edge.routing, fromInfo.point, junction, {
       fromSide: fromInfo.side,
       toSide: null,
       obstacles: trunkObstacles,
     });
-    const trunkVerts = _applyObstacleDetour(trunkRouted, edge.routing, trunkObstacles, edge);
     const trunkPath = vertexPathD(trunkVerts, edge.routing);
     this._appendEdgePath(edge, trunkPath, colour, scale, trunkVerts, { isTrunk: true, opacity });
 
     for (let i = 0; i < edge.branches.length; i++) {
       const b = edge.branches[i];
       const target = branchTargets[i];
-      const branchObstacles = this._obstaclesExcluding(obstacles, [target.rect]);
-      const routed = routeEdge(edge.routing, junction, target.point, {
+      const branchObstacles = passThrough ? [] : this._obstaclesExcluding(obstacles, [target.rect]);
+      const verts = routeEdge(edge.routing, junction, target.point, {
         fromSide: null,
         toSide: target.side,
         obstacles: branchObstacles,
       });
-      const verts = _applyObstacleDetour(routed, edge.routing, branchObstacles, edge);
       const d = vertexPathD(verts, edge.routing);
       this._appendBranchPath(edge, i, d, b.color || colour, scale, verts, opacity);
       if (lod && lod.edgeLabelsVisible) {

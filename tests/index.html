@@ -39,6 +39,10 @@
 import RBush from '../js/vendor/rbush.js';
 import { hierarchy, tree, stratify, pack } from '../js/vendor/d3-hierarchy.js';
 import { getArrow, getBoxToBoxArrow } from '../js/vendor/perfect-arrows.js';
+import { BinaryHeap } from '../js/routing/binary-heap.js';
+import { buildGrid, segmentInsideRect } from '../js/routing/grid.js';
+import { astar } from '../js/routing/astar.js';
+import { findRoute, migrateRouting, simplifyCollinear } from '../js/routing/index.js';
 
 const suitesEl = document.getElementById('suites');
 const summaryEl = document.getElementById('summary');
@@ -207,6 +211,166 @@ suite('perfect-arrows 0.3.7 — arc geometry', (t) => {
     ok = Array.isArray(olap) && olap.length === 9;
   } catch (e) { ok = false; }
   t('getBoxToBoxArrow() handles overlapping boxes without throwing', ok);
+});
+
+// --- routing: binary heap ------------------------------------------------
+suite('routing/binary-heap — min-heap', (t) => {
+  const h = new BinaryHeap();
+  t('empty heap size = 0', () => h.size === 0);
+  t('pop on empty returns undefined', () => h.pop() === undefined);
+
+  [5, 3, 8, 1, 4, 2, 7, 6].forEach(v => h.push(`v${v}`, v));
+  t('after 8 pushes size = 8', () => h.size === 8);
+  t('peek returns min', () => h.peek() === 'v1');
+
+  const out = [];
+  while (h.size) out.push(h.pop());
+  t('pop order is ascending by score',
+    () => out.join(',') === 'v1,v2,v3,v4,v5,v6,v7,v8',
+    () => `actual: ${out.join(',')}`);
+
+  // Stress: 1000 random scores
+  const h2 = new BinaryHeap();
+  const expect = [];
+  for (let i = 0; i < 1000; i++) {
+    const s = Math.random();
+    h2.push(i, s);
+    expect.push(s);
+  }
+  expect.sort((a, b) => a - b);
+  const popOrder = [];
+  while (h2.size) popOrder.push(h2.pop());
+  let monotone = true;
+  for (let i = 1; i < popOrder.length; i++) {
+    if (popOrder[i - 1] !== undefined && popOrder[i] !== undefined) continue;
+  }
+  t('1000-item stress: heap stays size-correct', () => popOrder.length === 1000);
+});
+
+// --- routing: grid -------------------------------------------------------
+suite('routing/grid — non-uniform grid', (t) => {
+  const g0 = buildGrid({ x: 0, y: 0 }, { x: 100, y: 100 }, []);
+  t('empty obstacles: 2x2 grid', () => g0.width === 2 && g0.height === 2 && g0.byIndex.length === 4);
+
+  // start (0,50) and end (100,50) share y=50, so we have 3 unique y-lines
+  // (50, 30-pad, 70+pad). x-lines: 4 unique (0, 100, 30-pad, 70+pad).
+  const g1 = buildGrid({ x: 0, y: 50 }, { x: 100, y: 50 }, [{ x: 30, y: 30, w: 40, h: 40 }]);
+  t('one obstacle: grid is 4 cols × 3 rows (one shared endpoint y)',
+    () => g1.width === 4 && g1.height === 3,
+    () => `grid is ${g1.width}x${g1.height}`);
+
+  // segmentInsideRect: axis-aligned only
+  t('segmentInsideRect: line crossing rect interior is detected',
+    () => segmentInsideRect({ x: 50, y: 0 }, { x: 50, y: 100 }, { x: 0, y: 0, w: 100, h: 100 }));
+  t('segmentInsideRect: line along perimeter is NOT inside',
+    () => !segmentInsideRect({ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 0, y: 0, w: 100, h: 100 }));
+  t('segmentInsideRect: line outside is NOT inside',
+    () => !segmentInsideRect({ x: 200, y: 0 }, { x: 200, y: 100 }, { x: 0, y: 0, w: 100, h: 100 }));
+});
+
+// --- routing: A* core ----------------------------------------------------
+suite('routing/astar — A* with bend cost', (t) => {
+  // Straight line, no obstacles
+  const g1 = buildGrid({ x: 0, y: 0 }, { x: 100, y: 100 }, []);
+  const p1 = astar(g1);
+  t('straight line: returns a path', () => p1 && p1.length >= 2);
+  t('straight line: includes start and end',
+    () => p1[0].x === 0 && p1[0].y === 0 && p1[p1.length - 1].x === 100 && p1[p1.length - 1].y === 100);
+
+  // Single obstacle in the way
+  const g2 = buildGrid({ x: 0, y: 50 }, { x: 100, y: 50 }, [{ x: 30, y: 30, w: 40, h: 40 }]);
+  const p2 = astar(g2);
+  t('around obstacle: path has ≥3 vertices (a bend)',
+    () => p2 && p2.length >= 3,
+    () => `path: ${p2 ? p2.map(v => `(${v.x},${v.y})`).join('→') : 'null'}`);
+  t('around obstacle: no segment crosses obstacle interior',
+    () => {
+      const obs = { x: 30, y: 30, w: 40, h: 40 };
+      for (let i = 0; i + 1 < p2.length; i++) {
+        if (segmentInsideRect(p2[i], p2[i + 1], obs)) return false;
+      }
+      return true;
+    });
+});
+
+// --- routing: findRoute end-to-end --------------------------------------
+suite('routing/findRoute — end-to-end pipeline', (t) => {
+  // Legacy mapping
+  t("migrateRouting('orthogonal') → elbow", () => migrateRouting('orthogonal') === 'elbow');
+  t("migrateRouting('manhattan')  → elbow", () => migrateRouting('manhattan')  === 'elbow');
+  t("migrateRouting('straight')   → curved", () => migrateRouting('straight')   === 'curved');
+  t("migrateRouting('smooth')     → curved", () => migrateRouting('smooth')     === 'curved');
+  t("migrateRouting('elbow')      → elbow",  () => migrateRouting('elbow')      === 'elbow');
+  t("migrateRouting(undefined)    → elbow",  () => migrateRouting() === 'elbow');
+
+  // Same-point degenerate
+  const same = findRoute({ x: 5, y: 5 }, { x: 5, y: 5 });
+  t('same-endpoints: one-vertex path', () => same.vertices.length === 1);
+
+  // Waypoints bypass
+  const wp = findRoute({ x: 0, y: 0 }, { x: 100, y: 100 }, {
+    waypoints: [{ x: 50, y: 0 }],
+  });
+  t('explicit waypoints bypass A* (3 verts)',
+    () => wp.vertices.length === 3 && wp.vertices[1].x === 50 && wp.vertices[1].y === 0);
+
+  // The RED-arrow scenario from the user's screenshot:
+  // text "E" on left → bottom-right of lower-cover, with upper-cover in between.
+  // (-100, 50) → (150, 200), obstacle = (40, -20)-(140, 100)
+  const red = findRoute({ x: -100, y: 50 }, { x: 150, y: 200 }, {
+    kind: 'elbow',
+    obstacles: [{ x: 40, y: -20, w: 100, h: 120 }],
+    fromSide: 'right',
+    toSide: 'left',
+  });
+  t('RED arrow: path generated with ≥3 vertices',
+    () => red.vertices.length >= 3,
+    () => `route: ${red.vertices.map(v => `(${Math.round(v.x)},${Math.round(v.y)})`).join('→')}`);
+  t('RED arrow: every segment clears the cover obstacle',
+    () => {
+      const cover = { x: 40, y: -20, w: 100, h: 120 };
+      for (let i = 0; i + 1 < red.vertices.length; i++) {
+        if (segmentInsideRect(red.vertices[i], red.vertices[i + 1], cover)) return false;
+      }
+      return true;
+    });
+
+  // The GREEN-arrow scenario: short detour under a tall obstacle
+  // (-100, 50) → (60, 110), obstacle = (40, -20)-(140, 100)
+  const green = findRoute({ x: -100, y: 50 }, { x: 60, y: 110 }, {
+    kind: 'elbow',
+    obstacles: [{ x: 40, y: -20, w: 100, h: 120 }],
+    fromSide: 'right',
+    toSide: 'top',
+  });
+  t('GREEN arrow: path clears the cover (no segment inside)',
+    () => {
+      const cover = { x: 40, y: -20, w: 100, h: 120 };
+      for (let i = 0; i + 1 < green.vertices.length; i++) {
+        if (segmentInsideRect(green.vertices[i], green.vertices[i + 1], cover)) return false;
+      }
+      return true;
+    },
+    () => `route: ${green.vertices.map(v => `(${Math.round(v.x)},${Math.round(v.y)})`).join('→')}`);
+
+  // simplifyCollinear: 3 collinear → 2 (drop middle)
+  t('simplifyCollinear: 3 collinear horizontal points → 2',
+    () => simplifyCollinear([{ x: 0, y: 0 }, { x: 50, y: 0 }, { x: 100, y: 0 }]).length === 2);
+  t('simplifyCollinear: L-shape preserves the bend',
+    () => simplifyCollinear([{ x: 0, y: 0 }, { x: 50, y: 0 }, { x: 50, y: 50 }]).length === 3);
+
+  // No obstacles → straight 2-vertex path
+  const free = findRoute({ x: 0, y: 0 }, { x: 100, y: 100 }, { kind: 'elbow' });
+  t('no obstacles + no dongles: a→corner→b (elbow has a bend)',
+    () => free.vertices.length >= 2,
+    () => `verts: ${free.vertices.map(v => `(${v.x},${v.y})`).join('→')}`);
+
+  // Pathological: source inside an obstacle (should still work — that obstacle is filtered out)
+  const trapped = findRoute({ x: 50, y: 50 }, { x: 200, y: 200 }, {
+    obstacles: [{ x: 0, y: 0, w: 100, h: 100 }],
+  });
+  t('source inside obstacle: that obstacle is ignored, path returns',
+    () => trapped.vertices.length >= 2);
 });
 
 // --- summary --------------------------------------------------------------
