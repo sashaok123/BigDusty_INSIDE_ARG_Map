@@ -7,6 +7,19 @@ import { pickTextColor, pickTextStroke, bgFromTheme, relativeLuminance } from '.
 import { getActiveTool, isSpaceHeld, setActiveTool } from './tools.js';
 import { VERIFICATION_STRIPE } from './nodes.js';
 
+const TEXT_SIZE_PRESET_PX = { XS: 10, S: 12, M: 16, L: 20, XL: 28, XXL: 36, XXXL: 48 };
+function resolveTextStyleSize(size) {
+  if (typeof size === 'number' && Number.isFinite(size)) {
+    return Math.max(8, Math.min(72, Math.round(size)));
+  }
+  if (typeof size === 'string') {
+    if (TEXT_SIZE_PRESET_PX[size]) return TEXT_SIZE_PRESET_PX[size];
+    const n = Number(size);
+    if (Number.isFinite(n)) return Math.max(8, Math.min(72, Math.round(n)));
+  }
+  return TEXT_SIZE_PRESET_PX.M;
+}
+
 const COLOR_PRESET_BG = {
   '':  null,
   '1': '#e83d3d',
@@ -927,8 +940,7 @@ export class Viewer {
     ctx.save();
     if (typeof h.provenanceOpacity === 'number') ctx.globalAlpha = h.provenanceOpacity;
     if (this.scale > 0.25 && lod && lod.edgeLabelsVisible) {
-      const sizeMap = { S: 12, M: 16, L: 20, XL: 28 };
-      const baseSize = sizeMap[ts.size] || 16;
+      const baseSize = resolveTextStyleSize(ts.size);
       const fontPx = Math.max(11, Math.min(40, baseSize / this.scale));
       const family = ts.family === 'mono' ? 'var(--font-mono)'
                    : ts.family === 'serif' ? 'Georgia, serif'
@@ -1854,7 +1866,7 @@ export class Viewer {
       const img = this.imagePointFromClient(ev.clientX, ev.clientY);
       const dxImg = img.x - d.startImg.x;
       const dyImg = img.y - d.startImg.y;
-      this.onDragSelection({ ids: d.ids, dx: dxImg, dy: dyImg });
+      this.onDragSelection({ ids: d.ids, dx: dxImg, dy: dyImg, shiftKey: !!ev.shiftKey });
       this.requestDraw();
       return;
     }
@@ -2050,7 +2062,7 @@ export class Viewer {
       const img = this.imagePointFromClient(ev.clientX, ev.clientY);
       const dxImg = img.x - d.startImg.x;
       const dyImg = img.y - d.startImg.y;
-      this.onDragSelectionEnd({ ids: d.ids, dx: dxImg, dy: dyImg });
+      this.onDragSelectionEnd({ ids: d.ids, dx: dxImg, dy: dyImg, shiftKey: !!ev.shiftKey });
       return;
     }
     if (d.kind === 'edit-click') {

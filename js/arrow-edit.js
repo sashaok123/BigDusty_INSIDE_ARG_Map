@@ -256,6 +256,49 @@ const LABEL_POSITION_PRESETS = [
 const STROKE_WIDTH_PRESETS = [1, 2, 3, 4, 6, 8];
 const STROKE_COLOR_SWATCHES_EDIT = ['#ffffff', '#000000', '#e83d3d', '#e88a3d', '#e8c83d', '#5fa854', '#2e6fe8', '#9a6ce8'];
 
+const ARROW_SIZE_RANGE_MIN = 4;
+const ARROW_SIZE_RANGE_MAX = 20;
+const ARROW_SIZE_RANGE_DEFAULT = 8;
+
+function popoverArrowSize(edge) {
+  if (edge && Number.isFinite(edge.arrowSize)) {
+    return Math.max(ARROW_SIZE_RANGE_MIN, Math.min(ARROW_SIZE_RANGE_MAX, Math.round(edge.arrowSize)));
+  }
+  return ARROW_SIZE_RANGE_DEFAULT;
+}
+
+function buildArrowSizeRow(edge, onPatch) {
+  const wrap = document.createElement('div');
+  wrap.className = 'arrow-props-row arrow-props-row-block arrow-props-arrow-size';
+  const row = document.createElement('div');
+  row.className = 'arrow-props-label-style-row';
+  const lab = document.createElement('span');
+  lab.className = 'arrow-props-mini-label';
+  lab.textContent = tr('edge_arrowhead_size');
+  row.appendChild(lab);
+  const slider = document.createElement('input');
+  slider.type = 'range';
+  slider.min = String(ARROW_SIZE_RANGE_MIN);
+  slider.max = String(ARROW_SIZE_RANGE_MAX);
+  slider.step = '1';
+  slider.value = String(popoverArrowSize(edge));
+  slider.className = 'arrow-props-mini-range';
+  const valSpan = document.createElement('span');
+  valSpan.className = 'arrow-props-mini-value';
+  valSpan.textContent = slider.value;
+  slider.addEventListener('input', () => {
+    valSpan.textContent = slider.value;
+  });
+  slider.addEventListener('change', () => {
+    const n = Number(slider.value);
+    if (Number.isFinite(n)) onPatch({ arrowSize: n });
+  });
+  row.appendChild(slider);
+  row.appendChild(valSpan);
+  wrap.appendChild(row);
+  return wrap;
+}
+
 function popoverStrokeWidth(edge) {
   if (edge && edge.stroke && Number.isFinite(edge.stroke.width)) return edge.stroke.width;
   return 2;
@@ -328,6 +371,39 @@ function buildStrokeRow(edge, onPatch) {
   }
   wrap.appendChild(colorRow);
 
+  const hexRow = document.createElement('div');
+  hexRow.className = 'arrow-props-label-style-row arrow-props-hex-row';
+  const hexIn = document.createElement('input');
+  hexIn.type = 'text';
+  hexIn.maxLength = 7;
+  hexIn.spellcheck = false;
+  hexIn.placeholder = '#rrggbb';
+  hexIn.className = 'arrow-props-mini-input arrow-props-hex-input';
+  if (/^#[0-9a-f]{6}$/i.test(currentColor)) hexIn.value = currentColor;
+  const hexBtn = document.createElement('button');
+  hexBtn.type = 'button';
+  hexBtn.className = 'arrow-props-mini-btn';
+  hexBtn.textContent = tr('color_picker_apply');
+  function commitHex() {
+    const v = (hexIn.value || '').trim().toLowerCase();
+    if (/^#[0-9a-f]{6}$/i.test(v)) {
+      onPatch({ strokeColor: v });
+      syncColorActive(v);
+    } else if (/^#[0-9a-f]{3}$/i.test(v)) {
+      const exp = '#' + v[1] + v[1] + v[2] + v[2] + v[3] + v[3];
+      hexIn.value = exp;
+      onPatch({ strokeColor: exp });
+      syncColorActive(exp);
+    }
+  }
+  hexBtn.addEventListener('click', commitHex);
+  hexIn.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') { ev.preventDefault(); commitHex(); }
+  });
+  hexRow.appendChild(hexIn);
+  hexRow.appendChild(hexBtn);
+  wrap.appendChild(hexRow);
+
   function syncWidthActive(active) {
     for (const it of widthBtns) it.el.classList.toggle('active', it.w === active);
   }
@@ -386,6 +462,36 @@ function buildLabelStyleRow(currentLabel, onPatch) {
   }
   wrap.appendChild(colorRow);
 
+  const labelHexRow = document.createElement('div');
+  labelHexRow.className = 'arrow-props-label-style-row arrow-props-hex-row';
+  const labelHexIn = document.createElement('input');
+  labelHexIn.type = 'text';
+  labelHexIn.maxLength = 7;
+  labelHexIn.spellcheck = false;
+  labelHexIn.placeholder = '#rrggbb';
+  labelHexIn.className = 'arrow-props-mini-input arrow-props-hex-input';
+  if (/^#[0-9a-f]{6}$/i.test(currentColor)) labelHexIn.value = currentColor;
+  const labelHexBtn = document.createElement('button');
+  labelHexBtn.type = 'button';
+  labelHexBtn.className = 'arrow-props-mini-btn';
+  labelHexBtn.textContent = tr('color_picker_apply');
+  function commitLabelHex() {
+    const v = (labelHexIn.value || '').trim().toLowerCase();
+    if (/^#[0-9a-f]{6}$/i.test(v)) onPatch({ color: v });
+    else if (/^#[0-9a-f]{3}$/i.test(v)) {
+      const exp = '#' + v[1] + v[1] + v[2] + v[2] + v[3] + v[3];
+      labelHexIn.value = exp;
+      onPatch({ color: exp });
+    }
+  }
+  labelHexBtn.addEventListener('click', commitLabelHex);
+  labelHexIn.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') { ev.preventDefault(); commitLabelHex(); }
+  });
+  labelHexRow.appendChild(labelHexIn);
+  labelHexRow.appendChild(labelHexBtn);
+  wrap.appendChild(labelHexRow);
+
   const posRow = document.createElement('div');
   posRow.className = 'arrow-props-label-style-row';
   const posLab = document.createElement('span');
@@ -441,7 +547,7 @@ export class EdgePropsPopover {
     popover.className = 'arrow-props';
     const stored = this._readStoredPos();
     const W = 290;
-    const H = 260;
+    const H = 330;
     const defaultLeft = Math.max(8, Math.min(window.innerWidth - W, screenPt.x - 145));
     const defaultTop  = Math.max(8, Math.min(window.innerHeight - H, screenPt.y + 14));
     const left = stored ? Math.max(8, Math.min(window.innerWidth - 80, stored.x)) : defaultLeft;
@@ -479,6 +585,9 @@ export class EdgePropsPopover {
       this.layer.applyEdgePatch(edge.id, { color: v });
     }));
     popover.appendChild(buildStrokeRow(edge, (p) => {
+      this.layer.applyEdgePatch(edge.id, p);
+    }));
+    popover.appendChild(buildArrowSizeRow(edge, (p) => {
       this.layer.applyEdgePatch(edge.id, p);
     }));
 

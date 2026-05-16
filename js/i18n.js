@@ -1308,8 +1308,23 @@ const _I18N_DATA = {
   history_label_paste_n:        ['Paste {n} nodes',   'Вставка {n}',        'Einfügen {n}',        'Incolla {n}',        'Indsæt {n}'],
   history_label_import:         ['Import',            'Импорт',             'Import',              'Importa',            'Import'],
 
-  toolbar_undo_tooltip:         ['Undo: {label}',     'Отменить: {label}',  'Rückgängig: {label}', 'Annulla: {label}',   'Fortryd: {label}'],
-  toolbar_redo_tooltip:         ['Redo: {label}',     'Повторить: {label}', 'Wiederholen: {label}','Ripeti: {label}',    'Gentag: {label}'],
+  toolbar_undo_tooltip:         ['Undo: your last action — {label}', 'Отменить ваше последнее действие — {label}', 'Rückgängig: deine letzte Aktion — {label}', 'Annulla: la tua ultima azione — {label}', 'Fortryd: din sidste handling — {label}'],
+  toolbar_redo_tooltip:         ['Redo: your last action — {label}', 'Повторить ваше действие — {label}', 'Wiederholen: deine letzte Aktion — {label}', 'Ripeti: la tua ultima azione — {label}', 'Gentag: din sidste handling — {label}'],
+  toolbar_undo_no_own:          ['No own actions to undo','Нет ваших действий для отмены','Keine eigenen Aktionen zum Rückgängigmachen','Nessuna azione propria da annullare','Ingen egne handlinger at fortryde'],
+  toolbar_redo_no_own:          ['No own actions to redo','Нет ваших действий для повтора','Keine eigenen Aktionen zum Wiederholen','Nessuna azione propria da ripetere','Ingen egne handlinger at gentage'],
+
+  color_picker_apply:           ['Apply',             'Применить',          'Anwenden',            'Applica',            'Anvend'],
+  color_picker_recent:          ['Recent',            'Недавние',           'Letzte',              'Recenti',            'Seneste'],
+  color_picker_recent_empty:    ['(none yet)',        '(пусто)',            '(noch keine)',        '(nessuno)',          '(ingen endnu)'],
+  color_picker_invalid_hex:     ['Invalid hex',       'Неверный hex',       'Ungültiger Hex',      'Hex non valido',     'Ugyldig hex'],
+  color_picker_none:            ['None',              'Нет',                'Keine',               'Nessuno',            'Ingen'],
+  color_picker_auto:            ['Auto',              'Авто',               'Auto',                'Auto',               'Auto'],
+  color_picker_custom_hex:      ['Custom hex',        'Свой hex',           'Eigener Hex',         'Hex personalizzato', 'Brugerdefineret hex'],
+
+  edit_modal_text_size_custom:  ['Custom size',       'Свой размер',        'Eigene Größe',        'Dimensione personalizzata','Brugerdefineret størrelse'],
+  edit_modal_text_size_px:      ['{n}px',             '{n}пк',              '{n}px',               '{n}px',              '{n}px'],
+
+  edge_arrowhead_size:          ['Arrowhead size',    'Размер наконечника', 'Pfeilspitze-Größe',   'Dimensione punta',   'Pilspids-størrelse'],
 
   branches_panel_title:  ['Branches',      'Ветви',             'Stränge',             'Filoni',             'Spor'],
   branches_all:          ['All',           'Все',               'Alle',                'Tutti',              'Alle'],

@@ -18,13 +18,29 @@ import { attachUserAutocomplete } from './user-mention.js';
 import { translateMany, providerLabel } from './translate.js';
 import { getTranslationProvider } from './settings.js';
 import { buildMarkdownToolbar } from './md-toolbar.js';
+import { buildColorPicker, isHexColor, pushRecentColor } from './color-picker.js';
 import {
   pickRenderer, renderHtmlInto, renderTextInto, renderJsonInto,
   renderPdfInto, renderImageInto, renderHexInto, fetchAsText, fetchAsBytes,
 } from './file-renderers.js';
 import { formatBytes } from './image-pipeline.js';
 
-const TEXT_SIZES = ['S', 'M', 'L', 'XL'];
+const TEXT_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+export const TEXT_SIZE_PX = { XS: 10, S: 12, M: 16, L: 20, XL: 28, XXL: 36, XXXL: 48 };
+export const TEXT_SIZE_MIN = 8;
+export const TEXT_SIZE_MAX = 72;
+
+export function resolveTextStyleSize(size) {
+  if (typeof size === 'number' && Number.isFinite(size)) {
+    return Math.max(TEXT_SIZE_MIN, Math.min(TEXT_SIZE_MAX, Math.round(size)));
+  }
+  if (typeof size === 'string') {
+    if (TEXT_SIZE_PX[size]) return TEXT_SIZE_PX[size];
+    const n = Number(size);
+    if (Number.isFinite(n)) return Math.max(TEXT_SIZE_MIN, Math.min(TEXT_SIZE_MAX, Math.round(n)));
+  }
+  return TEXT_SIZE_PX.M;
+}
 const TEXT_FAMILIES = ['system', 'mono', 'serif'];
 const TEXT_ALIGNS = ['left', 'center', 'right'];
 const TEXT_COLOR_SWATCHES = [
@@ -377,18 +393,21 @@ export class EditNodeModal {
 
     const colorField = el('div', { class: 'em-field' });
     const colorLabel = el('label', { text: tr('edit_modal_color') });
-    const colorRow = el('div', { class: 'em-colors' });
     const colorBtns = {};
-    for (const c of COLOR_PRESETS) {
-      const cls = c.id === '' ? 'em-color em-color-none' : 'em-color';
-      const b = el('div', { class: cls, role: 'button', tabindex: '0', 'data-color': c.id, 'aria-label': c.label });
-      if (c.swatch) b.style.background = c.swatch;
-      b.addEventListener('click', () => this._setColor(c.id));
-      b.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') this._setColor(c.id); });
-      colorRow.appendChild(b);
-      colorBtns[c.id] = b;
-    }
-    colorField.appendChild(colorLabel); colorField.appendChild(colorRow);
+    const colorPresetsForPicker = COLOR_PRESETS
+      .filter((c) => c.id !== '')
+      .map((c) => ({ value: c.id, swatch: c.swatch, label: c.label }));
+    const colorPicker = buildColorPicker({
+      value: '',
+      presets: colorPresetsForPicker,
+      showNone: true,
+      compact: true,
+      containerClass: 'cp-root em-color-picker',
+      onChange: (v) => this._setColor(v),
+    });
+    colorField.appendChild(colorLabel);
+    colorField.appendChild(colorPicker.root);
+    this._nodeColorPicker = colorPicker;
 
     const parentField = el('div', { class: 'em-field' });
     const parentLabel = el('label', { text: tr('edit_modal_parent_group') });
@@ -467,14 +486,42 @@ export class EditNodeModal {
     const textStyleField = el('div', { class: 'em-field em-text-style' });
     const textStyleLabel = el('label', { text: tr('edit_modal_text_style') });
     const textStyleRow = el('div', { class: 'em-text-style-row' });
-    const sizeSeg = el('div', { class: 'em-segmented' });
+    const sizeBlock = el('div', { class: 'em-text-size-block' });
+    const sizeSeg = el('div', { class: 'em-segmented em-text-size-seg' });
     const sizeBtns = {};
     for (const s of TEXT_SIZES) {
       const b = el('button', { type: 'button', text: s });
+      b.title = tr('edit_modal_text_size_px', { n: TEXT_SIZE_PX[s] });
       b.addEventListener('click', () => this._setTextStyle({ size: s }));
       sizeSeg.appendChild(b);
       sizeBtns[s] = b;
     }
+    const sizeNumWrap = el('div', { class: 'em-text-size-num' });
+    const sizeNumIn = el('input', { type: 'number', class: 'em-text-size-input',
+      min: String(TEXT_SIZE_MIN), max: String(TEXT_SIZE_MAX), step: '1',
+      title: tr('edit_modal_text_size_custom'),
+      placeholder: 'px' });
+    sizeNumIn.addEventListener('change', () => {
+      const v = Number(sizeNumIn.value);
+      if (Number.isFinite(v)) {
+        const clamped = Math.max(TEXT_SIZE_MIN, Math.min(TEXT_SIZE_MAX, Math.round(v)));
+        sizeNumIn.value = String(clamped);
+        this._setTextStyle({ size: clamped });
+      }
+    });
+    sizeNumIn.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') {
+        ev.preventDefault();
+        sizeNumIn.dispatchEvent(new Event('change'));
+        sizeNumIn.blur();
+      }
+    });
+    const sizeNumUnit = el('span', { class: 'em-text-size-unit', text: 'px' });
+    sizeNumWrap.appendChild(sizeNumIn);
+    sizeNumWrap.appendChild(sizeNumUnit);
+    sizeBlock.appendChild(sizeSeg);
+    sizeBlock.appendChild(sizeNumWrap);
+    this.sizeNumInputEl = sizeNumIn;
     const familySeg = el('div', { class: 'em-segmented' });
     const familyBtns = {};
     for (const f of TEXT_FAMILIES) {
@@ -493,15 +540,19 @@ export class EditNodeModal {
     }
     const colorPickerRow = el('div', { class: 'em-text-color-row' });
     const textColorBtns = {};
-    for (const c of TEXT_COLOR_SWATCHES) {
-      const b = el('div', { class: c.id === 'auto' ? 'em-text-color em-text-color-auto'
-                            : 'em-text-color', role: 'button', tabindex: '0' });
-      if (c.id === 'auto') b.textContent = 'A';
-      else b.style.background = c.swatch;
-      b.addEventListener('click', () => this._setTextStyle({ color: c.id === 'auto' ? 'auto' : c.id }));
-      colorPickerRow.appendChild(b);
-      textColorBtns[c.id] = b;
-    }
+    const textColorPresets = TEXT_COLOR_SWATCHES
+      .filter((c) => c.id !== 'auto')
+      .map((c) => ({ value: c.id, swatch: c.swatch, label: c.id }));
+    const textColorPickerInst = buildColorPicker({
+      value: 'auto',
+      presets: textColorPresets,
+      showAuto: true,
+      compact: true,
+      containerClass: 'cp-root em-text-color-picker',
+      onChange: (v) => this._setTextStyle({ color: v === 'auto' ? 'auto' : v }),
+    });
+    colorPickerRow.appendChild(textColorPickerInst.root);
+    this._textColorPicker = textColorPickerInst;
     const wrapToggleRow = el('div', { class: 'em-text-wrap-row' });
     const wrapToggleLabel = el('span', { class: 'em-text-wrap-label', text: tr('edit_modal_text_wrap') });
     const wrapToggleSeg = el('div', { class: 'em-segmented' });
@@ -513,7 +564,7 @@ export class EditNodeModal {
     wrapToggleSeg.appendChild(wrapNoneBtn);
     wrapToggleRow.appendChild(wrapToggleLabel);
     wrapToggleRow.appendChild(wrapToggleSeg);
-    textStyleRow.appendChild(sizeSeg);
+    textStyleRow.appendChild(sizeBlock);
     textStyleRow.appendChild(familySeg);
     textStyleRow.appendChild(alignSeg);
     textStyleField.appendChild(textStyleLabel);
@@ -649,6 +700,7 @@ export class EditNodeModal {
     this.colorFieldEl = colorField;
     this.colorLabelEl = colorLabel;
     this.colorBtnEls = colorBtns;
+    this.colorPickerInst = this._nodeColorPicker;
     this.parentFieldEl = parentField;
     this.parentLabelEl = parentLabel;
     this.parentSelectEl = parentSel;
@@ -734,9 +786,22 @@ export class EditNodeModal {
 
   _syncTextStyleButtons() {
     const ts = (this._state && this._state.text_style) || {};
+    const sizeVal = ts.size;
+    const isPresetKey = typeof sizeVal === 'string' && Object.prototype.hasOwnProperty.call(TEXT_SIZE_PX, sizeVal);
+    const matchKey = isPresetKey ? sizeVal : null;
     for (const s of TEXT_SIZES) {
       const b = this.sizeBtnEls[s];
-      if (b) b.classList.toggle('active', (ts.size || 'M') === s);
+      if (b) b.classList.toggle('active', s === (matchKey || 'M'));
+    }
+    if (this.sizeNumInputEl) {
+      const pxVal = resolveTextStyleSize(sizeVal);
+      if (typeof sizeVal === 'number' || (typeof sizeVal === 'string' && !isPresetKey && Number.isFinite(Number(sizeVal)))) {
+        this.sizeNumInputEl.value = String(pxVal);
+      } else if (matchKey) {
+        this.sizeNumInputEl.value = String(TEXT_SIZE_PX[matchKey]);
+      } else {
+        this.sizeNumInputEl.value = String(TEXT_SIZE_PX.M);
+      }
     }
     for (const f of TEXT_FAMILIES) {
       const b = this.familyBtnEls[f];
@@ -747,9 +812,10 @@ export class EditNodeModal {
       if (b) b.classList.toggle('active', (ts.align || 'left') === a);
     }
     const cur = ts.color || 'auto';
-    for (const [id, b] of Object.entries(this.textColorBtnEls)) {
-      b.classList.toggle('active', id === cur);
+    if (this._textColorPicker && typeof this._textColorPicker.setValue === 'function') {
+      this._textColorPicker.setValue(cur);
     }
+    if (isHexColor(cur)) pushRecentColor(cur);
     if (this.wrapWordBtnEl) this.wrapWordBtnEl.classList.toggle('active', (ts.wrap || 'word') !== 'none');
     if (this.wrapNoneBtnEl) this.wrapNoneBtnEl.classList.toggle('active', ts.wrap === 'none');
   }
@@ -1310,10 +1376,12 @@ export class EditNodeModal {
 
   _setColor(c, silent) {
     if (!this._state) return;
-    this._state.color = c;
-    Object.entries(this.colorBtnEls).forEach(([k, b]) => {
-      b.classList.toggle('active', k === c);
-    });
+    const val = typeof c === 'string' ? c : '';
+    this._state.color = val;
+    if (this.colorPickerInst && typeof this.colorPickerInst.setValue === 'function') {
+      this.colorPickerInst.setValue(val);
+    }
+    if (isHexColor(val)) pushRecentColor(val);
     void silent;
   }
 

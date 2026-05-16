@@ -80,7 +80,7 @@ import { openVideoUrlDialog } from './video-dialog.js';
 import { SettingsModal } from './settings-modal.js';
 import { AlignFloater } from './align-floater.js';
 import { CommentsLayer } from './comments-layer.js';
-import { SnapGuides } from './snap-guides.js';
+import { SnapGuides, computeSnapAdjust } from './snap-guides.js';
 import { VideoOverlay } from './video-overlay.js';
 import { AudioOverlay } from './audio-overlay.js';
 import { DocumentOverlay } from './document-overlay.js';
@@ -1571,11 +1571,11 @@ function setupViewer() {
       state.selection = new Set(ids);
       refreshSelectionStatus();
     },
-    onDragSelection: ({ ids, dx, dy }) => {
-      applyDragSelection(ids, dx, dy, false);
+    onDragSelection: ({ ids, dx, dy, shiftKey }) => {
+      applyDragSelection(ids, dx, dy, false, !!shiftKey);
     },
-    onDragSelectionEnd: ({ ids, dx, dy }) => {
-      applyDragSelection(ids, dx, dy, true);
+    onDragSelectionEnd: ({ ids, dx, dy, shiftKey }) => {
+      applyDragSelection(ids, dx, dy, true, !!shiftKey);
     },
     onSelectStrokeAtPoint: (worldPt, shiftKey) => {
       if (!penLayer) return null;
@@ -3321,7 +3321,7 @@ function openDiffForSelection() {
   if (compareModal) compareModal.open(toViewShape(a), toViewShape(b), { tab: 'diff' });
 }
 
-function applyDragSelection(ids, dx, dy, commit) {
+function applyDragSelection(ids, dx, dy, commit, shiftKey) {
   if (!ids || !ids.length) return;
   if (!isLoggedIn()) return;
   const allIds = new Set();
@@ -3334,27 +3334,53 @@ function applyDragSelection(ids, dx, dy, commit) {
   }
   if (!applyDragSelection._orig) applyDragSelection._orig = new Map();
   const orig = applyDragSelection._orig;
+  const otherRects = [];
+  for (const n of state.nodes.values()) {
+    if (allIds.has(n.id)) continue;
+    otherRects.push({ x: n.x, y: n.y, w: n.width, h: n.height });
+  }
+  let snapDx = 0;
+  let snapDy = 0;
+  let snapInfo = null;
+  if (!shiftKey) {
+    let origMinX = Infinity, origMinY = Infinity, origMaxX = -Infinity, origMaxY = -Infinity;
+    let any = false;
+    for (const id of allIds) {
+      const o = orig.has(id) ? orig.get(id) : (() => { const n = findNode(state.nodes, id); return n ? { x: n.x, y: n.y } : null; })();
+      const n = findNode(state.nodes, id);
+      if (!o || !n) continue;
+      const x = o.x + dx;
+      const y = o.y + dy;
+      if (x < origMinX) origMinX = x;
+      if (y < origMinY) origMinY = y;
+      if (x + n.width > origMaxX) origMaxX = x + n.width;
+      if (y + n.height > origMaxY) origMaxY = y + n.height;
+      any = true;
+    }
+    if (any) {
+      const dragRect = { x: origMinX, y: origMinY, w: origMaxX - origMinX, h: origMaxY - origMinY };
+      const adjust = computeSnapAdjust(dragRect, otherRects, 8);
+      snapDx = adjust.dx;
+      snapDy = adjust.dy;
+      snapInfo = adjust;
+    }
+  }
   for (const id of allIds) {
     const n = findNode(state.nodes, id);
     if (!n) continue;
     if (!orig.has(id)) orig.set(id, { x: n.x, y: n.y });
     const o = orig.get(id);
-    n.x = o.x + dx;
-    n.y = o.y + dy;
+    n.x = o.x + dx + snapDx;
+    n.y = o.y + dy + snapDy;
     if (arrowLayer) arrowLayer.invalidateNode(id);
     if (viewer && n.kind === 'block' && typeof viewer.updateBlockRect === 'function') {
       viewer.updateBlockRect(id, { x: n.x, y: n.y, w: n.width, h: n.height });
     }
   }
   if (snapGuides && !commit) {
-    const otherRects = [];
-    for (const n of state.nodes.values()) {
-      if (allIds.has(n.id)) continue;
-      otherRects.push({ x: n.x, y: n.y, w: n.width, h: n.height });
-    }
     const dragRect = computeUnionBbox(Array.from(allIds));
     if (dragRect) {
-      const guides = computeSnapGuides(dragRect, otherRects);
+      const guides = computeSnapGuides(dragRect, otherRects, snapInfo);
       snapGuides.show(guides);
     }
   }
@@ -3389,9 +3415,10 @@ function pushHistoryForDragCommit(allIds) {
   pushHistorySnapshot(snap, tr('history_label_move_n', { n }));
 }
 
-function computeSnapGuides(dragRect, otherRects) {
-  const SNAP = 4;
+function computeSnapGuides(dragRect, otherRects, snapInfo) {
+  const SNAP = 8;
   const out = [];
+  const dots = [];
   const dragXs = [
     { v: dragRect.x, role: 'left' },
     { v: dragRect.x + dragRect.w, role: 'right' },
@@ -3402,21 +3429,27 @@ function computeSnapGuides(dragRect, otherRects) {
     { v: dragRect.y + dragRect.h, role: 'bottom' },
     { v: dragRect.y + dragRect.h / 2, role: 'middleV' },
   ];
+  const snappedXValue = snapInfo && snapInfo.snappedX && snapInfo.snapX ? snapInfo.snapX.value : null;
+  const snappedYValue = snapInfo && snapInfo.snappedY && snapInfo.snapY ? snapInfo.snapY.value : null;
   for (const r of otherRects) {
     const xs = [r.x, r.x + r.w, r.x + r.w / 2];
     const ys = [r.y, r.y + r.h, r.y + r.h / 2];
     for (const d of dragXs) for (const ox of xs) {
       if (Math.abs(d.v - ox) <= SNAP) {
-        out.push({ x1: ox, y1: Math.min(dragRect.y, r.y) - 30, x2: ox, y2: Math.max(dragRect.y + dragRect.h, r.y + r.h) + 30 });
+        const isSnapped = snappedXValue !== null && Math.abs(snappedXValue - ox) < 0.5;
+        out.push({ x1: ox, y1: Math.min(dragRect.y, r.y) - 30, x2: ox, y2: Math.max(dragRect.y + dragRect.h, r.y + r.h) + 30, snapped: isSnapped });
+        if (isSnapped) dots.push({ x: ox, y: r.y + r.h / 2 });
       }
     }
     for (const d of dragYs) for (const oy of ys) {
       if (Math.abs(d.v - oy) <= SNAP) {
-        out.push({ x1: Math.min(dragRect.x, r.x) - 30, y1: oy, x2: Math.max(dragRect.x + dragRect.w, r.x + r.w) + 30, y2: oy });
+        const isSnapped = snappedYValue !== null && Math.abs(snappedYValue - oy) < 0.5;
+        out.push({ x1: Math.min(dragRect.x, r.x) - 30, y1: oy, x2: Math.max(dragRect.x + dragRect.w, r.x + r.w) + 30, y2: oy, snapped: isSnapped });
+        if (isSnapped) dots.push({ x: r.x + r.w / 2, y: oy });
       }
     }
   }
-  return out;
+  return { lines: out, dots };
 }
 
 function groupCurrentSelection() {
@@ -3590,6 +3623,12 @@ function computeUnionBbox(ids) {
   return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
 }
 
+function _currentAuthorId() {
+  const u = getCurrentUser();
+  if (u && (typeof u.id === 'number' || typeof u.id === 'string')) return String(u.id);
+  return 'anonymous';
+}
+
 function pushHistory(label, opts) {
   const o = opts || {};
   const snap = serializeFullState();
@@ -3598,6 +3637,7 @@ function pushHistory(label, opts) {
     label: typeof label === 'string' && label ? label : tr('history_label_unknown'),
     at: now,
     nodeId: typeof o.nodeId === 'string' && o.nodeId ? o.nodeId : null,
+    authorId: _currentAuthorId(),
   };
   snap._historyMeta = meta;
   const past = state.history.past;
@@ -3606,6 +3646,7 @@ function pushHistory(label, opts) {
   if (lastMeta
       && lastMeta.label === meta.label
       && lastMeta.nodeId === meta.nodeId
+      && lastMeta.authorId === meta.authorId
       && now - lastMeta.at < HISTORY_COALESCE_MS) {
     past[past.length - 1] = { ...last, _historyMeta: { ...lastMeta, at: now } };
   } else {
@@ -3619,22 +3660,31 @@ function pushHistory(label, opts) {
 function nextUndoLabel() {
   const past = state.history.past;
   if (!past.length) return '';
-  const meta = past[past.length - 1] && past[past.length - 1]._historyMeta;
+  const me = _currentAuthorId();
+  const idx = _findOwnHistoryIndex(past, me);
+  if (idx < 0) return '';
+  const meta = past[idx]._historyMeta;
   return (meta && meta.label) || '';
 }
 
 function nextRedoLabel() {
   const future = state.history.future;
   if (!future.length) return '';
-  const meta = future[future.length - 1] && future[future.length - 1]._historyMeta;
+  const me = _currentAuthorId();
+  const idx = _findOwnHistoryIndex(future, me);
+  if (idx < 0) return '';
+  const meta = future[idx]._historyMeta;
   return (meta && meta.label) || '';
 }
 
 function refreshHistoryUi() {
   if (leftRail && typeof leftRail.refreshHistoryButtons === 'function') {
+    const me = _currentAuthorId();
+    const undoIdx = _findOwnHistoryIndex(state.history.past, me);
+    const redoIdx = _findOwnHistoryIndex(state.history.future, me);
     leftRail.refreshHistoryButtons({
-      canUndo: state.history.past.length > 0,
-      canRedo: state.history.future.length > 0,
+      canUndo: undoIdx >= 0,
+      canRedo: redoIdx >= 0,
       undoLabel: nextUndoLabel(),
       redoLabel: nextRedoLabel(),
     });
@@ -3649,6 +3699,7 @@ function pushHistorySnapshot(snap, label, opts) {
     label: typeof label === 'string' && label ? label : tr('history_label_unknown'),
     at: now,
     nodeId: typeof o.nodeId === 'string' && o.nodeId ? o.nodeId : null,
+    authorId: _currentAuthorId(),
   };
   state.history.past.push(snap);
   if (state.history.past.length > HISTORY_LIMIT) state.history.past.shift();
@@ -3778,14 +3829,29 @@ async function pushEdgeDelete(id) {
   }
 }
 
+function _findOwnHistoryIndex(stack, ownerId) {
+  for (let i = stack.length - 1; i >= 0; i--) {
+    const meta = stack[i] && stack[i]._historyMeta;
+    if (!meta) continue;
+    if (meta.authorId === ownerId) return i;
+  }
+  return -1;
+}
+
 function doUndo() {
   if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
   if (state.history.past.length === 0) return;
-  const targetMeta = state.history.past[state.history.past.length - 1]._historyMeta || null;
+  const me = _currentAuthorId();
+  const idx = _findOwnHistoryIndex(state.history.past, me);
+  if (idx < 0) {
+    toast(tr('toolbar_undo_no_own'));
+    return;
+  }
+  const snap = state.history.past.splice(idx, 1)[0];
+  const targetMeta = snap._historyMeta || null;
   const cur = serializeFullState();
-  cur._historyMeta = targetMeta ? { ...targetMeta, at: Date.now() } : null;
+  cur._historyMeta = targetMeta ? { ...targetMeta, at: Date.now(), authorId: me } : { authorId: me, at: Date.now(), label: '', nodeId: null };
   state.history.future.push(cur);
-  const snap = state.history.past.pop();
   restoreFullState(snap);
   scheduleSave();
   refreshHistoryUi();
@@ -3794,11 +3860,17 @@ function doUndo() {
 function doRedo() {
   if (!isLoggedIn()) { if (authUI) authUI.openLogin(); return; }
   if (state.history.future.length === 0) return;
-  const targetMeta = state.history.future[state.history.future.length - 1]._historyMeta || null;
+  const me = _currentAuthorId();
+  const idx = _findOwnHistoryIndex(state.history.future, me);
+  if (idx < 0) {
+    toast(tr('toolbar_redo_no_own'));
+    return;
+  }
+  const snap = state.history.future.splice(idx, 1)[0];
+  const targetMeta = snap._historyMeta || null;
   const cur = serializeFullState();
-  cur._historyMeta = targetMeta ? { ...targetMeta, at: Date.now() } : null;
+  cur._historyMeta = targetMeta ? { ...targetMeta, at: Date.now(), authorId: me } : { authorId: me, at: Date.now(), label: '', nodeId: null };
   state.history.past.push(cur);
-  const snap = state.history.future.pop();
   restoreFullState(snap);
   scheduleSave();
   refreshHistoryUi();

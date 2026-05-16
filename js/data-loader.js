@@ -275,8 +275,15 @@ export function normaliseEdge(raw) {
     edge.toPoint = { x: raw.toPoint.x, y: raw.toPoint.y };
   }
   edge.stroke = normaliseEdgeStroke(raw.stroke);
+  edge.arrowSize = normaliseArrowSize(raw.arrowSize);
   edge.bindings = normaliseBindings(raw.bindings);
   return edge;
+}
+
+export function normaliseArrowSize(raw) {
+  const n = Number(raw);
+  if (Number.isFinite(n)) return Math.max(4, Math.min(20, Math.round(n)));
+  return 8;
 }
 
 export function normaliseEdgeStroke(raw) {

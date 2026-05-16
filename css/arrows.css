@@ -251,4 +251,22 @@ body.space-held #viewport #arrow-layer * { pointer-events: none !important; curs
   text-align: center;
 }
 
+.arrow-props-hex-row .arrow-props-hex-input {
+  width: 80px;
+  font-size: 10px;
+}
+.arrow-props-mini-range {
+  flex: 1;
+  min-width: 80px;
+  accent-color: var(--accent);
+}
+.arrow-props-mini-value {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  min-width: 18px;
+  text-align: right;
+}
+.arrow-props-arrow-size .arrow-props-label-style-row { flex-wrap: nowrap; }
+
 .arrow-props-stroke .arrow-props-label-style-row { gap: 4px; }

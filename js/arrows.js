@@ -43,7 +43,47 @@ function strokeFor(edge, fallbackColour) {
   return { width: s.width, colour };
 }
 
-export { STROKE_COLOR_SWATCHES, ensureStrokeShape };
+const ARROW_SIZE_DEFAULT = 8;
+const ARROW_SIZE_MIN = 4;
+const ARROW_SIZE_MAX = 20;
+
+function ensureArrowSize(value) {
+  const n = Number(value);
+  if (Number.isFinite(n)) return Math.max(ARROW_SIZE_MIN, Math.min(ARROW_SIZE_MAX, Math.round(n)));
+  return ARROW_SIZE_DEFAULT;
+}
+
+function _adjustArrowTipApproach(vertices, toInfo, edge) {
+  if (!Array.isArray(vertices) || vertices.length < 2) return vertices;
+  if (!toInfo || !toInfo.rect) return vertices;
+  if (edge && (edge.routing === 'smooth' || edge.routing === 'orthogonal' || edge.routing === 'manhattan')) return vertices;
+  const last = vertices[vertices.length - 1];
+  const prev = vertices[vertices.length - 2];
+  const cx = toInfo.rect.x + toInfo.rect.w / 2;
+  const cy = toInfo.rect.y + toInfo.rect.h / 2;
+  const dxCenter = last.x - cx;
+  const dyCenter = last.y - cy;
+  const dCenter = Math.hypot(dxCenter, dyCenter);
+  if (dCenter < 1e-3) return vertices;
+  const ux = dxCenter / dCenter;
+  const uy = dyCenter / dCenter;
+  const segDx = last.x - prev.x;
+  const segDy = last.y - prev.y;
+  const segLen = Math.hypot(segDx, segDy);
+  if (segLen < 1e-3) return vertices;
+  const sx = segDx / segLen;
+  const sy = segDy / segLen;
+  const dot = sx * ux + sy * uy;
+  if (dot > 0.97) return vertices;
+  const approachLen = Math.min(Math.max(segLen * 0.12, 4), 10);
+  const blendPt = { x: last.x - ux * approachLen, y: last.y - uy * approachLen };
+  const out = vertices.slice(0, -1);
+  out.push(blendPt);
+  out.push(last);
+  return out;
+}
+
+export { STROKE_COLOR_SWATCHES, ensureStrokeShape, ensureArrowSize, ARROW_SIZE_DEFAULT, ARROW_SIZE_MIN, ARROW_SIZE_MAX };
 
 function ensureLabelShape(label) {
   if (label && typeof label === 'object' && typeof label.text === 'string') {
@@ -142,18 +182,19 @@ export class ArrowLayer {
     this.world.appendChild(this.previewGroup);
   }
 
-  _ensureCustomMarker(hex) {
+  _ensureCustomMarker(hex, size) {
     const key = String(hex).toLowerCase();
     if (!/^#[0-9a-f]{3,8}$/i.test(key)) return null;
-    const id = `arrowhead-x${key.slice(1)}`;
+    const sz = ensureArrowSize(size);
+    const id = `arrowhead-x${key.slice(1)}-s${sz}`;
     if (this._customMarkerCache && this._customMarkerCache.has(id)) return id;
     const mk = document.createElementNS(SVG_NS, 'marker');
     mk.setAttribute('id', id);
     mk.setAttribute('viewBox', '0 0 10 10');
     mk.setAttribute('refX', '8');
     mk.setAttribute('refY', '5');
-    mk.setAttribute('markerWidth', '6');
-    mk.setAttribute('markerHeight', '6');
+    mk.setAttribute('markerWidth', String(sz * 0.75));
+    mk.setAttribute('markerHeight', String(sz * 0.75));
     mk.setAttribute('orient', 'auto-start-reverse');
     const poly = document.createElementNS(SVG_NS, 'path');
     poly.setAttribute('d', 'M 0 0 L 10 5 L 0 10 Z');
@@ -164,14 +205,40 @@ export class ArrowLayer {
     return id;
   }
 
+  _ensurePresetMarker(presetName, size) {
+    const sz = ensureArrowSize(size);
+    const id = `arrowhead-${presetName}-s${sz}`;
+    if (this._customMarkerCache && this._customMarkerCache.has(id)) return id;
+    const mk = document.createElementNS(SVG_NS, 'marker');
+    mk.setAttribute('id', id);
+    mk.setAttribute('viewBox', '0 0 10 10');
+    mk.setAttribute('refX', '8');
+    mk.setAttribute('refY', '5');
+    mk.setAttribute('markerWidth', String(sz * 0.75));
+    mk.setAttribute('markerHeight', String(sz * 0.75));
+    mk.setAttribute('orient', 'auto-start-reverse');
+    const poly = document.createElementNS(SVG_NS, 'path');
+    poly.setAttribute('d', 'M 0 0 L 10 5 L 0 10 Z');
+    poly.setAttribute('fill', COLOUR_VAR[presetName] || COLOUR_VAR.accent);
+    mk.appendChild(poly);
+    this.defs.appendChild(mk);
+    if (this._customMarkerCache) this._customMarkerCache.add(id);
+    return id;
+  }
+
   _markerEndUrlFor(edge, fallbackColour) {
     const s = ensureStrokeShape(edge.stroke);
+    const size = ensureArrowSize(edge.arrowSize);
     if (s.color !== 'auto') {
-      const id = this._ensureCustomMarker(s.color);
+      const id = this._ensureCustomMarker(s.color, size);
       if (id) return `url(#${id})`;
     }
     const preset = COLOUR_VAR[fallbackColour] ? fallbackColour : 'accent';
-    return `url(#arrowhead-${preset})`;
+    if (size === ARROW_SIZE_DEFAULT) {
+      return `url(#arrowhead-${preset})`;
+    }
+    const id = this._ensurePresetMarker(preset, size);
+    return `url(#${id})`;
   }
 
   _installEvents() {
@@ -370,6 +437,9 @@ export class ArrowLayer {
       const c = typeof patch.strokeColor === 'string' && patch.strokeColor ? patch.strokeColor : 'auto';
       e.stroke = { ...cur, color: c };
     }
+    if (patch.arrowSize !== undefined) {
+      e.arrowSize = ensureArrowSize(patch.arrowSize);
+    }
     if (patch.routing !== undefined) this._pathCache.delete(id);
     if (patch.label   !== undefined) e.label   = normaliseLabelValue(patch.label, e.label);
     if (patch.labelText !== undefined) {
@@ -565,12 +635,13 @@ export class ArrowLayer {
       vertices = cached.vertices;
       d = cached.d;
     } else {
-      vertices = routeEdge(edge.routing, fromInfo.point, toInfo.point, {
+      const routedVerts = routeEdge(edge.routing, fromInfo.point, toInfo.point, {
         fromSide: fromInfo.side,
         toSide:   toInfo.side,
         obstacles: this._obstaclesExcluding(obstacles, [fromInfo.rect, toInfo.rect]),
         waypoints: edge.waypoints,
       });
+      vertices = _adjustArrowTipApproach(routedVerts, toInfo, edge);
       d = vertexPathD(vertices, edge.routing);
       this._pathCache.set(edge.id, { key: cacheKey, vertices, d });
     }
@@ -584,7 +655,10 @@ export class ArrowLayer {
     const wp = Array.isArray(edge.waypoints)
       ? edge.waypoints.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(';')
       : '';
-    return `${edge.routing}|${fromInfo.point.x.toFixed(2)},${fromInfo.point.y.toFixed(2)}|${toInfo.point.x.toFixed(2)},${toInfo.point.y.toFixed(2)}|${fromInfo.side || ''}|${toInfo.side || ''}|${wp}`;
+    const arrowSz = ensureArrowSize(edge.arrowSize);
+    const tcx = toInfo.rect ? (toInfo.rect.x + toInfo.rect.w / 2).toFixed(2) : '';
+    const tcy = toInfo.rect ? (toInfo.rect.y + toInfo.rect.h / 2).toFixed(2) : '';
+    return `${edge.routing}|${fromInfo.point.x.toFixed(2)},${fromInfo.point.y.toFixed(2)}|${toInfo.point.x.toFixed(2)},${toInfo.point.y.toFixed(2)}|${fromInfo.side || ''}|${toInfo.side || ''}|${wp}|a${arrowSz}|c${tcx},${tcy}`;
   }
 
   _edgeOpacity(edge, nodes) {
