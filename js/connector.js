@@ -29,9 +29,30 @@ export function vertexPathD(vertices, kind) {
     const [a, c1, c2, b] = vertices;
     return `M ${fmt(a.x)} ${fmt(a.y)} C ${fmt(c1.x)} ${fmt(c1.y)}, ${fmt(c2.x)} ${fmt(c2.y)}, ${fmt(b.x)} ${fmt(b.y)}`;
   }
+  if (kind === 'smooth' && vertices.length >= 3) {
+    return _smoothCatmullRomD(vertices);
+  }
   let d = `M ${fmt(vertices[0].x)} ${fmt(vertices[0].y)}`;
   for (let i = 1; i < vertices.length; i++) {
     d += ` L ${fmt(vertices[i].x)} ${fmt(vertices[i].y)}`;
+  }
+  return d;
+}
+
+function _smoothCatmullRomD(verts) {
+  const n = verts.length;
+  if (n < 2) return '';
+  let d = `M ${fmt(verts[0].x)} ${fmt(verts[0].y)}`;
+  for (let i = 0; i < n - 1; i++) {
+    const p0 = verts[Math.max(0, i - 1)];
+    const p1 = verts[i];
+    const p2 = verts[i + 1];
+    const p3 = verts[Math.min(n - 1, i + 2)];
+    const c1x = p1.x + (p2.x - p0.x) / 6;
+    const c1y = p1.y + (p2.y - p0.y) / 6;
+    const c2x = p2.x - (p3.x - p1.x) / 6;
+    const c2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C ${fmt(c1x)} ${fmt(c1y)} ${fmt(c2x)} ${fmt(c2y)} ${fmt(p2.x)} ${fmt(p2.y)}`;
   }
   return d;
 }
