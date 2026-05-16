@@ -9,6 +9,7 @@ import { rectOf, anchorWorld, perimeterProjection, rectContains, sideFromBinding
 import { buildMarkdownToolbar } from './md-toolbar.js';
 import { attachMentionAutocomplete } from './node-mention.js';
 import { attachUserAutocomplete } from './user-mention.js';
+import { buildColorPicker } from './color-picker.js';
 
 function _mentionNodesFor(layer) {
   return () => {
@@ -379,8 +380,6 @@ function buildStrokeRow(edge, onPatch) {
   widthVal.textContent = widthSlider.value;
   widthSlider.addEventListener('input', () => {
     widthVal.textContent = widthSlider.value;
-  });
-  widthSlider.addEventListener('change', () => {
     const n = Number(widthSlider.value);
     if (Number.isFinite(n)) onPatch({ strokeWidth: n });
   });
@@ -388,78 +387,48 @@ function buildStrokeRow(edge, onPatch) {
   widthRow.appendChild(widthVal);
   wrap.appendChild(widthRow);
 
+  const arrowRow = document.createElement('div');
+  arrowRow.className = 'arrow-props-label-style-row arrow-props-arrow-size';
+  const arrowLab = document.createElement('span');
+  arrowLab.className = 'arrow-props-mini-label';
+  arrowLab.textContent = tr('edge_arrowhead_size');
+  arrowRow.appendChild(arrowLab);
+  const arrowSlider = document.createElement('input');
+  arrowSlider.type = 'range';
+  arrowSlider.min = String(ARROW_SIZE_RANGE_MIN);
+  arrowSlider.max = String(ARROW_SIZE_RANGE_MAX);
+  arrowSlider.step = '1';
+  arrowSlider.value = String(popoverArrowSize(edge));
+  arrowSlider.className = 'arrow-props-mini-range';
+  const arrowVal = document.createElement('span');
+  arrowVal.className = 'arrow-props-mini-value';
+  arrowVal.textContent = arrowSlider.value;
+  arrowSlider.addEventListener('input', () => {
+    arrowVal.textContent = arrowSlider.value;
+    const n = Number(arrowSlider.value);
+    if (Number.isFinite(n)) onPatch({ arrowSize: n });
+  });
+  arrowRow.appendChild(arrowSlider);
+  arrowRow.appendChild(arrowVal);
+  wrap.appendChild(arrowRow);
+
   const colorRow = document.createElement('div');
-  colorRow.className = 'arrow-props-label-style-row';
+  colorRow.className = 'arrow-props-label-style-row arrow-props-color-row';
   const colorLab = document.createElement('span');
   colorLab.className = 'arrow-props-mini-label';
   colorLab.textContent = tr('edge_stroke_color');
   colorRow.appendChild(colorLab);
   const currentColor = popoverStrokeColor(edge);
-  const colorBtns = [];
-  const autoBtn = document.createElement('button');
-  autoBtn.type = 'button';
-  autoBtn.className = 'arrow-props-mini-btn';
-  autoBtn.textContent = 'A';
-  autoBtn.title = tr('arrow_label_color_auto');
-  if (currentColor === 'auto') autoBtn.classList.add('active');
-  autoBtn.addEventListener('click', () => {
-    onPatch({ strokeColor: 'auto' });
-    syncColorActive('auto');
+  const picker = buildColorPicker({
+    value: currentColor,
+    presets: STROKE_COLOR_SWATCHES_EDIT,
+    showAuto: true,
+    onChange: (val) => {
+      onPatch({ strokeColor: val || 'auto' });
+    },
   });
-  colorRow.appendChild(autoBtn);
-  colorBtns.push({ value: 'auto', el: autoBtn });
-  for (const c of STROKE_COLOR_SWATCHES_EDIT) {
-    const sw = document.createElement('button');
-    sw.type = 'button';
-    sw.className = 'arrow-props-color-swatch';
-    sw.style.background = c;
-    if (currentColor === c) sw.classList.add('active');
-    sw.addEventListener('click', () => {
-      onPatch({ strokeColor: c });
-      syncColorActive(c);
-    });
-    colorRow.appendChild(sw);
-    colorBtns.push({ value: c, el: sw });
-  }
+  colorRow.appendChild(picker.root);
   wrap.appendChild(colorRow);
-
-  const hexRow = document.createElement('div');
-  hexRow.className = 'arrow-props-label-style-row arrow-props-hex-row';
-  const hexIn = document.createElement('input');
-  hexIn.type = 'text';
-  hexIn.maxLength = 7;
-  hexIn.spellcheck = false;
-  hexIn.placeholder = '#rrggbb';
-  hexIn.className = 'arrow-props-mini-input arrow-props-hex-input';
-  if (/^#[0-9a-f]{6}$/i.test(currentColor)) hexIn.value = currentColor;
-  const hexBtn = document.createElement('button');
-  hexBtn.type = 'button';
-  hexBtn.className = 'arrow-props-mini-btn';
-  hexBtn.textContent = tr('color_picker_apply');
-  function commitHex() {
-    const v = (hexIn.value || '').trim().toLowerCase();
-    if (/^#[0-9a-f]{6}$/i.test(v)) {
-      onPatch({ strokeColor: v });
-      syncColorActive(v);
-    } else if (/^#[0-9a-f]{3}$/i.test(v)) {
-      const exp = '#' + v[1] + v[1] + v[2] + v[2] + v[3] + v[3];
-      hexIn.value = exp;
-      onPatch({ strokeColor: exp });
-      syncColorActive(exp);
-    }
-  }
-  hexBtn.addEventListener('click', commitHex);
-  hexIn.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Enter') { ev.preventDefault(); commitHex(); }
-  });
-  hexRow.appendChild(hexIn);
-  hexRow.appendChild(hexBtn);
-  wrap.appendChild(hexRow);
-
-  function syncColorActive(active) {
-    for (const it of colorBtns) it.el.classList.toggle('active', it.value === active);
-  }
-  void syncColorActive;
 
   return wrap;
 }
@@ -752,9 +721,6 @@ export class EdgePropsPopover {
       this.layer.applyEdgePatch(edge.id, { color: v });
     }));
     popover.appendChild(buildStrokeRow(edge, (p) => {
-      this.layer.applyEdgePatch(edge.id, p);
-    }));
-    popover.appendChild(buildArrowSizeRow(edge, (p) => {
       this.layer.applyEdgePatch(edge.id, p);
     }));
 
