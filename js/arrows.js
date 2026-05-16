@@ -904,12 +904,13 @@ export class ArrowLayer {
     const baseWidth = stroke.width + selectedBoost;
     const dash = dashFor(edge.style, scale);
     const markerEnd = (!opts || !opts.isTrunk) ? this._markerEndUrlFor(edge, colour) : null;
+    const lineCap = markerEnd ? 'butt' : 'round';
     const haloD = markerEnd ? this._trimPathForMarker(d, vertices, edge) : d;
     const halo = document.createElementNS(SVG_NS, 'path');
     halo.setAttribute('d', haloD);
     halo.setAttribute('fill', 'none');
     halo.style.stroke = 'rgba(255,255,255,0.85)';
-    halo.setAttribute('stroke-linecap',  'round');
+    halo.setAttribute('stroke-linecap',  lineCap);
     halo.setAttribute('stroke-linejoin', 'round');
     halo.setAttribute('stroke-width', String((baseWidth * 1.5 + 1) / scale));
     if (dash) halo.setAttribute('stroke-dasharray', dash);
@@ -924,7 +925,7 @@ export class ArrowLayer {
     path.setAttribute('d', d);
     path.setAttribute('fill', 'none');
     path.style.stroke = stroke.colour;
-    path.setAttribute('stroke-linecap',  'round');
+    path.setAttribute('stroke-linecap',  lineCap);
     path.setAttribute('stroke-linejoin', 'round');
     path.setAttribute('stroke-width', String(baseWidth / scale));
     if (dash) path.setAttribute('stroke-dasharray', dash);
