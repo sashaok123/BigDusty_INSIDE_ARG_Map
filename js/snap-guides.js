@@ -126,3 +126,60 @@ export function computeSnapAdjust(draggingRect, otherRects, snapPx) {
     snapY: snappedY ? bestYTarget : null,
   };
 }
+
+export function computeResizeSnap(rect, handle, otherRects, snapPx) {
+  const sx = snapPx || DEFAULT_SNAP_PX;
+  const out = { rect: { ...rect }, snapX: null, snapY: null };
+  if (!handle || !otherRects || !otherRects.length) return out;
+  const useW = handle.includes('w');
+  const useE = handle.includes('e');
+  const useN = handle.includes('n');
+  const useS = handle.includes('s');
+  const candidatesX = [];
+  for (const r of otherRects) {
+    candidatesX.push(r.x, r.x + r.w, r.x + r.w / 2);
+  }
+  const candidatesY = [];
+  for (const r of otherRects) {
+    candidatesY.push(r.y, r.y + r.h, r.y + r.h / 2);
+  }
+  const snapTo = (value, list) => {
+    let best = null;
+    for (const c of list) {
+      const d = Math.abs(c - value);
+      if (d <= sx && (best === null || d < Math.abs(best - value))) best = c;
+    }
+    return best;
+  };
+  if (useW) {
+    const target = snapTo(out.rect.x, candidatesX);
+    if (target !== null) {
+      const right = out.rect.x + out.rect.w;
+      out.rect.x = target;
+      out.rect.w = Math.max(1, right - target);
+      out.snapX = { value: target, role: 'left' };
+    }
+  } else if (useE) {
+    const target = snapTo(out.rect.x + out.rect.w, candidatesX);
+    if (target !== null) {
+      out.rect.w = Math.max(1, target - out.rect.x);
+      out.snapX = { value: target, role: 'right' };
+    }
+  }
+  if (useN) {
+    const target = snapTo(out.rect.y, candidatesY);
+    if (target !== null) {
+      const bottom = out.rect.y + out.rect.h;
+      out.rect.y = target;
+      out.rect.h = Math.max(1, bottom - target);
+      out.snapY = { value: target, role: 'top' };
+    }
+  } else if (useS) {
+    const target = snapTo(out.rect.y + out.rect.h, candidatesY);
+    if (target !== null) {
+      out.rect.h = Math.max(1, target - out.rect.y);
+      out.snapY = { value: target, role: 'bottom' };
+    }
+  }
+  return out;
+}

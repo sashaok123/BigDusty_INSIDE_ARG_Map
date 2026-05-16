@@ -6,6 +6,7 @@ import { lodFor } from './lod.js';
 import { pickTextColor, pickTextStroke, bgFromTheme, relativeLuminance } from './contrast.js';
 import { getActiveTool, isSpaceHeld, setActiveTool } from './tools.js';
 import { VERIFICATION_STRIPE } from './nodes.js';
+import { computeResizeSnap } from './snap-guides.js';
 
 const TEXT_SIZE_PRESET_PX = { XS: 10, S: 12, M: 16, L: 20, XL: 28, XXL: 36, XXXL: 48 };
 function resolveTextStyleSize(size) {
@@ -1887,6 +1888,17 @@ export class Viewer {
       if (rect.h < MIN_SIDE) {
         if (d.handle.includes('n')) rect.y = d.origRect.y + d.origRect.h - MIN_SIDE;
         rect.h = MIN_SIDE;
+      }
+      if (!ev.shiftKey) {
+        const others = [];
+        for (const h of this.hotspots) if (h && h.id !== d.id && h.rect) others.push(h.rect);
+        for (const g of this.groups) if (g && g.id !== d.id && g.rect) others.push(g.rect);
+        for (const b of this.blocks) if (b && b.id !== d.id && b.rect) others.push(b.rect);
+        const snapped = computeResizeSnap(rect, d.handle, others, 8);
+        rect.x = snapped.rect.x;
+        rect.y = snapped.rect.y;
+        rect.w = snapped.rect.w;
+        rect.h = snapped.rect.h;
       }
       const isImageTarget = d.target === 'block' || d.target === 'image-hotspot';
       const lockAspect = isImageTarget ? !ev.shiftKey : !!ev.shiftKey;
