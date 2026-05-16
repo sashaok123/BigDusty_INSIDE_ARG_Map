@@ -93,7 +93,10 @@ const _SIDE_INWARD = {
   bottom: { x:  0, y: -1 },
 };
 
-const END_TAIL_RUNWAY = 6;
+/* 1 px because the user wants 'no visible straight tail before the
+   arrowhead'. The tail still exists so the marker's auto-orient sees a
+   perpendicular last segment (1 px is enough to compute a tangent). */
+const END_TAIL_RUNWAY = 1;
 
 /* In pixels: arrowhead width along the path direction. Mirror of the marker
    geometry built by _ensureCustomMarker / _ensurePresetMarker — they use
@@ -118,28 +121,34 @@ function _markerLengthPx(edge) {
    rect's perimeter (not inside the rect content) and the line ends cleanly
    at the marker BASE (no overlap). Inserts a short perpendicular tail-
    runway right behind the marker so the marker auto-orient resolves to a
-   strict perpendicular tangent. */
-function _adjustEndForMarker(vertices, side, edge) {
+   strict perpendicular tangent.
+
+   `scale` is the current canvas zoom. _appendEdgePath sets the path's
+   stroke-width attribute to baseWidth/scale so the on-screen stroke stays
+   constant across zoom levels; the marker therefore renders at
+   markerWidthAttr × (baseWidth/scale) user-coordinate units wide. We must
+   shift the endpoint by the same value (in user coords) so the marker tip
+   lands ON the perimeter at every zoom level — otherwise at zoom>1 the tip
+   falls short of the perimeter (visible gap) and at zoom<1 it overshoots
+   into the rect. */
+function _adjustEndForMarker(vertices, side, edge, scale) {
   if (!side || !_SIDE_INWARD[side] || !Array.isArray(vertices) || vertices.length < 1) {
     return vertices;
   }
   const inward = _SIDE_INWARD[side];
-  const markerLen = _markerLengthPx(edge);
+  const s = scale && scale > 0 ? scale : 1;
+  const markerLen = _markerLengthPx(edge) / s;
+  const tail = END_TAIL_RUNWAY / s;
   const origEnd = vertices[vertices.length - 1];
-  // New end-point sits markerLen outside the perimeter so the marker (refX=0,
-  // base at path-end, tip extending forward along path tangent) lands its
-  // tip exactly on the perimeter — i.e., 'pointing at' the rect.
   const newEnd = {
     x: origEnd.x - inward.x * markerLen,
     y: origEnd.y - inward.y * markerLen,
   };
-  // Short perpendicular tail just outward of newEnd → guarantees the last
-  // visible segment is INWARD-perpendicular for marker auto-orient.
-  const tail = {
-    x: newEnd.x - inward.x * END_TAIL_RUNWAY,
-    y: newEnd.y - inward.y * END_TAIL_RUNWAY,
+  const tailPt = {
+    x: newEnd.x - inward.x * tail,
+    y: newEnd.y - inward.y * tail,
   };
-  return [...vertices.slice(0, -1), tail, newEnd];
+  return [...vertices.slice(0, -1), tailPt, newEnd];
 }
 
 const ARROW_SIZE_DEFAULT = 8;
@@ -785,7 +794,7 @@ export class ArrowLayer {
     }
 
     const detourObstacles = this._obstaclesExcluding(obstacles, [fromInfo.rect, toInfo.rect]);
-    const cacheKey = this._edgeRouteKey(edge, fromInfo, toInfo, detourObstacles);
+    const cacheKey = this._edgeRouteKey(edge, fromInfo, toInfo, detourObstacles, scale);
     const cached = this._pathCache.get(edge.id);
     let vertices;
     let d;
@@ -801,7 +810,7 @@ export class ArrowLayer {
         obstacles: routeObs,
         waypoints: edge.waypoints,
       });
-      vertices = _adjustEndForMarker(_adjustArrowTipApproach(routedVerts, toInfo, edge), toSide, edge);
+      vertices = _adjustEndForMarker(_adjustArrowTipApproach(routedVerts, toInfo, edge), toSide, edge, scale);
       const hasUserWaypoints = Array.isArray(edge.waypoints) && edge.waypoints.length > 0;
       d = vertexPathD(vertices, edge.routing, { hasUserWaypoints });
       this._pathCache.set(edge.id, { key: cacheKey, vertices, d });
@@ -812,7 +821,7 @@ export class ArrowLayer {
     }
   }
 
-  _edgeRouteKey(edge, fromInfo, toInfo, obstacles) {
+  _edgeRouteKey(edge, fromInfo, toInfo, obstacles, scale) {
     const wp = Array.isArray(edge.waypoints)
       ? edge.waypoints.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(';')
       : '';
@@ -826,10 +835,11 @@ export class ArrowLayer {
       ? _obstacleDigestKey(obstacles, fromInfo.point, toInfo.point)
       : '';
     const pass = edge.passThrough === true ? 'p1' : '';
-    // sw (stroke width) included because _adjustEndForMarker shifts the
-    // endpoint by markerLen which is a function of stroke width — different
-    // stroke widths must produce different cached paths.
-    return `${edge.routing}|${fromInfo.point.x.toFixed(2)},${fromInfo.point.y.toFixed(2)}|${toInfo.point.x.toFixed(2)},${toInfo.point.y.toFixed(2)}|${fromInfo.side || ''}|${toInfo.side || ''}|${wp}|a${arrowSz}|sw${stroke.width}|c${tcx},${tcy}|${pass}|${detour}`;
+    const z = scale && scale > 0 ? scale.toFixed(3) : '1';
+    // sw (stroke width) and z (zoom) included because _adjustEndForMarker
+    // shifts the endpoint by markerLen / scale — both must invalidate the
+    // cached path when they change.
+    return `${edge.routing}|${fromInfo.point.x.toFixed(2)},${fromInfo.point.y.toFixed(2)}|${toInfo.point.x.toFixed(2)},${toInfo.point.y.toFixed(2)}|${fromInfo.side || ''}|${toInfo.side || ''}|${wp}|a${arrowSz}|sw${stroke.width}|z${z}|c${tcx},${tcy}|${pass}|${detour}`;
   }
 
   _edgeOpacity(edge, nodes) {
