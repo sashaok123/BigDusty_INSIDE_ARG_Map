@@ -728,7 +728,8 @@ export class ArrowLayer {
         waypoints: edge.waypoints,
       });
       vertices = _adjustArrowTipApproach(routedVerts, toInfo, edge);
-      d = vertexPathD(vertices, edge.routing);
+      const hasUserWaypoints = Array.isArray(edge.waypoints) && edge.waypoints.length > 0;
+      d = vertexPathD(vertices, edge.routing, { hasUserWaypoints });
       this._pathCache.set(edge.id, { key: cacheKey, vertices, d });
     }
     this._appendEdgePath(edge, d, colour, scale, vertices, { opacity });
@@ -1283,6 +1284,9 @@ export class ArrowLayer {
     this.onEdgesChange();
     this.onScheduleSave();
     this.onEdgeMutation('update', edgeId, e);
+    // Auto-select so the waypoint handle is immediately visible — handles
+    // only render when this.selectedId === edge.id.
+    this._selectEdge(edgeId, null);
     this.requestDraw();
   }
 

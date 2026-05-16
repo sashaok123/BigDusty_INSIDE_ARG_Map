@@ -36,7 +36,7 @@ const CORNER_RADIUS = {
   straight:   0,
 };
 
-export function vertexPathD(vertices, kind) {
+export function vertexPathD(vertices, kind, opts) {
   if (!vertices.length) return '';
   if (vertices.length === 1) {
     const p = vertices[0];
@@ -49,7 +49,15 @@ export function vertexPathD(vertices, kind) {
     const [a, c1, c2, b] = vertices;
     return `M ${fmt(a.x)} ${fmt(a.y)} C ${fmt(c1.x)} ${fmt(c1.y)}, ${fmt(c2.x)} ${fmt(c2.y)}, ${fmt(b.x)} ${fmt(b.y)}`;
   }
-  const radius = CORNER_RADIUS[kind] != null ? CORNER_RADIUS[kind] : CORNER_RADIUS.elbow;
+  // User-added waypoints must lie EXACTLY on the rendered path so the
+  // waypoint handle (a small circle at the waypoint coord) appears on the
+  // line, not 'floating beside it'. Sharp polyline does that. Auto-shaped
+  // paths (no user waypoints) get the kind-specific corner radius for the
+  // smoother look.
+  const hasUserWaypoints = !!(opts && opts.hasUserWaypoints);
+  const radius = hasUserWaypoints
+    ? 0
+    : (CORNER_RADIUS[kind] != null ? CORNER_RADIUS[kind] : CORNER_RADIUS.elbow);
   if (radius <= 0 || vertices.length < 3) {
     return _polylineD(vertices);
   }
