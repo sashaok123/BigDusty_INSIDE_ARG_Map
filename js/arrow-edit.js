@@ -313,7 +313,6 @@ function buildStrokeRow(edge, onPatch) {
   const wrap = document.createElement('div');
   wrap.className = 'arrow-props-row arrow-props-row-block arrow-props-stroke';
 
-  const widthBtns = [];
   const widthRow = document.createElement('div');
   widthRow.className = 'arrow-props-label-style-row';
   const widthLab = document.createElement('span');
@@ -321,19 +320,25 @@ function buildStrokeRow(edge, onPatch) {
   widthLab.textContent = tr('edge_stroke_width');
   widthRow.appendChild(widthLab);
   const curW = popoverStrokeWidth(edge);
-  for (const w of STROKE_WIDTH_PRESETS) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'arrow-props-mini-btn arrow-props-stroke-width-btn';
-    b.textContent = String(w);
-    if (w === curW) b.classList.add('active');
-    b.addEventListener('click', () => {
-      onPatch({ strokeWidth: w });
-      syncWidthActive(w);
-    });
-    widthRow.appendChild(b);
-    widthBtns.push({ w, el: b });
-  }
+  const widthSlider = document.createElement('input');
+  widthSlider.type = 'range';
+  widthSlider.min = '1';
+  widthSlider.max = '12';
+  widthSlider.step = '1';
+  widthSlider.value = String(Math.max(1, Math.min(12, Math.round(curW))));
+  widthSlider.className = 'arrow-props-mini-range';
+  const widthVal = document.createElement('span');
+  widthVal.className = 'arrow-props-mini-value';
+  widthVal.textContent = widthSlider.value;
+  widthSlider.addEventListener('input', () => {
+    widthVal.textContent = widthSlider.value;
+  });
+  widthSlider.addEventListener('change', () => {
+    const n = Number(widthSlider.value);
+    if (Number.isFinite(n)) onPatch({ strokeWidth: n });
+  });
+  widthRow.appendChild(widthSlider);
+  widthRow.appendChild(widthVal);
   wrap.appendChild(widthRow);
 
   const colorRow = document.createElement('div');
@@ -404,12 +409,10 @@ function buildStrokeRow(edge, onPatch) {
   hexRow.appendChild(hexBtn);
   wrap.appendChild(hexRow);
 
-  function syncWidthActive(active) {
-    for (const it of widthBtns) it.el.classList.toggle('active', it.w === active);
-  }
   function syncColorActive(active) {
     for (const it of colorBtns) it.el.classList.toggle('active', it.value === active);
   }
+  void syncColorActive;
 
   return wrap;
 }
