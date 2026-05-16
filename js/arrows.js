@@ -116,15 +116,29 @@ function _applyObstacleDetour(vertices, routing, obstacles, edge) {
   if (!obstacles || !obstacles.length) return vertices;
   if (edge && edge.passThrough === true) return vertices;
   if (Array.isArray(edge && edge.waypoints) && edge.waypoints.length) return vertices;
-  if (routing !== 'straight' && routing !== 'smooth') return vertices;
   if (!Array.isArray(vertices) || vertices.length < 2) return vertices;
-  const a = vertices[0];
-  const b = vertices[vertices.length - 1];
-  const span = Math.hypot(b.x - a.x, b.y - a.y);
-  if (span < 40) return vertices;
-  const detour = _routeStraightAroundObstacle(a, b, obstacles);
-  if (!detour) return vertices;
-  return [a, detour, b];
+  let current = vertices.slice();
+  for (let iter = 0; iter < 5; iter++) {
+    const next = [current[0]];
+    let changed = false;
+    for (let i = 0; i < current.length - 1; i++) {
+      const p = current[i];
+      const q = current[i + 1];
+      const span = Math.hypot(q.x - p.x, q.y - p.y);
+      if (span >= 20) {
+        const detour = _routeStraightAroundObstacle(p, q, obstacles);
+        if (detour) {
+          next.push(detour);
+          changed = true;
+        }
+      }
+      next.push(q);
+    }
+    if (!changed) break;
+    current = next;
+  }
+  void routing;
+  return current;
 }
 
 function _obstacleDigestKey(obstacles, a, b) {
